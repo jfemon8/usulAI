@@ -1,0 +1,61 @@
+# dependencies
+node_modules/
+docs/
+
+# next.js
+.next/
+out/
+
+# production
+build/
+
+# env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+credentials.json
+service-account*.json
+secrets/
+
+# ai assistant / editor local config
+.claude/
+CLAUDE.md
+.cursor/
+.cursorrules
+.codex/
+.gemini/
+GEMINI.md
+.aider*
+.mcp.json
+
+# misc
+.DS_Store
+Thumbs.db
+coverage/
+
+# raw ingestion sources (large binary files, not for git)
+data/ijma/*
+data/qiyas/*
+!data/ijma/.gitkeep
+!data/qiyas/.gitkeep
+
+# generated widget bundle
+public/widget.js
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts

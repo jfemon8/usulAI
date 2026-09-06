@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="256" height="256">
+  <defs>
+    <linearGradient id="usulLogoFill" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7fb2e4"/>
+      <stop offset="1" stop-color="#2f5a87"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#usulLogoFill)">
+    <g opacity="0.3">
+      <rect x="15" y="15" width="34" height="34" rx="3"/>
+      <rect x="15" y="15" width="34" height="34" rx="3" transform="rotate(45 32 32)"/>
+    </g>
+    <g opacity="0.55">
+      <rect x="22" y="22" width="20" height="20" rx="2.5"/>
+      <rect x="22" y="22" width="20" height="20" rx="2.5" transform="rotate(45 32 32)"/>
+    </g>
+    <rect x="27.5" y="27.5" width="9" height="9" rx="1.5" transform="rotate(45 32 32)"/>
+  </g>
+</svg>
