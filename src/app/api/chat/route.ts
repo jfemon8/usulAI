@@ -1,4 +1,4 @@
-import { createUIMessageStream, createUIMessageStreamResponse, streamText } from "ai";
+import { createUIMessageStream, createUIMessageStreamResponse, smoothStream, streamText } from "ai";
 import { getModelChain } from "@/lib/ai/providers";
 import { buildSystemPrompt, buildRagPrompt } from "@/lib/ai/prompt";
 import { retrieveAnswerContext } from "@/lib/retrieval/search";
@@ -44,7 +44,12 @@ export async function POST(request: Request) {
         let emitted = false;
 
         try {
-          const result = streamText({ model, system, prompt });
+          const result = streamText({
+            model,
+            system,
+            prompt,
+            experimental_transform: smoothStream({ chunking: "word", delayInMs: 12 }),
+          });
 
           for await (const delta of result.textStream) {
             if (!emitted) {

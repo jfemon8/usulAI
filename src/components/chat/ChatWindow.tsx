@@ -151,7 +151,10 @@ export function ChatWindow({ compact = false }: ChatWindowProps) {
   const { messages, sendMessage, status } = useChat<UsulUIMessage>({ transport });
 
   const isLoading = status === "submitted" || status === "streaming";
-  const isWaiting = status === "submitted";
+  const lastMessage = messages[messages.length - 1];
+  const answerStarted =
+    lastMessage?.role !== "user" && messageText(lastMessage?.parts ?? []).length > 0;
+  const isWaiting = isLoading && !answerStarted;
 
   useEffect(() => {
     const element = scrollRef.current;

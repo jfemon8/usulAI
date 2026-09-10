@@ -15,7 +15,7 @@ export const MODEL_CONFIG = {
   },
   fallback: {
     provider: "openrouter",
-    model: "google/gemini-2.0-flash-001",
+    model: "nex-agi/nex-n2.5-pro:free",
   },
   embedding: {
     provider: "google",
