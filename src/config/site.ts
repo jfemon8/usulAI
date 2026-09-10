@@ -138,6 +138,7 @@ export const INGESTION_CONFIG = {
 export const DB_CONFIG = {
   collection: "documents",
   queryLogCollection: "query_logs",
+  feedbackCollection: "answer_feedback",
   vectorIndex: "documents_embedding_idx",
   textIndex: "documents_text_idx",
   embeddingPath: "embedding",

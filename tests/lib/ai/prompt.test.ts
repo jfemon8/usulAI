@@ -17,7 +17,7 @@ describe("buildSystemPrompt", () => {
     const prompt = buildSystemPrompt();
 
     expect(prompt).toContain("রেফারেন্স ছাড়া কোনো উত্তর দেওয়া যাবে না");
-    expect(prompt).toContain("সূত্র:");
+    expect(prompt).toContain("কোনো তালিকা লিখবে না");
     expect(prompt).toContain("কোনো রেফারেন্স বানিয়ে লিখো না");
   });
 

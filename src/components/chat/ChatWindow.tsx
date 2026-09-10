@@ -6,6 +6,7 @@ import { DefaultChatTransport } from "ai";
 import { MessageBubble } from "@/components/chat/MessageBubble";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { SourceCitationList } from "@/components/chat/SourceCitation";
+import { AnswerFeedback } from "@/components/chat/AnswerFeedback";
 import { LogoBadge } from "@/components/ui/Logo";
 import type { AnswerSource, UsulUIMessage } from "@/types";
 
@@ -75,6 +76,17 @@ function getServerSuggestions(): string[] {
 
 function messageText(parts: UsulUIMessage["parts"]): string {
   return parts.map((part) => (part.type === "text" ? part.text : "")).join("");
+}
+
+function lastUserQuestion(messages: UsulUIMessage[], beforeId: string): string {
+  const position = messages.findIndex((message) => message.id === beforeId);
+  const earlier = position === -1 ? messages : messages.slice(0, position);
+
+  for (let index = earlier.length - 1; index >= 0; index--) {
+    const candidate = earlier[index];
+    if (candidate?.role === "user") return messageText(candidate.parts);
+  }
+  return "";
 }
 
 function messageSources(parts: UsulUIMessage["parts"]): AnswerSource[] | null {
@@ -196,7 +208,16 @@ export function ChatWindow({ compact = false }: ChatWindowProps) {
                   text={text}
                   footer={
                     isAssistant && sources !== null ? (
-                      <SourceCitationList sources={sources} />
+                      <>
+                        <SourceCitationList sources={sources} />
+                        {!isLoading || message.id !== lastMessage?.id ? (
+                          <AnswerFeedback
+                            question={lastUserQuestion(messages, message.id)}
+                            answer={text}
+                            sources={sources}
+                          />
+                        ) : null}
+                      </>
                     ) : null
                   }
                 />
