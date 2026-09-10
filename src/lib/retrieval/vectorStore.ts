@@ -74,6 +74,12 @@ export async function upsertChunks(chunks: UpsertableChunk[]): Promise<void> {
   );
 }
 
+export async function existingReferences(sourceType: SourceType): Promise<Set<string>> {
+  const collection = await getDocumentsCollection();
+  const references = await collection.distinct("citation.reference", { sourceType });
+  return new Set(references as unknown as string[]);
+}
+
 export async function deleteSourceChunks(sourceType: SourceType): Promise<number> {
   const collection = await getDocumentsCollection();
   const { deletedCount } = await collection.deleteMany({ sourceType });

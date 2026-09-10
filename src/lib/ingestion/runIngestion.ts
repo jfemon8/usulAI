@@ -5,12 +5,37 @@ import { fetchHadithCorpus } from "@/lib/ingestion/sources/hadith";
 import { loadIjmaDocuments } from "@/lib/ingestion/sources/ijma";
 import { loadQiyasDocuments } from "@/lib/ingestion/sources/qiyas";
 import { loadSiratDocuments } from "@/lib/ingestion/sources/sirat";
-import { deleteSourceChunks, upsertChunks } from "@/lib/retrieval/vectorStore";
+import { deleteSourceChunks, existingReferences, upsertChunks } from "@/lib/retrieval/vectorStore";
 import { logger } from "@/lib/utils/logger";
 import type { IngestionDocument, SourceType } from "@/types";
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRateLimit(error: unknown): boolean {
+  const text = String(error);
+  return text.includes("429") || text.includes("RESOURCE_EXHAUSTED") || text.includes("quota");
+}
+
+async function embedBatchWaitingOutRateLimits(
+  texts: string[],
+  sourceType: SourceType,
+): Promise<number[][]> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await embedTexts(texts);
+    } catch (error) {
+      if (!isRateLimit(error) || attempt >= INGESTION_CONFIG.embeddingRateLimitAttempts) {
+        throw error;
+      }
+
+      logger.warn(
+        `${sourceType}: rate limited, waiting ${INGESTION_CONFIG.embeddingRateLimitWaitMs / 1000}s (attempt ${attempt})`,
+      );
+      await delay(INGESTION_CONFIG.embeddingRateLimitWaitMs);
+    }
+  }
 }
 
 const SOURCE_LOADERS: Record<SourceType, () => Promise<IngestionDocument[]>> = {
@@ -26,6 +51,7 @@ export interface IngestionOptions {
   continueOnError?: boolean;
   limit?: number;
   skip?: number;
+  resume?: boolean;
 }
 
 export interface IngestionReport {
@@ -40,23 +66,36 @@ async function ingestSource(
   options: IngestionOptions,
 ): Promise<IngestionReport> {
   const loaded = await SOURCE_LOADERS[sourceType]();
-  const skip = options.skip ?? 0;
-  const documents = loaded.slice(skip, options.limit ? skip + options.limit : undefined);
 
   if (loaded.length === 0) {
     logger.warn(`No documents found for ${sourceType}`);
     return { sourceType, status: "empty", count: 0 };
   }
 
-  if (skip > 0 || options.limit) {
+  if (options.replace) {
+    const removed = await deleteSourceChunks(sourceType);
+    logger.info(`Removed ${removed} existing ${sourceType} chunks before re-ingest`);
+  }
+
+  const skip = options.skip ?? 0;
+  let documents = loaded.slice(skip, options.limit ? skip + options.limit : undefined);
+
+  if (options.resume && !options.replace) {
+    const already = await existingReferences(sourceType);
+    const before = documents.length;
+    documents = documents.filter((document) => !already.has(document.citation.reference));
+    logger.info(
+      `${sourceType}: ${already.size} already stored, ${before - documents.length} skipped, ${documents.length} to ingest`,
+    );
+  } else if (skip > 0 || options.limit) {
     logger.info(
       `${sourceType}: ingesting ${documents.length} of ${loaded.length} documents (skip ${skip})`,
     );
   }
 
-  if (options.replace) {
-    const removed = await deleteSourceChunks(sourceType);
-    logger.info(`Removed ${removed} existing ${sourceType} chunks before re-ingest`);
+  if (documents.length === 0) {
+    logger.info(`${sourceType}: nothing left to ingest`);
+    return { sourceType, status: "ingested", count: 0 };
   }
 
   let inserted = 0;
@@ -67,7 +106,10 @@ async function ingestSource(
   for (let start = 0; start < documents.length; start += INGESTION_CONFIG.embeddingBatchSize) {
     const startedAt = Date.now();
     const batch = documents.slice(start, start + INGESTION_CONFIG.embeddingBatchSize);
-    const embeddings = await embedTexts(batch.map((document) => document.content));
+    const embeddings = await embedBatchWaitingOutRateLimits(
+      batch.map((document) => document.content),
+      sourceType,
+    );
 
     await upsertChunks(
       batch.map((document, index) => ({

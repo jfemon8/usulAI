@@ -11,7 +11,7 @@ export const MODEL_CONFIG = {
   },
   secondary: {
     provider: "groq",
-    model: "llama-3.3-70b-versatile",
+    model: "qwen/qwen3.8-27b",
   },
   fallback: {
     provider: "openrouter",
@@ -127,8 +127,10 @@ export const INGESTION_CONFIG = {
   requestRetries: 2,
   retryBaseDelayMs: 1_000,
   embeddingBatchSize: 20,
-  embeddingDocsPerMinute: 80,
-  embeddingMaxRetries: 6,
+  embeddingDocsPerMinute: 60,
+  embeddingMaxRetries: 1,
+  embeddingRateLimitWaitMs: 65_000,
+  embeddingRateLimitAttempts: 40,
 } as const;
 
 export const DB_CONFIG = {
