@@ -1,4 +1,4 @@
-import { CONTEXT_CONFIG, HYBRID_CONFIG, SOURCE_PRIORITY } from "@/config/site";
+import { CONTEXT_CONFIG, HYBRID_CONFIG, RERANK_CONFIG, SOURCE_PRIORITY } from "@/config/site";
 import { embedText, embedTexts } from "@/lib/ai/embeddings";
 import {
   attachEmbeddings,
@@ -6,6 +6,7 @@ import {
   similaritySearch,
   textSearch,
 } from "@/lib/retrieval/vectorStore";
+import { rerankContext } from "@/lib/retrieval/rerank";
 import { logger } from "@/lib/utils/logger";
 import type { RetrievedChunk, SourceType } from "@/types";
 import type { SearchOptions } from "@/lib/retrieval/types";
@@ -86,7 +87,10 @@ export async function retrieveAnswerContext(
     void backfillEmbeddings([...ordered, ...leftovers]);
   }
 
-  return ordered;
+  if (options.rerank === false || !RERANK_CONFIG.enabled) return ordered;
+
+  const relevant = await rerankContext(question, ordered);
+  return relevant.sort((a, b) => sources.indexOf(a.sourceType) - sources.indexOf(b.sourceType));
 }
 
 async function backfillEmbeddings(candidates: RetrievedChunk[]): Promise<void> {

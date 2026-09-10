@@ -5,4 +5,5 @@ export interface SearchOptions {
   sources?: readonly SourceType[];
   minSimilarity?: number;
   lazyEmbed?: boolean;
+  rerank?: boolean;
 }

@@ -6,6 +6,9 @@ import type { RetrievedChunk, SourceType } from "@/types";
 
 export interface QueryLogEntry {
   question: string;
+  searchQuery?: string;
+  rewritten?: boolean;
+  historyTurns?: number;
   language: QuestionLanguage;
   createdAt: Date;
   sourcesUsed: SourceType[];

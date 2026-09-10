@@ -1,5 +1,6 @@
 import { SOURCE_PRIORITY } from "@/config/site";
 import { detectQuestionLanguage } from "@/lib/ai/language";
+import type { ConversationTurn } from "@/lib/ai/queryRewriter";
 import type { RetrievedChunk, SourceType } from "@/types";
 
 const SOURCE_LABELS: Record<SourceType, string> = {
@@ -9,6 +10,9 @@ const SOURCE_LABELS: Record<SourceType, string> = {
   qiyas: "কিয়াস (সাদৃশ্যভিত্তিক অনুমান)",
   sirat: "সীরাত (নবী জীবনী ও ফিকহ কিতাব)",
 };
+
+const HISTORY_TURNS_IN_PROMPT = 6;
+const HISTORY_TURN_CHARS = 600;
 
 const BANGLA_COUNTS: Record<number, string> = {
   3: "তিনটা",
@@ -23,8 +27,18 @@ export function buildSystemPrompt(): string {
     (source, index) => `${index + 1}. ${SOURCE_LABELS[source]}`,
   ).join("\n");
 
-  return `তুমি Usul AI — একজন সহায়ক যে শুধুমাত্র নিচের ${count} উৎস থেকে উত্তর দেয়, সবসময় এই priority অনুসারে:
+  return `তুমি Usul AI — একজন জ্ঞানী, স্নেহশীল ইসলামি সহায়ক। তুমি শুধুমাত্র নিচের ${count} উৎস থেকে উত্তর দাও, সবসময় এই priority অনুসারে:
 ${sourceList}
+
+কেমন করে কথা বলবে:
+- একজন আন্তরিক শিক্ষকের মতো লেখো — যিনি প্রশ্নকারীর অবস্থা বোঝেন, নিছক দলিল ছুঁড়ে দেন না।
+- **শুধু আয়াত বা হাদিস তুলে দিয়ে থেমে যেও না।** প্রতিটা উদ্ধৃতির পরেই সহজ ভাষায় বুঝিয়ে দাও: এখানে আসলে কী বলা হচ্ছে, আর এটা ইউজারের প্রশ্নের সাথে কীভাবে মিলছে।
+- ইউজার আগে যা জিজ্ঞেস করেছে সেটা মাথায় রেখে উত্তর দাও — কথোপকথনের সূত্র ধরে এগোও, প্রতিবার শূন্য থেকে শুরু কোরো না।
+- প্রয়োজনে দৈনন্দিন জীবনের সহজ উদাহরণ দাও, যাতে বিষয়টা ধরা সহজ হয়।
+- ছোট অনুচ্ছেদে লেখো, দরকার হলে শিরোনাম বা তালিকা ব্যবহার করো। এক দমে বড় অনুচ্ছেদ লিখো না।
+- শুরুতে এক-দুই বাক্যে সরাসরি উত্তরটা দাও, তারপর দলিল ও ব্যাখ্যায় যাও — ইউজার যেন প্রথমেই মূল কথাটা পায়।
+- শেষে স্বাভাবিকভাবে সম্পর্কিত একটা দিক ছুঁয়ে দিতে পারো বা জানার আগ্রহ জাগাতে পারো, তবে জোর করে নয়।
+- উষ্ণ ও শ্রদ্ধাশীল থাকো, কিন্তু অতিরিক্ত আনুষ্ঠানিক বা যান্ত্রিক নয়। কখনো ধমক বা বিচারকের সুরে কথা বলবে না।
 
 ভাষার নিয়ম (বাধ্যতামূলক):
 - ইউজার বাংলায় বা বাংলিশে (রোমান হরফে বাংলা, যেমন "namaz er niyom ki") প্রশ্ন করলে উত্তর অবশ্যই বাংলায় দিতে হবে — বাংলিশে বা ইংরেজিতে নয়।
@@ -39,6 +53,7 @@ ${sourceList}
 রেফারেন্সের নিয়ম (বাধ্যতামূলক):
 - প্রতিটা উত্তরে অবশ্যই রেফারেন্স উল্লেখ করতে হবে — রেফারেন্স ছাড়া কোনো উত্তর দেওয়া যাবে না।
 - Context-এর প্রতিটা অংশ [1], [2] এভাবে নম্বর করা আছে। যে তথ্য যেখান থেকে নিচ্ছো, ঠিক সেই বাক্যের শেষে ওই নম্বরটা বসাও।
+- নম্বরগুলো স্বাভাবিকভাবে বাক্যের ভেতরে বসাও, আলাদা করে তালিকা বানিয়ে নয়।
 - উত্তরের শেষে "সূত্র:" শিরোনামে ব্যবহৃত প্রতিটা রেফারেন্স পুরো নাম ধরে লেখো (যেমন — সূরা আল-বাকারা 2:255, সহীহ বুখারী 1)।
 - Context-এ যা নেই তা কখনো লিখো না, এবং কোনো রেফারেন্স বানিয়ে লিখো না।
 
@@ -54,7 +69,11 @@ ${sourceList}
 - জটিল/ব্যক্তিগত মাসআলার ক্ষেত্রে একজন যোগ্য আলেমের সাথে পরামর্শ করার পরামর্শ দাও।`;
 }
 
-export function buildRagPrompt(question: string, context: RetrievedChunk[]): string {
+export function buildRagPrompt(
+  question: string,
+  context: RetrievedChunk[],
+  history: ConversationTurn[] = [],
+): string {
   const contextBlock = context
     .map(
       (chunk, index) =>
@@ -84,10 +103,26 @@ export function buildRagPrompt(question: string, context: RetrievedChunk[]): str
       ? `Context-এ ${present.map((source) => SOURCE_LABELS[source]).join(", ")} — এই উৎসগুলো আছে। সবগুলো থেকেই নিয়ে একটি সমন্বিত উত্তর দাও, ঠিক এই ক্রমে সাজিয়ে।`
       : "";
 
-  return `Context:
+  const recent = history.slice(-HISTORY_TURNS_IN_PROMPT);
+  const historyBlock =
+    recent.length > 0
+      ? `আগের কথোপকথন:\n${recent
+          .map(
+            (turn) =>
+              `${turn.role === "user" ? "ইউজার" : "তুমি"}: ${turn.text.slice(0, HISTORY_TURN_CHARS)}`,
+          )
+          .join("\n")}\n\n`
+      : "";
+
+  const continuityDirective =
+    recent.length > 0
+      ? "আগের কথার সূত্র ধরে উত্তর দাও — যা ইতিমধ্যে বলেছ তা হুবহু আবার লিখো না, বরং সেটার উপর ভিত্তি করে এগোও।"
+      : "";
+
+  return `${historyBlock}Context:
 ${contextBlock || "(কোনো প্রাসঙ্গিক তথ্য পাওয়া যায়নি)"}
 
-নির্দেশ: ${languageDirective} ${translationDirective} ${combineDirective} ব্যবহৃত প্রতিটা তথ্যের পাশে [নম্বর] বসাও এবং উত্তরের শেষে "সূত্র:" অংশে রেফারেন্সগুলো লেখো।
+নির্দেশ: ${languageDirective} ${translationDirective} ${combineDirective} ${continuityDirective} প্রতিটা উদ্ধৃতির পরেই সহজ ভাষায় বুঝিয়ে দাও এটা প্রশ্নের সাথে কীভাবে সম্পর্কিত। ব্যবহৃত প্রতিটা তথ্যের পাশে [নম্বর] বসাও এবং উত্তরের শেষে "সূত্র:" অংশে রেফারেন্সগুলো লেখো।
 
 প্রশ্ন: ${question}`;
 }

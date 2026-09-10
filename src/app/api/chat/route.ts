@@ -2,6 +2,7 @@ import { createUIMessageStream, createUIMessageStreamResponse, smoothStream, str
 import { logQuery, summariseRetrieval } from "@/lib/analytics/queryLog";
 import { detectQuestionLanguage } from "@/lib/ai/language";
 import { getModelChain } from "@/lib/ai/providers";
+import { rewriteQuery, type ConversationTurn } from "@/lib/ai/queryRewriter";
 import { buildSystemPrompt, buildRagPrompt } from "@/lib/ai/prompt";
 import { retrieveAnswerContext } from "@/lib/retrieval/search";
 import { logger } from "@/lib/utils/logger";
@@ -13,6 +14,17 @@ function extractText(message: UsulUIMessage): string {
   return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
 }
 
+function toHistory(messages: UsulUIMessage[]): ConversationTurn[] {
+  return messages
+    .slice(0, -1)
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .map((message) => ({
+      role: message.role === "user" ? ("user" as const) : ("assistant" as const),
+      text: extractText(message),
+    }))
+    .filter((turn) => turn.text.trim().length > 0);
+}
+
 export async function POST(request: Request) {
   const { messages }: { messages: UsulUIMessage[] } = await request.json();
   const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
@@ -22,9 +34,12 @@ export async function POST(request: Request) {
   }
 
   const question = extractText(lastUserMessage);
-  const context = await retrieveAnswerContext(question);
+  const history = toHistory(messages);
+  const { query, rewritten } = await rewriteQuery(question, history);
+
+  const context = await retrieveAnswerContext(query);
   const system = buildSystemPrompt();
-  const prompt = buildRagPrompt(question, context);
+  const prompt = buildRagPrompt(question, context, history);
   const chain = getModelChain();
 
   const sources: AnswerSource[] = context.map((chunk, index) => ({
@@ -68,6 +83,9 @@ export async function POST(request: Request) {
             writer.write({ type: "text-end", id: textId });
             void logQuery({
               question,
+              searchQuery: query,
+              rewritten,
+              historyTurns: history.length,
               language: detectQuestionLanguage(question),
               ...summariseRetrieval(context),
               answered: true,
@@ -98,6 +116,9 @@ export async function POST(request: Request) {
 
       void logQuery({
         question,
+        searchQuery: query,
+        rewritten,
+        historyTurns: history.length,
         language: detectQuestionLanguage(question),
         ...summariseRetrieval(context),
         answered: false,

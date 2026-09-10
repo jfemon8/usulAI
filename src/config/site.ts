@@ -149,6 +149,12 @@ export const HYBRID_CONFIG = {
   lazyEmbedPerRequest: 12,
 } as const;
 
+export const RERANK_CONFIG = {
+  enabled: true,
+  minCandidates: 3,
+  snippetChars: 260,
+} as const;
+
 export const CONTEXT_CONFIG = {
   maxContextChunks: 12,
   perSourceCap: {
