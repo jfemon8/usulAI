@@ -1,4 +1,4 @@
-import { HYBRID_CONFIG, RETRIEVAL_CONFIG, SOURCE_PRIORITY } from "@/config/site";
+import { CONTEXT_CONFIG, HYBRID_CONFIG, SOURCE_PRIORITY } from "@/config/site";
 import { embedText, embedTexts } from "@/lib/ai/embeddings";
 import {
   attachEmbeddings,
@@ -7,10 +7,11 @@ import {
   textSearch,
 } from "@/lib/retrieval/vectorStore";
 import { logger } from "@/lib/utils/logger";
-import type { RetrievedChunk } from "@/types";
+import type { RetrievedChunk, SourceType } from "@/types";
 import type { SearchOptions } from "@/lib/retrieval/types";
 
 const MIN_SIMILARITY = 0.8;
+const embeddingsInFlight = new Set<string>();
 
 async function embedQuestion(question: string): Promise<number[] | null> {
   try {
@@ -32,49 +33,72 @@ function dedupe(chunks: RetrievedChunk[]): RetrievedChunk[] {
   });
 }
 
+async function gatherFromSource(
+  sourceType: SourceType,
+  question: string,
+  queryEmbedding: number[] | null,
+  minSimilarity: number,
+): Promise<RetrievedChunk[]> {
+  const cap = CONTEXT_CONFIG.perSourceCap[sourceType];
+
+  const [vectorHits, textHits] = await Promise.all([
+    queryEmbedding ? similaritySearch(queryEmbedding, sourceType, cap) : Promise.resolve([]),
+    textSearch(question, sourceType),
+  ]);
+
+  const confidentVector = vectorHits.filter((hit) => hit.similarity >= minSimilarity);
+  const confidentText = textHits.filter((hit) => hit.similarity >= HYBRID_CONFIG.minTextScore);
+
+  return dedupe([...confidentVector, ...confidentText]);
+}
+
 export async function retrieveAnswerContext(
   question: string,
   options: SearchOptions = {},
 ): Promise<RetrievedChunk[]> {
   const sources = options.sources ?? SOURCE_PRIORITY;
-  const maxChunks = options.maxChunks ?? RETRIEVAL_CONFIG.topKPerSource;
+  const maxChunks = options.maxChunks ?? CONTEXT_CONFIG.maxContextChunks;
   const minSimilarity = options.minSimilarity ?? MIN_SIMILARITY;
 
   const queryEmbedding = await embedQuestion(question);
-  const collected: RetrievedChunk[] = [];
-  const textOnlyMatches: RetrievedChunk[] = [];
 
-  for (const sourceType of sources) {
-    if (collected.length >= maxChunks) break;
+  const perSource = await Promise.all(
+    sources.map((sourceType) =>
+      gatherFromSource(sourceType, question, queryEmbedding, minSimilarity),
+    ),
+  );
 
-    const room = maxChunks - collected.length;
-    const [vectorHits, textHits] = await Promise.all([
-      queryEmbedding ? similaritySearch(queryEmbedding, sourceType, room) : Promise.resolve([]),
-      textSearch(question, sourceType),
-    ]);
+  const context: RetrievedChunk[] = [];
+  const leftovers: RetrievedChunk[] = [];
 
-    const confidentVector = vectorHits.filter((hit) => hit.similarity >= minSimilarity);
-    const confidentText = textHits.filter((hit) => hit.similarity >= HYBRID_CONFIG.minTextScore);
+  sources.forEach((sourceType, index) => {
+    const hits = perSource[index] ?? [];
+    const cap = CONTEXT_CONFIG.perSourceCap[sourceType];
+    context.push(...hits.slice(0, cap));
+    leftovers.push(...hits.slice(cap));
+  });
 
-    textOnlyMatches.push(...confidentText);
-    collected.push(...dedupe([...confidentVector, ...confidentText]).slice(0, room));
-  }
-
-  const context = dedupe(collected).slice(0, maxChunks);
+  const ordered = dedupe(context)
+    .sort((a, b) => sources.indexOf(a.sourceType) - sources.indexOf(b.sourceType))
+    .slice(0, maxChunks);
 
   if (options.lazyEmbed !== false) {
-    void backfillEmbeddings([...context, ...textOnlyMatches]);
+    void backfillEmbeddings([...ordered, ...leftovers]);
   }
 
-  return context;
+  return ordered;
 }
 
 async function backfillEmbeddings(candidates: RetrievedChunk[]): Promise<void> {
-  try {
-    const ids = dedupe(candidates)
-      .slice(0, HYBRID_CONFIG.lazyEmbedPerRequest)
-      .map((chunk) => chunk.id);
+  const ids = dedupe(candidates)
+    .map((chunk) => chunk.id)
+    .filter((id) => !embeddingsInFlight.has(id))
+    .slice(0, HYBRID_CONFIG.lazyEmbedPerRequest);
 
+  if (ids.length === 0) return;
+  for (const id of ids) embeddingsInFlight.add(id);
+
+  try {
     const missing = await findUnembedded(ids);
     if (missing.length === 0) return;
 
@@ -86,5 +110,7 @@ async function backfillEmbeddings(candidates: RetrievedChunk[]): Promise<void> {
     logger.info(`Lazy-embedded ${updated} retrieved documents`);
   } catch (error) {
     logger.warn("Lazy embedding skipped", { error: String(error).slice(0, 160) });
+  } finally {
+    for (const id of ids) embeddingsInFlight.delete(id);
   }
 }

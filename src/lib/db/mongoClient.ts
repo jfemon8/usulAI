@@ -1,4 +1,4 @@
-import { MongoClient, type Collection, type Db } from "mongodb";
+import { MongoClient, type Binary, type Collection, type Db } from "mongodb";
 import { DB_CONFIG } from "@/config/site";
 import { getDbEnv } from "@/lib/utils/env";
 import type { SourceCitation, SourceType } from "@/types";
@@ -8,7 +8,7 @@ export interface DocumentRecord {
   content: string;
   citation: SourceCitation;
   metadata: Record<string, unknown>;
-  embedding?: number[];
+  embedding?: Binary;
   embeddedAt?: Date;
   createdAt: Date;
 }

@@ -16,6 +16,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check:env": "tsx scripts/check-env.ts",
+    "evaluate": "tsx scripts/evaluate.ts",
     "setup:db": "tsx scripts/setup-db.ts",
     "ingest": "tsx scripts/ingest.ts",
     "build:widget": "node scripts/build-widget.mjs",

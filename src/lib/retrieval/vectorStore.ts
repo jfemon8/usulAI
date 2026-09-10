@@ -1,4 +1,4 @@
-import { ObjectId } from "mongodb";
+import { Binary, ObjectId } from "mongodb";
 import { DB_CONFIG, HYBRID_CONFIG, RETRIEVAL_CONFIG } from "@/config/site";
 import { getDocumentsCollection } from "@/lib/db/mongoClient";
 import type { RetrievedChunk, SourceCitation, SourceType } from "@/types";
@@ -8,6 +8,10 @@ interface SearchRow {
   content: string;
   citation: SourceCitation;
   score: number;
+}
+
+export function toFloat32Vector(embedding: number[]): Binary {
+  return Binary.fromFloat32Array(new Float32Array(embedding));
 }
 
 function toChunk(row: SearchRow, sourceType: SourceType, retrievedBy: "vector" | "text") {
@@ -34,7 +38,7 @@ export async function similaritySearch(
         $vectorSearch: {
           index: DB_CONFIG.vectorIndex,
           path: DB_CONFIG.embeddingPath,
-          queryVector: queryEmbedding,
+          queryVector: toFloat32Vector(queryEmbedding),
           numCandidates: limit * RETRIEVAL_CONFIG.candidateMultiplier,
           limit,
           filter: { sourceType: { $eq: sourceType } },
@@ -107,7 +111,7 @@ export async function upsertChunks(chunks: UpsertableChunk[]): Promise<void> {
       content: chunk.content,
       citation: chunk.citation,
       metadata: chunk.metadata ?? {},
-      ...(chunk.embedding ? { embedding: chunk.embedding } : {}),
+      ...(chunk.embedding ? { embedding: toFloat32Vector(chunk.embedding) } : {}),
       createdAt,
     })),
   );
@@ -123,7 +127,9 @@ export async function attachEmbeddings(
     entries.map((entry) => ({
       updateOne: {
         filter: { _id: new ObjectId(entry.id) },
-        update: { $set: { embedding: entry.embedding, embeddedAt: new Date() } },
+        update: {
+          $set: { embedding: toFloat32Vector(entry.embedding), embeddedAt: new Date() },
+        },
       },
     })),
   );

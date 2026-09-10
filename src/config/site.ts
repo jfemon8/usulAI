@@ -2,6 +2,8 @@ export const SITE_NAME = "Usul AI";
 
 export const SOURCE_PRIORITY = ["quran", "hadith", "ijma", "qiyas", "sirat"] as const;
 
+type SourceName = (typeof SOURCE_PRIORITY)[number];
+
 export const FILE_SOURCES = ["ijma", "qiyas", "sirat"] as const;
 
 export const MODEL_CONFIG = {
@@ -146,6 +148,17 @@ export const HYBRID_CONFIG = {
   minTextScore: 3.5,
   lazyEmbedPerRequest: 12,
 } as const;
+
+export const CONTEXT_CONFIG = {
+  maxContextChunks: 12,
+  perSourceCap: {
+    quran: 4,
+    hadith: 4,
+    ijma: 2,
+    qiyas: 2,
+    sirat: 2,
+  },
+} as const satisfies { maxContextChunks: number; perSourceCap: Record<SourceName, number> };
 
 export const STORAGE_CONFIG = {
   rawSourcesPrefix: "raw-sources",
