@@ -4,17 +4,9 @@ import { parsePdf } from "@/lib/ingestion/parsers/pdfParser";
 import { parseDocx } from "@/lib/ingestion/parsers/docxParser";
 import { parsePlainText } from "@/lib/ingestion/parsers/textParser";
 import { chunkText } from "@/lib/ingestion/chunker";
-import { uploadRawDocument } from "@/lib/storage/r2Storage";
+import { uploadRawDocument } from "@/lib/storage";
 import { logger } from "@/lib/utils/logger";
 import type { IngestionDocument, SourceCitation, SourceType } from "@/types";
-
-const CONTENT_TYPES: Record<string, string> = {
-  ".pdf": "application/pdf",
-  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  ".doc": "application/msword",
-  ".txt": "text/plain; charset=utf-8",
-  ".md": "text/markdown; charset=utf-8",
-};
 
 const PLAIN_TEXT_EXTENSIONS = new Set([".txt", ".md"]);
 
@@ -28,15 +20,19 @@ async function parseByExtension(extension: string, buffer: Buffer): Promise<stri
 export interface FileSourceOptions {
   sourceType: SourceType;
   directory: string;
-  buildCitation: (fileName: string, chunkIndex: number, r2Key: string | null) => SourceCitation;
-  archiveToR2?: boolean;
+  buildCitation: (
+    fileName: string,
+    chunkIndex: number,
+    storageKey: string | null,
+  ) => SourceCitation;
+  archiveRawFile?: boolean;
 }
 
 export async function loadFileDocuments({
   sourceType,
   directory,
   buildCitation,
-  archiveToR2 = true,
+  archiveRawFile = true,
 }: FileSourceOptions): Promise<IngestionDocument[]> {
   const files = await readdir(directory).catch(() => []);
   const documents: IngestionDocument[] = [];
@@ -60,17 +56,13 @@ export async function loadFileDocuments({
       continue;
     }
 
-    let r2Key: string | null = null;
+    let storageKey: string | null = null;
 
-    if (archiveToR2) {
+    if (archiveRawFile) {
       try {
-        r2Key = await uploadRawDocument(
-          `${sourceType}/${file}`,
-          buffer,
-          CONTENT_TYPES[extension] ?? "application/octet-stream",
-        );
+        storageKey = await uploadRawDocument(`${sourceType}/${file}`, buffer);
       } catch (error) {
-        logger.warn(`R2 archive failed for "${file}", continuing without it`, {
+        logger.warn(`Raw file archive failed for "${file}", continuing without it`, {
           sourceType,
           error: String(error),
         });
@@ -83,8 +75,8 @@ export async function loadFileDocuments({
       documents.push({
         sourceType,
         content: chunk,
-        citation: buildCitation(file, index, r2Key),
-        metadata: { fileName: file, chunkIndex: index, chunkCount: chunks.length, r2Key },
+        citation: buildCitation(file, index, storageKey),
+        metadata: { fileName: file, chunkIndex: index, chunkCount: chunks.length, storageKey },
       });
     });
   }

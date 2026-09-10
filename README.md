@@ -21,7 +21,7 @@ Usul AI (উসূল AI) একটা Islamic Q&A assistant, যেটার �
 - **Framework:** Next.js (App Router) + TypeScript
 - **LLM:** Gemini (primary) → Groq (secondary) → OpenRouter (fallback), via the Vercel AI SDK
 - **Vector DB:** MongoDB Atlas Vector Search
-- **Object storage:** Cloudflare R2 (raw Ijma/Qiyas source files)
+- **Object storage:** Cloudinary (raw Ijma/Qiyas/Sirat source files)
 - **Styling:** Tailwind CSS
 - **Parsing:** unpdf (PDF), mammoth (DOCX)
 

@@ -7,47 +7,54 @@ function blank<T extends z.ZodTypeAny>(schema: T) {
   );
 }
 
-const appSchema = z.object({
+const appShape = {
   NEXT_PUBLIC_APP_URL: blank(z.string().url().default("http://localhost:3000")),
   INGEST_API_SECRET: z.string().min(1, "INGEST_API_SECRET missing"),
-});
+};
 
-const aiSchema = z.object({
+const aiShape = {
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1, "Gemini API key missing"),
   GROQ_API_KEY: z.string().min(1, "Groq API key missing"),
   OPENROUTER_API_KEY: z.string().min(1, "OpenRouter API key missing"),
-});
+};
 
-const embeddingSchema = z.object({
+const embeddingShape = {
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1, "Gemini API key missing"),
-});
+};
 
-const dbSchema = z.object({
+const dbShape = {
   MONGODB_URI: z.string().startsWith("mongodb", "MONGODB_URI must be a MongoDB connection string"),
   MONGODB_DB: blank(z.string().min(1).default("usul_ai")),
   MONGODB_MAX_POOL_SIZE: blank(z.coerce.number().int().min(1).max(200).default(10)),
-});
+};
 
-const storageSchema = z.object({
-  R2_ACCOUNT_ID: z.string().min(1, "R2_ACCOUNT_ID missing"),
-  R2_ACCESS_KEY_ID: z.string().min(1, "R2_ACCESS_KEY_ID missing"),
-  R2_SECRET_ACCESS_KEY: z.string().min(1, "R2_SECRET_ACCESS_KEY missing"),
-  R2_BUCKET: blank(z.string().min(1).default("usul-raw-sources")),
-  R2_PUBLIC_BASE_URL: blank(z.string().url().optional()),
-});
+const storageShape = {
+  CLOUDINARY_CLOUD_NAME: z.string().min(1, "CLOUDINARY_CLOUD_NAME missing"),
+  CLOUDINARY_API_KEY: z.string().min(1, "CLOUDINARY_API_KEY missing"),
+  CLOUDINARY_API_SECRET: z.string().min(1, "CLOUDINARY_API_SECRET missing"),
+};
 
-const sourcesSchema = z.object({
+const sourcesShape = {
   QURAN_API_BASE_URL: blank(z.string().url().default("https://api.alquran.cloud/v1")),
   HADITH_API_BASE_URL: blank(z.string().url().optional()),
   HADITH_API_KEY: blank(z.string().min(1).optional()),
   SUNNAH_API_KEY: blank(z.string().min(1).optional()),
-});
+};
 
-const envSchema = appSchema
-  .merge(aiSchema)
-  .merge(dbSchema)
-  .merge(storageSchema)
-  .merge(sourcesSchema);
+const appSchema = z.object(appShape);
+const aiSchema = z.object(aiShape);
+const embeddingSchema = z.object(embeddingShape);
+const dbSchema = z.object(dbShape);
+const storageSchema = z.object(storageShape);
+const sourcesSchema = z.object(sourcesShape);
+
+const envSchema = z.object({
+  ...appShape,
+  ...aiShape,
+  ...dbShape,
+  ...storageShape,
+  ...sourcesShape,
+});
 
 export type Env = z.infer<typeof envSchema>;
 

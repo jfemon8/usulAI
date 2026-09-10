@@ -10,8 +10,7 @@ function main() {
     console.log("Environment is valid.");
     console.log(`  database        ${env.MONGODB_DB}`);
     console.log(`  mongo pool      ${env.MONGODB_MAX_POOL_SIZE}`);
-    console.log(`  r2 bucket       ${env.R2_BUCKET}`);
-    console.log(`  r2 public url   ${env.R2_PUBLIC_BASE_URL ?? "(not set)"}`);
+    console.log(`  cloudinary      ${env.CLOUDINARY_CLOUD_NAME}`);
     console.log(`  hadith api key  ${env.HADITH_API_KEY ? "set" : "(not set, CDN fallback)"}`);
     console.log(`  sunnah api key  ${env.SUNNAH_API_KEY ? "set" : "(not set, CDN fallback)"}`);
 
