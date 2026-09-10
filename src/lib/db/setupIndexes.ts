@@ -17,6 +17,34 @@ const VECTOR_INDEX_DEFINITION = {
   ],
 };
 
+const TEXT_INDEX_DEFINITION = {
+  mappings: {
+    dynamic: false,
+    fields: {
+      content: { type: "string", analyzer: "lucene.standard" },
+      sourceType: { type: "token" },
+    },
+  },
+};
+
+async function ensureSearchIndex(
+  collection: Awaited<ReturnType<typeof getDocumentsCollection>>,
+  name: string,
+  type: "vectorSearch" | "search",
+  definition: Record<string, unknown>,
+): Promise<void> {
+  const indexes = await collection.listSearchIndexes().toArray();
+
+  if (indexes.some((index) => index.name === name)) {
+    await collection.updateSearchIndex(name, definition);
+    logger.info(`Updated ${type} index "${name}"`);
+    return;
+  }
+
+  await collection.createSearchIndex({ name, type, definition });
+  logger.info(`Created ${type} index "${name}" — Atlas builds it asynchronously`);
+}
+
 export async function setupIndexes(): Promise<void> {
   const db = await getDb();
   const existing = await db.listCollections({ name: DB_CONFIG.collection }).toArray();
@@ -28,20 +56,14 @@ export async function setupIndexes(): Promise<void> {
 
   const collection = await getDocumentsCollection();
   await collection.createIndex({ sourceType: 1 });
+  await collection.createIndex({ sourceType: 1, "citation.reference": 1 });
+  await collection.createIndex({ embedding: 1 }, { sparse: true });
 
-  const searchIndexes = await collection.listSearchIndexes().toArray();
-  const hasVectorIndex = searchIndexes.some((index) => index.name === DB_CONFIG.vectorIndex);
-
-  if (hasVectorIndex) {
-    await collection.updateSearchIndex(DB_CONFIG.vectorIndex, VECTOR_INDEX_DEFINITION);
-    logger.info(`Updated vector index "${DB_CONFIG.vectorIndex}"`);
-    return;
-  }
-
-  await collection.createSearchIndex({
-    name: DB_CONFIG.vectorIndex,
-    type: "vectorSearch",
-    definition: VECTOR_INDEX_DEFINITION,
-  });
-  logger.info(`Created vector index "${DB_CONFIG.vectorIndex}" — Atlas builds it asynchronously`);
+  await ensureSearchIndex(
+    collection,
+    DB_CONFIG.vectorIndex,
+    "vectorSearch",
+    VECTOR_INDEX_DEFINITION,
+  );
+  await ensureSearchIndex(collection, DB_CONFIG.textIndex, "search", TEXT_INDEX_DEFINITION);
 }

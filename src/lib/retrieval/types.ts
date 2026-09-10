@@ -4,4 +4,5 @@ export interface SearchOptions {
   maxChunks?: number;
   sources?: readonly SourceType[];
   minSimilarity?: number;
+  lazyEmbed?: boolean;
 }

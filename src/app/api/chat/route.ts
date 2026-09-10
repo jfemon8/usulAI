@@ -1,4 +1,6 @@
 import { createUIMessageStream, createUIMessageStreamResponse, smoothStream, streamText } from "ai";
+import { logQuery, summariseRetrieval } from "@/lib/analytics/queryLog";
+import { detectQuestionLanguage } from "@/lib/ai/language";
 import { getModelChain } from "@/lib/ai/providers";
 import { buildSystemPrompt, buildRagPrompt } from "@/lib/ai/prompt";
 import { retrieveAnswerContext } from "@/lib/retrieval/search";
@@ -61,6 +63,13 @@ export async function POST(request: Request) {
 
           if (emitted) {
             writer.write({ type: "text-end", id: textId });
+            void logQuery({
+              question,
+              language: detectQuestionLanguage(question),
+              ...summariseRetrieval(context),
+              answered: true,
+              modelTier: tier,
+            });
             return;
           }
 
@@ -83,6 +92,14 @@ export async function POST(request: Request) {
           }
         }
       }
+
+      void logQuery({
+        question,
+        language: detectQuestionLanguage(question),
+        ...summariseRetrieval(context),
+        answered: false,
+        errorTier: chain[chain.length - 1]?.tier,
+      });
 
       throw lastError ?? new Error("No model tier produced a response.");
     },

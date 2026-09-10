@@ -9,6 +9,7 @@ const chunk: RetrievedChunk = {
   content: "ٱلْحَمْدُ لِلَّهِ\n\nযাবতীয় প্রশংসা আল্লাহর",
   citation: { sourceType: "quran", reference: "Al-Faatiha 1:2" },
   similarity: 0.9,
+  retrievedBy: "vector",
 };
 
 describe("buildSystemPrompt", () => {

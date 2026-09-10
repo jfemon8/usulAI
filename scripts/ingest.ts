@@ -31,16 +31,24 @@ function parseArgs(argv: string[]) {
     replace: flags.has("--replace"),
     continueOnError: flags.has("--continue-on-error"),
     resume: flags.has("--resume"),
+    textOnly: flags.has("--text-only"),
     limit: numericFlag(argv, "--limit"),
     skip: numericFlag(argv, "--skip"),
   };
 }
 
 async function main() {
-  const { sources, replace, continueOnError, resume, limit, skip } = parseArgs(
+  const { sources, replace, continueOnError, resume, textOnly, limit, skip } = parseArgs(
     process.argv.slice(2),
   );
-  const reports = await runIngestion(sources, { replace, continueOnError, resume, limit, skip });
+  const reports = await runIngestion(sources, {
+    replace,
+    continueOnError,
+    resume,
+    textOnly,
+    limit,
+    skip,
+  });
 
   console.table(reports);
 

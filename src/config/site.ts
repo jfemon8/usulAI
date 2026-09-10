@@ -135,8 +135,16 @@ export const INGESTION_CONFIG = {
 
 export const DB_CONFIG = {
   collection: "documents",
+  queryLogCollection: "query_logs",
   vectorIndex: "documents_embedding_idx",
+  textIndex: "documents_text_idx",
   embeddingPath: "embedding",
+} as const;
+
+export const HYBRID_CONFIG = {
+  textCandidatesPerSource: 12,
+  minTextScore: 3.5,
+  lazyEmbedPerRequest: 12,
 } as const;
 
 export const STORAGE_CONFIG = {

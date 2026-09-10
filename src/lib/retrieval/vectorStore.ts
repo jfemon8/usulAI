@@ -1,12 +1,24 @@
-import { DB_CONFIG, RETRIEVAL_CONFIG } from "@/config/site";
+import { ObjectId } from "mongodb";
+import { DB_CONFIG, HYBRID_CONFIG, RETRIEVAL_CONFIG } from "@/config/site";
 import { getDocumentsCollection } from "@/lib/db/mongoClient";
 import type { RetrievedChunk, SourceCitation, SourceType } from "@/types";
 
-interface VectorSearchRow {
+interface SearchRow {
   _id: unknown;
   content: string;
   citation: SourceCitation;
-  similarity: number;
+  score: number;
+}
+
+function toChunk(row: SearchRow, sourceType: SourceType, retrievedBy: "vector" | "text") {
+  return {
+    id: String(row._id),
+    sourceType,
+    content: row.content,
+    citation: row.citation,
+    similarity: row.score,
+    retrievedBy,
+  };
 }
 
 export async function similaritySearch(
@@ -17,7 +29,7 @@ export async function similaritySearch(
   const collection = await getDocumentsCollection();
 
   const rows = await collection
-    .aggregate<VectorSearchRow>([
+    .aggregate<SearchRow>([
       {
         $vectorSearch: {
           index: DB_CONFIG.vectorIndex,
@@ -33,19 +45,46 @@ export async function similaritySearch(
           _id: 1,
           content: 1,
           citation: 1,
-          similarity: { $meta: "vectorSearchScore" },
+          score: { $meta: "vectorSearchScore" },
         },
       },
     ])
     .toArray();
 
-  return rows.map((row) => ({
-    id: String(row._id),
-    sourceType,
-    content: row.content,
-    citation: row.citation,
-    similarity: row.similarity,
-  }));
+  return rows.map((row) => toChunk(row, sourceType, "vector"));
+}
+
+export async function textSearch(
+  query: string,
+  sourceType: SourceType,
+  limit: number = HYBRID_CONFIG.textCandidatesPerSource,
+): Promise<RetrievedChunk[]> {
+  const collection = await getDocumentsCollection();
+
+  const rows = await collection
+    .aggregate<SearchRow>([
+      {
+        $search: {
+          index: DB_CONFIG.textIndex,
+          compound: {
+            must: [{ text: { query, path: "content" } }],
+            filter: [{ equals: { path: "sourceType", value: sourceType } }],
+          },
+        },
+      },
+      { $limit: limit },
+      {
+        $project: {
+          _id: 1,
+          content: 1,
+          citation: 1,
+          score: { $meta: "searchScore" },
+        },
+      },
+    ])
+    .toArray();
+
+  return rows.map((row) => toChunk(row, sourceType, "text"));
 }
 
 interface UpsertableChunk {
@@ -53,7 +92,7 @@ interface UpsertableChunk {
   content: string;
   citation: SourceCitation;
   metadata?: Record<string, unknown>;
-  embedding: number[];
+  embedding?: number[];
 }
 
 export async function upsertChunks(chunks: UpsertableChunk[]): Promise<void> {
@@ -68,10 +107,53 @@ export async function upsertChunks(chunks: UpsertableChunk[]): Promise<void> {
       content: chunk.content,
       citation: chunk.citation,
       metadata: chunk.metadata ?? {},
-      embedding: chunk.embedding,
+      ...(chunk.embedding ? { embedding: chunk.embedding } : {}),
       createdAt,
     })),
   );
+}
+
+export async function attachEmbeddings(
+  entries: { id: string; embedding: number[] }[],
+): Promise<number> {
+  if (entries.length === 0) return 0;
+
+  const collection = await getDocumentsCollection();
+  const result = await collection.bulkWrite(
+    entries.map((entry) => ({
+      updateOne: {
+        filter: { _id: new ObjectId(entry.id) },
+        update: { $set: { embedding: entry.embedding, embeddedAt: new Date() } },
+      },
+    })),
+  );
+
+  return result.modifiedCount;
+}
+
+export async function findUnembedded(ids: string[]): Promise<{ id: string; content: string }[]> {
+  if (ids.length === 0) return [];
+
+  const collection = await getDocumentsCollection();
+  const rows = await collection
+    .find(
+      { _id: { $in: ids.map((id) => new ObjectId(id)) }, embedding: { $exists: false } },
+      { projection: { content: 1 } },
+    )
+    .toArray();
+
+  return rows.map((row) => ({ id: String(row._id), content: row.content }));
+}
+
+export async function embeddingCoverage(): Promise<{ total: number; embedded: number }> {
+  const collection = await getDocumentsCollection();
+
+  const [total, embedded] = await Promise.all([
+    collection.countDocuments(),
+    collection.countDocuments({ embedding: { $exists: true } }),
+  ]);
+
+  return { total, embedded };
 }
 
 export async function existingReferences(sourceType: SourceType): Promise<Set<string>> {

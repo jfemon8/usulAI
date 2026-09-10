@@ -15,6 +15,7 @@ export interface RetrievedChunk {
   content: string;
   citation: SourceCitation;
   similarity: number;
+  retrievedBy: "vector" | "text";
 }
 
 export interface IngestionDocument {

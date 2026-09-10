@@ -46,12 +46,15 @@ const SOURCE_LOADERS: Record<SourceType, () => Promise<IngestionDocument[]>> = {
   sirat: loadSiratDocuments,
 };
 
+const TEXT_ONLY_BATCH_SIZE = 500;
+
 export interface IngestionOptions {
   replace?: boolean;
   continueOnError?: boolean;
   limit?: number;
   skip?: number;
   resume?: boolean;
+  textOnly?: boolean;
 }
 
 export interface IngestionReport {
@@ -96,6 +99,28 @@ async function ingestSource(
   if (documents.length === 0) {
     logger.info(`${sourceType}: nothing left to ingest`);
     return { sourceType, status: "ingested", count: 0 };
+  }
+
+  if (options.textOnly) {
+    let stored = 0;
+
+    for (let start = 0; start < documents.length; start += TEXT_ONLY_BATCH_SIZE) {
+      const batch = documents.slice(start, start + TEXT_ONLY_BATCH_SIZE);
+
+      await upsertChunks(
+        batch.map((document) => ({
+          sourceType: document.sourceType,
+          content: document.content,
+          citation: document.citation,
+          metadata: document.metadata,
+        })),
+      );
+
+      stored += batch.length;
+      logger.info(`${sourceType}: stored ${stored}/${documents.length} (text only)`);
+    }
+
+    return { sourceType, status: "ingested", count: stored };
   }
 
   let inserted = 0;
