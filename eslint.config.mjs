@@ -9,7 +9,10 @@ const eslintConfig = [
     ignores: [".next/**", "public/widget.js", "node_modules/**"],
   },
   {
-    files: ["src/app/**/{icon,apple-icon,opengraph-image,twitter-image}.tsx"],
+    files: [
+      "src/app/**/{icon,apple-icon,opengraph-image,twitter-image}.tsx",
+      "src/components/chat/SourceViewer.tsx",
+    ],
     rules: { "@next/next/no-img-element": "off" },
   },
 ];

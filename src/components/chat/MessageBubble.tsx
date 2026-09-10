@@ -1,31 +1,11 @@
 import type { ReactNode } from "react";
 import { clsx } from "clsx";
+import { AnswerMarkdown } from "@/components/chat/AnswerMarkdown";
 
 interface MessageBubbleProps {
   role: "user" | "assistant";
   text: string;
   footer?: ReactNode;
-}
-
-const ARABIC_RANGE = /[؀-ۿ]/;
-const TRANSLATION_LABEL = /^(বাংলা|English)\s*:/;
-
-function renderLines(text: string) {
-  return text.split("\n").map((line, index) => {
-    const trimmed = line.trim();
-
-    if (trimmed.length === 0) {
-      return <span key={index} className="block h-2" />;
-    }
-
-    const isArabic = ARABIC_RANGE.test(trimmed) && !TRANSLATION_LABEL.test(trimmed);
-
-    return (
-      <span key={index} className={clsx("block", isArabic && "arabic my-1")}>
-        {line}
-      </span>
-    );
-  });
 }
 
 export function MessageBubble({ role, text, footer }: MessageBubbleProps) {
@@ -41,7 +21,11 @@ export function MessageBubble({ role, text, footer }: MessageBubbleProps) {
             : "glass glass-sheen glass-strong text-(--text-1)",
         )}
       >
-        {renderLines(text)}
+        {isUser ? (
+          <span className="whitespace-pre-wrap">{text}</span>
+        ) : (
+          <AnswerMarkdown text={text} />
+        )}
         {footer}
       </div>
     </div>

@@ -3,10 +3,15 @@ import type { SOURCE_PRIORITY } from "@/config/site";
 
 export type SourceType = (typeof SOURCE_PRIORITY)[number];
 
+export type CitationMedia = "web" | "image" | "pdf";
+
 export interface SourceCitation {
   sourceType: SourceType;
   reference: string;
   url?: string;
+  media?: CitationMedia;
+  page?: number;
+  pageCount?: number;
 }
 
 export interface RetrievedChunk {
@@ -30,6 +35,9 @@ export interface AnswerSource {
   sourceType: SourceType;
   reference: string;
   url?: string;
+  media?: CitationMedia;
+  page?: number;
+  pageCount?: number;
   similarity: number;
 }
 

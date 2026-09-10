@@ -32,6 +32,9 @@ export async function POST(request: Request) {
     sourceType: chunk.sourceType,
     reference: chunk.citation.reference,
     url: chunk.citation.url,
+    media: chunk.citation.media,
+    page: chunk.citation.page,
+    pageCount: chunk.citation.pageCount,
     similarity: chunk.similarity,
   }));
 
