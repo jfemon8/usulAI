@@ -50,7 +50,7 @@ export function AnswerFeedback({ question, answer, sources }: AnswerFeedbackProp
       <p className="mt-2 text-[0.6875rem] text-(--text-3)">
         {sent === "helpful"
           ? "ধন্যবাদ, আপনার মতামত রাখা হলো।"
-          : "ধন্যবাদ — এটি পর্যালোচনার জন্য পাঠানো হয়েছে।"}
+          : "ধন্যবাদ। এটি পর্যালোচনার জন্য পাঠানো হয়েছে।"}
       </p>
     );
   }
