@@ -4,7 +4,7 @@ import { similaritySearch } from "@/lib/retrieval/vectorStore";
 import type { RetrievedChunk } from "@/types";
 import type { SearchOptions } from "@/lib/retrieval/types";
 
-const MIN_SIMILARITY = 0.75;
+const MIN_SIMILARITY = 0.8;
 
 export async function retrieveAnswerContext(
   question: string,

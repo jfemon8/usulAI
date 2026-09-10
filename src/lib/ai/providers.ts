@@ -3,7 +3,7 @@ import { groq } from "@ai-sdk/groq";
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
 import { MODEL_CHAIN, MODEL_CONFIG } from "@/config/site";
-import { getAiEnv, getEmbeddingEnv } from "@/lib/utils/env";
+import { getEmbeddingEnv } from "@/lib/utils/env";
 
 export type ModelTier = (typeof MODEL_CHAIN)[number];
 
@@ -32,10 +32,22 @@ const TIER_FACTORIES: Record<ModelTier, () => LanguageModel> = {
   fallback: getFallbackModel,
 };
 
-export function getModelChain(): TieredModel[] {
-  getAiEnv();
+const TIER_KEYS: Record<ModelTier, string> = {
+  primary: "GOOGLE_GENERATIVE_AI_API_KEY",
+  secondary: "GROQ_API_KEY",
+  fallback: "OPENROUTER_API_KEY",
+};
 
-  return MODEL_CHAIN.map((tier) => ({
+export function getModelChain(): TieredModel[] {
+  const configured = MODEL_CHAIN.filter((tier) => Boolean(process.env[TIER_KEYS[tier]]));
+
+  if (configured.length === 0) {
+    throw new Error(
+      `No model tier is configured. Set at least one of: ${Object.values(TIER_KEYS).join(", ")}`,
+    );
+  }
+
+  return configured.map((tier) => ({
     tier,
     provider: MODEL_CONFIG[tier].provider,
     modelId: MODEL_CONFIG[tier].model,

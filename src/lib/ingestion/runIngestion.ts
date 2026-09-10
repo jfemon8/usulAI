@@ -9,6 +9,10 @@ import { deleteSourceChunks, upsertChunks } from "@/lib/retrieval/vectorStore";
 import { logger } from "@/lib/utils/logger";
 import type { IngestionDocument, SourceType } from "@/types";
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const SOURCE_LOADERS: Record<SourceType, () => Promise<IngestionDocument[]>> = {
   quran: fetchQuranCorpus,
   hadith: fetchHadithCorpus,
@@ -20,6 +24,8 @@ const SOURCE_LOADERS: Record<SourceType, () => Promise<IngestionDocument[]>> = {
 export interface IngestionOptions {
   replace?: boolean;
   continueOnError?: boolean;
+  limit?: number;
+  skip?: number;
 }
 
 export interface IngestionReport {
@@ -33,11 +39,19 @@ async function ingestSource(
   sourceType: SourceType,
   options: IngestionOptions,
 ): Promise<IngestionReport> {
-  const documents = await SOURCE_LOADERS[sourceType]();
+  const loaded = await SOURCE_LOADERS[sourceType]();
+  const skip = options.skip ?? 0;
+  const documents = loaded.slice(skip, options.limit ? skip + options.limit : undefined);
 
-  if (documents.length === 0) {
+  if (loaded.length === 0) {
     logger.warn(`No documents found for ${sourceType}`);
     return { sourceType, status: "empty", count: 0 };
+  }
+
+  if (skip > 0 || options.limit) {
+    logger.info(
+      `${sourceType}: ingesting ${documents.length} of ${loaded.length} documents (skip ${skip})`,
+    );
   }
 
   if (options.replace) {
@@ -46,8 +60,12 @@ async function ingestSource(
   }
 
   let inserted = 0;
+  const minBatchIntervalMs = Math.ceil(
+    (60_000 * INGESTION_CONFIG.embeddingBatchSize) / INGESTION_CONFIG.embeddingDocsPerMinute,
+  );
 
   for (let start = 0; start < documents.length; start += INGESTION_CONFIG.embeddingBatchSize) {
+    const startedAt = Date.now();
     const batch = documents.slice(start, start + INGESTION_CONFIG.embeddingBatchSize);
     const embeddings = await embedTexts(batch.map((document) => document.content));
 
@@ -63,6 +81,11 @@ async function ingestSource(
 
     inserted += batch.length;
     logger.info(`${sourceType}: embedded ${inserted}/${documents.length}`);
+
+    const remaining = minBatchIntervalMs - (Date.now() - startedAt);
+    if (remaining > 0 && start + INGESTION_CONFIG.embeddingBatchSize < documents.length) {
+      await delay(remaining);
+    }
   }
 
   return { sourceType, status: "ingested", count: inserted };

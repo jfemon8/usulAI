@@ -4,6 +4,17 @@ import { getMongoClient } from "@/lib/db/mongoClient";
 import { runIngestion } from "@/lib/ingestion/runIngestion";
 import type { SourceType } from "@/types";
 
+function numericFlag(argv: string[], name: string): number | undefined {
+  const match = argv.find((arg) => arg.startsWith(`${name}=`));
+  if (!match) return undefined;
+
+  const value = Number(match.split("=")[1]);
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(`${name} must be a non-negative integer`);
+  }
+  return value;
+}
+
 function parseArgs(argv: string[]) {
   const flags = new Set(argv.filter((arg) => arg.startsWith("--")));
   const named = argv.filter((arg) => !arg.startsWith("--")) as SourceType[];
@@ -19,12 +30,14 @@ function parseArgs(argv: string[]) {
     sources: named.length > 0 ? named : SOURCE_PRIORITY,
     replace: flags.has("--replace"),
     continueOnError: flags.has("--continue-on-error"),
+    limit: numericFlag(argv, "--limit"),
+    skip: numericFlag(argv, "--skip"),
   };
 }
 
 async function main() {
-  const { sources, replace, continueOnError } = parseArgs(process.argv.slice(2));
-  const reports = await runIngestion(sources, { replace, continueOnError });
+  const { sources, replace, continueOnError, limit, skip } = parseArgs(process.argv.slice(2));
+  const reports = await runIngestion(sources, { replace, continueOnError, limit, skip });
 
   console.table(reports);
 

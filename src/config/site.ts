@@ -7,7 +7,7 @@ export const FILE_SOURCES = ["ijma", "qiyas", "sirat"] as const;
 export const MODEL_CONFIG = {
   primary: {
     provider: "google",
-    model: "gemini-2.5-flash",
+    model: "gemini-3.6-flash",
   },
   secondary: {
     provider: "groq",
@@ -19,8 +19,13 @@ export const MODEL_CONFIG = {
   },
   embedding: {
     provider: "google",
-    model: "text-embedding-004",
+    model: "gemini-embedding-001",
   },
+} as const;
+
+export const EMBEDDING_TASK = {
+  document: "RETRIEVAL_DOCUMENT",
+  query: "RETRIEVAL_QUERY",
 } as const;
 
 export const MODEL_CHAIN = ["primary", "secondary", "fallback"] as const;
@@ -121,7 +126,9 @@ export const INGESTION_CONFIG = {
   requestTimeoutMs: 30_000,
   requestRetries: 2,
   retryBaseDelayMs: 1_000,
-  embeddingBatchSize: 64,
+  embeddingBatchSize: 20,
+  embeddingDocsPerMinute: 80,
+  embeddingMaxRetries: 6,
 } as const;
 
 export const DB_CONFIG = {
