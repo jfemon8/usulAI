@@ -1,7 +1,8 @@
-import { RERANK_CONFIG } from "@/config/site";
+import { AUXILIARY_CONFIG, RERANK_CONFIG } from "@/config/site";
 import { generateWithChain } from "@/lib/ai/auxiliaryModel";
 import { TRANSLATION_LABELS } from "@/lib/ingestion/translations";
 import { logger } from "@/lib/utils/logger";
+import { createLru, normalizeCacheKey } from "@/lib/utils/lru";
 import type { RetrievedChunk, SourceType } from "@/types";
 
 const RERANK_SYSTEM = `তুমি একটি প্রাসঙ্গিকতা-যাচাইকারী। একটি প্রশ্ন আর নম্বর দেওয়া কিছু উদ্ধৃতি পাবে। যেগুলো প্রশ্নের উত্তর দিতে সত্যিই কাজে লাগে শুধু সেগুলোর নম্বর ফেরত দাও।
@@ -29,19 +30,48 @@ export function buildRerankSnippet(content: string): string {
   return source.replace(/\s+/g, " ").slice(0, RERANK_CONFIG.snippetChars);
 }
 
-function parseKeepList(text: string, total: number): number[] | null {
-  const cleaned = text.trim().toUpperCase();
-  if (cleaned.startsWith("NONE")) return [];
+export function parseKeepList(text: string, total: number): number[] | null {
+  const lines = text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 
-  const numbers = [...text.matchAll(/\d+/g)]
+  const digitLine = lines.find((line) => /\d/.test(line));
+
+  if (digitLine === undefined) {
+    return /\bNONE\b/i.test(text) ? [] : null;
+  }
+
+  const numbers = [...digitLine.matchAll(/\d+/g)]
     .map((match) => Number(match[0]))
     .filter((value) => value >= 1 && value <= total);
 
-  return numbers.length > 0 ? [...new Set(numbers)] : null;
+  if (numbers.length === 0) {
+    return /\bNONE\b/i.test(text) ? [] : null;
+  }
+
+  return [...new Set(numbers)];
+}
+
+const verdictCache = createLru<string[]>(AUXILIARY_CONFIG.rerankCacheSize);
+
+function verdictKey(question: string, group: RetrievedChunk[]): string {
+  return `${normalizeCacheKey(question)}::${group
+    .map((chunk) => chunk.id)
+    .sort()
+    .join(",")}`;
 }
 
 async function rerankGroup(question: string, group: RetrievedChunk[]): Promise<RetrievedChunk[]> {
   if (group.length < RERANK_CONFIG.minCandidates) return group;
+
+  const key = verdictKey(question, group);
+  const cached = verdictCache.get(key);
+
+  if (cached) {
+    const keptIds = new Set(cached);
+    return group.filter((chunk) => keptIds.has(chunk.id));
+  }
 
   const listing = group
     .map(
@@ -61,9 +91,16 @@ async function rerankGroup(question: string, group: RetrievedChunk[]): Promise<R
     const keep = parseKeepList(text, group.length);
     if (keep === null) return group;
 
-    return keep
+    const kept = keep
       .map((position) => group[position - 1])
       .filter((chunk): chunk is RetrievedChunk => Boolean(chunk));
+
+    verdictCache.set(
+      key,
+      kept.map((chunk) => chunk.id),
+    );
+
+    return kept;
   } catch (error) {
     logger.warn("Re-ranking skipped, using raw context", {
       error: String(error).slice(0, 160),

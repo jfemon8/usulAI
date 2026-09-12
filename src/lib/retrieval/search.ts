@@ -1,5 +1,5 @@
 import { CONTEXT_CONFIG, HYBRID_CONFIG, RERANK_CONFIG, SOURCE_PRIORITY } from "@/config/site";
-import { embedText, embedTexts } from "@/lib/ai/embeddings";
+import { embedText, embedTexts, embeddingsCoolingDown } from "@/lib/ai/embeddings";
 import {
   attachEmbeddings,
   findUnembedded,
@@ -16,6 +16,8 @@ const MIN_SIMILARITY = 0.8;
 const embeddingsInFlight = new Set<string>();
 
 async function embedQuestion(question: string): Promise<number[] | null> {
+  if (embeddingsCoolingDown()) return null;
+
   try {
     return await embedText(question);
   } catch (error) {
@@ -104,6 +106,8 @@ export async function retrieveAnswerContext(
 }
 
 async function backfillEmbeddings(candidates: RetrievedChunk[]): Promise<void> {
+  if (embeddingsCoolingDown()) return;
+
   const ids = dedupe(candidates)
     .map((chunk) => chunk.id)
     .filter((id) => !embeddingsInFlight.has(id))

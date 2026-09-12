@@ -1,4 +1,5 @@
 import { generateText } from "ai";
+import { AUXILIARY_CONFIG } from "@/config/site";
 import { getModelChain } from "@/lib/ai/providers";
 import { logger } from "@/lib/utils/logger";
 
@@ -15,6 +16,8 @@ export async function generateWithChain(
         model,
         system: options.system,
         prompt: options.prompt,
+        temperature: AUXILIARY_CONFIG.temperature,
+        maxOutputTokens: AUXILIARY_CONFIG.maxOutputTokens,
         maxRetries: 0,
       });
 

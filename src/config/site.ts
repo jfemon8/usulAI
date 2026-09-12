@@ -152,6 +152,18 @@ export const HYBRID_CONFIG = {
   lazyEmbedPerRequest: 12,
 } as const;
 
+export const EMBEDDING_RUNTIME_CONFIG = {
+  queryCacheSize: 300,
+  providerCooldownMs: 300_000,
+} as const;
+
+export const AUXILIARY_CONFIG = {
+  temperature: 0,
+  maxOutputTokens: 400,
+  rewriteCacheSize: 200,
+  rerankCacheSize: 300,
+} as const;
+
 export const VERIFIED_ANSWER_CONFIG = {
   enabled: true,
   autoVerifyAfterPositives: 3,

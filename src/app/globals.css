@@ -99,6 +99,26 @@
     outline: 2px solid var(--accent-ring);
     outline-offset: 2px;
   }
+
+  button,
+  [role="button"],
+  a[href],
+  summary,
+  select,
+  label[for],
+  input[type="checkbox"],
+  input[type="radio"],
+  input[type="file"],
+  input[type="submit"],
+  input[type="reset"] {
+    cursor: pointer;
+  }
+
+  :disabled,
+  [aria-disabled="true"],
+  [data-disabled] {
+    cursor: not-allowed;
+  }
 }
 
 @layer components {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRerankSnippet } from "@/lib/retrieval/rerank";
+import { buildRerankSnippet, parseKeepList } from "@/lib/retrieval/rerank";
 import { RERANK_CONFIG } from "@/config/site";
 
 const arabic =
@@ -33,5 +33,35 @@ describe("buildRerankSnippet", () => {
 
     expect(snippet).toHaveLength(RERANK_CONFIG.snippetChars);
     expect(snippet).not.toMatch(/\s{2,}/);
+  });
+});
+
+describe("parseKeepList", () => {
+  it("reads a plain comma list", () => {
+    expect(parseKeepList("1,3,4", 5)).toEqual([1, 3, 4]);
+  });
+
+  it("treats NONE as keeping nothing", () => {
+    expect(parseKeepList("NONE", 5)).toEqual([]);
+  });
+
+  it("still reads NONE when the model wraps it in a sentence", () => {
+    expect(parseKeepList("কোনোটিই প্রাসঙ্গিক নয়। NONE", 5)).toEqual([]);
+  });
+
+  it("keeps everything when the reply is unusable", () => {
+    expect(parseKeepList("আমি নিশ্চিত নই", 5)).toBeNull();
+  });
+
+  it("ignores numbers in prose after the answer line", () => {
+    expect(parseKeepList("2\n\nকারণ সহীহ বুখারী 1454 এখানে প্রাসঙ্গিক", 4)).toEqual([2]);
+  });
+
+  it("drops positions outside the candidate range", () => {
+    expect(parseKeepList("1, 9, 2", 3)).toEqual([1, 2]);
+  });
+
+  it("de-duplicates repeated positions", () => {
+    expect(parseKeepList("2,2,3", 3)).toEqual([2, 3]);
   });
 });

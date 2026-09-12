@@ -1,6 +1,8 @@
+import { AUXILIARY_CONFIG } from "@/config/site";
 import { detectQuestionLanguage } from "@/lib/ai/language";
 import { generateWithChain } from "@/lib/ai/auxiliaryModel";
 import { logger } from "@/lib/utils/logger";
+import { createLru, normalizeCacheKey } from "@/lib/utils/lru";
 
 export interface ConversationTurn {
   role: "user" | "assistant";
@@ -23,11 +25,21 @@ export function needsRewrite(question: string, history: ConversationTurn[]): boo
   return history.length > 0 || detectQuestionLanguage(question) === "banglish";
 }
 
+const rewriteCache = createLru<string>(AUXILIARY_CONFIG.rewriteCacheSize);
+
 export async function rewriteQuery(
   question: string,
   history: ConversationTurn[],
 ): Promise<{ query: string; rewritten: boolean }> {
   if (!needsRewrite(question, history)) return { query: question, rewritten: false };
+
+  const cacheable = history.length === 0;
+  const key = normalizeCacheKey(question);
+
+  if (cacheable) {
+    const cached = rewriteCache.get(key);
+    if (cached) return { query: cached, rewritten: cached !== question };
+  }
 
   const transcript =
     history.length > 0
@@ -57,6 +69,8 @@ export async function rewriteQuery(
     if (query !== question) {
       logger.info("Rewrote question into search query", { from: question, to: query });
     }
+
+    if (cacheable) rewriteCache.set(key, query);
 
     return { query, rewritten: query !== question };
   } catch (error) {
