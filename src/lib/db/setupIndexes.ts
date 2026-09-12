@@ -21,7 +21,7 @@ const TEXT_INDEX_DEFINITION = {
   mappings: {
     dynamic: false,
     fields: {
-      content: { type: "string", analyzer: "lucene.standard" },
+      content: { type: "string", analyzer: "lucene.bengali" },
       sourceType: { type: "token" },
     },
   },

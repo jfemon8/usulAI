@@ -13,6 +13,13 @@ const chunk: RetrievedChunk = {
 };
 
 describe("buildSystemPrompt", () => {
+  it("forbids em-dashes and mixed-script words", () => {
+    const prompt = buildSystemPrompt();
+
+    expect(prompt).toContain("লম্বা ড্যাশ");
+    expect(prompt).toContain("দুই লিপি মিশাবে না");
+  });
+
   it("makes citations mandatory", () => {
     const prompt = buildSystemPrompt();
 
@@ -52,7 +59,7 @@ describe("buildRagPrompt", () => {
   it("numbers context entries so the model can cite them", () => {
     const prompt = buildRagPrompt("প্রশ্ন", [chunk]);
 
-    expect(prompt).toContain("[1] (কুরআন — Al-Faatiha 1:2)");
+    expect(prompt).toContain("[1] (কুরআন, Al-Faatiha 1:2)");
     expect(prompt).toContain("[নম্বর] বসাও");
   });
 

@@ -6,6 +6,7 @@ import {
   similaritySearch,
   textSearch,
 } from "@/lib/retrieval/vectorStore";
+import { applyRankingSignals } from "@/lib/analytics/rankingSignals";
 import { rerankContext } from "@/lib/retrieval/rerank";
 import { logger } from "@/lib/utils/logger";
 import type { RetrievedChunk, SourceType } from "@/types";
@@ -39,12 +40,13 @@ async function gatherFromSource(
   question: string,
   queryEmbedding: number[] | null,
   minSimilarity: number,
+  expandSynonyms: boolean,
 ): Promise<RetrievedChunk[]> {
   const cap = CONTEXT_CONFIG.perSourceCap[sourceType];
 
   const [vectorHits, textHits] = await Promise.all([
     queryEmbedding ? similaritySearch(queryEmbedding, sourceType, cap) : Promise.resolve([]),
-    textSearch(question, sourceType),
+    textSearch(question, sourceType, HYBRID_CONFIG.textCandidatesPerSource, expandSynonyms),
   ]);
 
   const confidentVector = vectorHits.filter((hit) => hit.similarity >= minSimilarity);
@@ -65,7 +67,13 @@ export async function retrieveAnswerContext(
 
   const perSource = await Promise.all(
     sources.map((sourceType) =>
-      gatherFromSource(sourceType, question, queryEmbedding, minSimilarity),
+      gatherFromSource(
+        sourceType,
+        question,
+        queryEmbedding,
+        minSimilarity,
+        options.expandSynonyms !== false,
+      ),
     ),
   );
 
@@ -87,9 +95,11 @@ export async function retrieveAnswerContext(
     void backfillEmbeddings([...ordered, ...leftovers]);
   }
 
-  if (options.rerank === false || !RERANK_CONFIG.enabled) return ordered;
+  const tuned = await applyRankingSignals(question, ordered);
 
-  const relevant = await rerankContext(question, ordered);
+  if (options.rerank === false || !RERANK_CONFIG.enabled) return tuned;
+
+  const relevant = await rerankContext(question, tuned);
   return relevant.sort((a, b) => sources.indexOf(a.sourceType) - sources.indexOf(b.sourceType));
 }
 

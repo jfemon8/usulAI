@@ -6,4 +6,5 @@ export interface SearchOptions {
   minSimilarity?: number;
   lazyEmbed?: boolean;
   rerank?: boolean;
+  expandSynonyms?: boolean;
 }

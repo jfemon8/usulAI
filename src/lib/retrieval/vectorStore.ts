@@ -1,6 +1,7 @@
 import { Binary, ObjectId } from "mongodb";
 import { DB_CONFIG, HYBRID_CONFIG, RETRIEVAL_CONFIG } from "@/config/site";
 import { getDocumentsCollection } from "@/lib/db/mongoClient";
+import { expandQueryTerms } from "@/lib/retrieval/synonyms";
 import type { RetrievedChunk, SourceCitation, SourceType } from "@/types";
 
 interface SearchRow {
@@ -58,10 +59,10 @@ export async function similaritySearch(
   return rows.map((row) => toChunk(row, sourceType, "vector"));
 }
 
-export async function textSearch(
+async function runTextSearch(
   query: string,
   sourceType: SourceType,
-  limit: number = HYBRID_CONFIG.textCandidatesPerSource,
+  limit: number,
 ): Promise<RetrievedChunk[]> {
   const collection = await getDocumentsCollection();
 
@@ -89,6 +90,26 @@ export async function textSearch(
     .toArray();
 
   return rows.map((row) => toChunk(row, sourceType, "text"));
+}
+
+export async function textSearch(
+  query: string,
+  sourceType: SourceType,
+  limit: number = HYBRID_CONFIG.textCandidatesPerSource,
+  expandSynonyms = true,
+): Promise<RetrievedChunk[]> {
+  const extras = expandSynonyms ? expandQueryTerms(query) : [];
+
+  const [plain, expanded] = await Promise.all([
+    runTextSearch(query, sourceType, limit),
+    extras.length > 0
+      ? runTextSearch(extras.join(" "), sourceType, limit)
+      : Promise.resolve<RetrievedChunk[]>([]),
+  ]);
+
+  const seen = new Set(plain.map((hit) => hit.id));
+
+  return [...plain, ...expanded.filter((hit) => !seen.has(hit.id))];
 }
 
 interface UpsertableChunk {

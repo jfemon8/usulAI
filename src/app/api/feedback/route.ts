@@ -26,6 +26,7 @@ const resolveSchema = z.object({
   id: z.string().min(1),
   status: z.enum(["approved", "rejected"]),
   reviewerNote: z.string().max(2000).optional(),
+  correctedAnswer: z.string().max(8000).optional(),
 });
 
 function isReviewer(request: Request): boolean {
@@ -74,7 +75,12 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Invalid review payload" }, { status: 400 });
   }
 
-  const updated = await resolveReview(parsed.data.id, parsed.data.status, parsed.data.reviewerNote);
+  const updated = await resolveReview(
+    parsed.data.id,
+    parsed.data.status,
+    parsed.data.reviewerNote,
+    parsed.data.correctedAnswer,
+  );
 
   return updated
     ? NextResponse.json({ status: "ok" })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { stripTrailingSources } from "@/lib/ai/answerText";
+import { normalizeDashes, stripTrailingSources } from "@/lib/ai/answerText";
 
 const body = "সুদ হারাম [1]। ব্যবসা হালাল [2]।";
 
@@ -30,5 +30,27 @@ describe("stripTrailingSources", () => {
   it("does not cut a body that merely mentions the word", () => {
     const text = "কথোপকথনের সূত্র ধরে বলছি, সুদ হারাম [1]।";
     expect(stripTrailingSources(text)).toBe(text);
+  });
+});
+
+describe("normalizeDashes", () => {
+  it("turns a spaced em-dash into a comma", () => {
+    expect(normalizeDashes("সুদ হারাম — এটি কুরআনে স্পষ্ট।")).toBe("সুদ হারাম, এটি কুরআনে স্পষ্ট।");
+  });
+
+  it("keeps markdown list bullets as hyphens", () => {
+    expect(normalizeDashes("তালিকা:\n— প্রথম\n— দ্বিতীয়")).toBe("তালিকা:\n- প্রথম\n- দ্বিতীয়");
+  });
+
+  it("tightens a dash used inside a compound", () => {
+    expect(normalizeDashes("বাবা—মেয়ে")).toBe("বাবা-মেয়ে");
+  });
+
+  it("handles en-dashes the same way", () => {
+    expect(normalizeDashes("ক – খ")).toBe("ক, খ");
+  });
+
+  it("leaves text without dashes alone", () => {
+    expect(normalizeDashes("সুদ হারাম, এটি স্পষ্ট।")).toBe("সুদ হারাম, এটি স্পষ্ট।");
   });
 });

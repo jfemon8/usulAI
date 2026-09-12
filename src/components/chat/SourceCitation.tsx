@@ -37,7 +37,7 @@ export function SourceCitationList({ sources }: { sources: AnswerSource[] }) {
   if (sources.length === 0) {
     return (
       <p className="mt-3 border-t border-(--glass-border) pt-2.5 text-xs text-(--text-3)">
-        কোনো সোর্স পাওয়া যায়নি — এই উত্তরের ভিত্তি যাচাই করা যাচ্ছে না।
+        কোনো সোর্স পাওয়া যায়নি, তাই এই উত্তরের ভিত্তি যাচাই করা যাচ্ছে না।
       </p>
     );
   }

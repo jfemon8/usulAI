@@ -4,11 +4,18 @@ import { detectQuestionLanguage } from "@/lib/ai/language";
 import { getModelChain } from "@/lib/ai/providers";
 import { rewriteQuery, type ConversationTurn } from "@/lib/ai/queryRewriter";
 import { buildSystemPrompt, buildRagPrompt } from "@/lib/ai/prompt";
+import { findVerifiedAnswer } from "@/lib/analytics/verifiedAnswers";
 import { retrieveAnswerContext } from "@/lib/retrieval/search";
 import { logger } from "@/lib/utils/logger";
 import type { AnswerSource, UsulUIMessage } from "@/types";
 
 export const runtime = "nodejs";
+
+const NO_CONTEXT_REPLY = `দুঃখিত, আপনার এই প্রশ্নের উত্তর দেওয়ার মতো কোনো দলিল আমার সংগ্রহে খুঁজে পাইনি।
+
+আমি শুধু কুরআন, হাদিস, ইজমা, কিয়াস ও সীরাত থেকে পাওয়া দলিলের ভিত্তিতেই উত্তর দিই; দলিল ছাড়া নিজে থেকে কিছু বলি না।
+
+প্রশ্নটি একটু ভিন্নভাবে বা আরও নির্দিষ্ট করে জিজ্ঞেস করে দেখতে পারেন। আর এই মাসআলার নির্ভরযোগ্য সমাধানের জন্য নিকটস্থ একজন যোগ্য আলেমের সাথে পরামর্শ করার অনুরোধ করছি।`;
 
 function extractText(message: UsulUIMessage): string {
   return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
@@ -35,9 +42,51 @@ export async function POST(request: Request) {
 
   const question = extractText(lastUserMessage);
   const history = toHistory(messages);
+
+  const verified = history.length === 0 ? await findVerifiedAnswer(question) : null;
+
+  if (verified) {
+    return createUIMessageStreamResponse({
+      stream: createUIMessageStream<UsulUIMessage>({
+        execute: ({ writer }) => {
+          const textId = crypto.randomUUID();
+          writer.write({ type: "data-sources", id: "sources", data: verified.sources });
+          writer.write({ type: "text-start", id: textId });
+          writer.write({ type: "text-delta", id: textId, delta: verified.answer });
+          writer.write({ type: "text-end", id: textId });
+        },
+      }),
+    });
+  }
+
   const { query, rewritten } = await rewriteQuery(question, history);
 
   const context = await retrieveAnswerContext(query);
+
+  if (context.length === 0) {
+    void logQuery({
+      question,
+      searchQuery: query,
+      rewritten,
+      historyTurns: history.length,
+      language: detectQuestionLanguage(question),
+      ...summariseRetrieval(context),
+      answered: false,
+    });
+
+    return createUIMessageStreamResponse({
+      stream: createUIMessageStream<UsulUIMessage>({
+        execute: ({ writer }) => {
+          const textId = crypto.randomUUID();
+          writer.write({ type: "data-sources", id: "sources", data: [] });
+          writer.write({ type: "text-start", id: textId });
+          writer.write({ type: "text-delta", id: textId, delta: NO_CONTEXT_REPLY });
+          writer.write({ type: "text-end", id: textId });
+        },
+      }),
+    });
+  }
+
   const system = buildSystemPrompt();
   const prompt = buildRagPrompt(question, context, history);
   const chain = getModelChain();
@@ -129,7 +178,7 @@ export async function POST(request: Request) {
     },
     onError: (error) => {
       logger.error("Chat stream failed across every model tier", { error: String(error) });
-      return "উত্তর তৈরি করা যায়নি — কিছুক্ষণ পর আবার চেষ্টা করো।";
+      return "উত্তর তৈরি করা যায়নি, কিছুক্ষণ পর আবার চেষ্টা করো।";
     },
   });
 

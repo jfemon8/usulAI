@@ -139,6 +139,8 @@ export const DB_CONFIG = {
   collection: "documents",
   queryLogCollection: "query_logs",
   feedbackCollection: "answer_feedback",
+  verifiedAnswerCollection: "verified_answers",
+  rankingSignalCollection: "ranking_signals",
   vectorIndex: "documents_embedding_idx",
   textIndex: "documents_text_idx",
   embeddingPath: "embedding",
@@ -150,9 +152,21 @@ export const HYBRID_CONFIG = {
   lazyEmbedPerRequest: 12,
 } as const;
 
+export const VERIFIED_ANSWER_CONFIG = {
+  enabled: true,
+  autoVerifyAfterPositives: 3,
+} as const;
+
+export const FEEDBACK_LEARNING_CONFIG = {
+  enabled: true,
+  boostPerPositive: 0.35,
+  penaltyPerNegative: 0.6,
+  dropAtNetNegative: -2,
+} as const;
+
 export const RERANK_CONFIG = {
   enabled: true,
-  minCandidates: 3,
+  minCandidates: 2,
   snippetChars: 260,
 } as const;
 

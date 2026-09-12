@@ -6,7 +6,7 @@ import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeSanitize from "rehype-sanitize";
 import { clsx } from "clsx";
-import { stripTrailingSources } from "@/lib/ai/answerText";
+import { prepareAnswer } from "@/lib/ai/answerText";
 
 const ARABIC_RANGE = /[؀-ۿ]/;
 const TRANSLATION_LABEL = /^(বাংলা|English)\s*:/;
@@ -81,7 +81,7 @@ export function AnswerMarkdown({ text }: { text: string }) {
         rehypePlugins={[rehypeSanitize, rehypeKatex]}
         components={COMPONENTS}
       >
-        {stripTrailingSources(text)}
+        {prepareAnswer(text)}
       </ReactMarkdown>
     </div>
   );

@@ -3,9 +3,9 @@ import { SITE_NAME } from "@/config/site";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: `${SITE_NAME} — ইসলামিক প্রশ্নোত্তর`,
+    name: `${SITE_NAME}: ইসলামিক প্রশ্নোত্তর`,
     short_name: SITE_NAME,
-    description: "কুরআন, হাদিস, ইজমা, কিয়াস ও সীরাতের আলোকে দলিলসহ উত্তর — এই তারতীব মেনে।",
+    description: "কুরআন, হাদিস, ইজমা, কিয়াস ও সীরাতের আলোকে দলিলসহ উত্তর, এই তারতীব মেনে।",
     lang: "bn",
     dir: "ltr",
     start_url: "/",
