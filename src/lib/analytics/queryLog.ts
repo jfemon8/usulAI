@@ -19,6 +19,8 @@ export interface QueryLogEntry {
   references: string[];
   answered: boolean;
   modelTier?: string;
+  modelId?: string;
+  attempt?: number;
   errorTier?: string;
 }
 

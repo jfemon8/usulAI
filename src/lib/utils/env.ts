@@ -16,6 +16,7 @@ const aiShape = {
   GOOGLE_GENERATIVE_AI_API_KEY: z.string().min(1, "Gemini API key missing"),
   GROQ_API_KEY: z.string().min(1, "Groq API key missing"),
   OPENROUTER_API_KEY: z.string().min(1, "OpenRouter API key missing"),
+  ZAI_API_KEY: blank(z.string().min(1).optional()),
 };
 
 const embeddingShape = {

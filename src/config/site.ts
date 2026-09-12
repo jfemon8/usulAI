@@ -19,6 +19,10 @@ export const MODEL_CONFIG = {
     provider: "openrouter",
     model: "nex-agi/nex-n2.5-pro:free",
   },
+  reserve: {
+    provider: "zai",
+    model: "glm-4.5-flash",
+  },
   embedding: {
     provider: "google",
     model: "gemini-embedding-001",
@@ -30,7 +34,7 @@ export const EMBEDDING_TASK = {
   query: "RETRIEVAL_QUERY",
 } as const;
 
-export const MODEL_CHAIN = ["primary", "secondary", "fallback"] as const;
+export const MODEL_CHAIN = ["primary", "secondary", "fallback", "reserve"] as const;
 
 export const QURAN_EDITIONS = {
   alquranCloud: {
@@ -155,6 +159,23 @@ export const HYBRID_CONFIG = {
 export const EMBEDDING_RUNTIME_CONFIG = {
   queryCacheSize: 300,
   providerCooldownMs: 300_000,
+} as const;
+
+export const MODEL_ATTEMPT_CONFIG = {
+  retries: 1,
+  firstTokenTimeoutMs: 45_000,
+} as const;
+
+export const OPENROUTER_FALLBACK_MODELS = [
+  "nex-agi/nex-n2.5-mini:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
+  "google/gemma-4-26b-a4b-it:free",
+] as const;
+
+export const ZAI_CONFIG = {
+  baseUrl: "https://api.z.ai/api/paas/v4",
+  thinking: "disabled",
+  models: ["glm-4.7-flash", "glm-4.6v-flash", "glm-4.5-flash"],
 } as const;
 
 export const AUXILIARY_CONFIG = {

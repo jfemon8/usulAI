@@ -1,4 +1,5 @@
 import { createUIMessageStream, createUIMessageStreamResponse, smoothStream, streamText } from "ai";
+import { MODEL_ATTEMPT_CONFIG } from "@/config/site";
 import { logQuery, summariseRetrieval } from "@/lib/analytics/queryLog";
 import { detectQuestionLanguage } from "@/lib/ai/language";
 import { getModelChain } from "@/lib/ai/providers";
@@ -16,6 +17,10 @@ const NO_CONTEXT_REPLY = `দুঃখিত, আপনার এই প্র�
 আমি শুধু কুরআন, হাদিস, ইজমা, কিয়াস ও সীরাত থেকে পাওয়া দলিলের ভিত্তিতেই উত্তর দিই; দলিল ছাড়া নিজে থেকে কিছু বলি না।
 
 প্রশ্নটি একটু ভিন্নভাবে বা আরও নির্দিষ্ট করে জিজ্ঞেস করে দেখতে পারেন। আর এই মাসআলার নির্ভরযোগ্য সমাধানের জন্য নিকটস্থ একজন যোগ্য আলেমের সাথে পরামর্শ করার অনুরোধ করছি।`;
+
+const ALL_TIERS_FAILED_REPLY = `দুঃখিত, এই মুহূর্তে উত্তরটি তৈরি করা গেল না। আপনার প্রশ্নের সাথে সম্পর্কিত দলিলগুলো আমি খুঁজে পেয়েছি, কিন্তু সেগুলো গুছিয়ে লিখে দেওয়ার ধাপটি সাময়িকভাবে কাজ করছে না।
+
+নিচে সূত্রগুলো দেওয়া আছে, চাইলে সেগুলো সরাসরি দেখে নিতে পারেন। আর কিছুক্ষণ পর প্রশ্নটি আবার করলে সাধারণত উত্তর পাওয়া যায়।`;
 
 function extractText(message: UsulUIMessage): string {
   return message.parts.map((part) => (part.type === "text" ? part.text : "")).join("");
@@ -108,20 +113,29 @@ export async function POST(request: Request) {
 
       let lastError: unknown;
 
-      for (const { tier, provider, modelId, model } of chain) {
+      for (const [attempt, { tier, provider, modelId, model }] of chain.entries()) {
         const textId = crypto.randomUUID();
         let emitted = false;
+
+        const controller = new AbortController();
+        const stall = setTimeout(
+          () => controller.abort(),
+          MODEL_ATTEMPT_CONFIG.firstTokenTimeoutMs,
+        );
 
         try {
           const result = streamText({
             model,
             system,
             prompt,
+            maxRetries: MODEL_ATTEMPT_CONFIG.retries,
+            abortSignal: controller.signal,
             experimental_transform: smoothStream({ chunking: "word", delayInMs: 12 }),
           });
 
           for await (const delta of result.textStream) {
             if (!emitted) {
+              clearTimeout(stall);
               writer.write({ type: "text-start", id: textId });
               emitted = true;
             }
@@ -139,29 +153,40 @@ export async function POST(request: Request) {
               ...summariseRetrieval(context),
               answered: true,
               modelTier: tier,
+              modelId,
+              attempt: attempt + 1,
             });
             return;
           }
 
           lastError = new Error(`${provider}/${modelId} returned an empty stream`);
-          logger.warn(`Model tier "${tier}" produced no output, trying next`, {
+          logger.warn(`Attempt ${attempt + 1}/${chain.length} produced no output, trying next`, {
+            tier,
             provider,
             modelId,
           });
         } catch (error) {
           lastError = error;
-          logger.warn(`Model tier "${tier}" failed, trying next`, {
+          logger.warn(`Attempt ${attempt + 1}/${chain.length} failed, trying next`, {
+            tier,
             provider,
             modelId,
-            error: String(error),
+            error: String(error).slice(0, 200),
           });
 
           if (emitted) {
             writer.write({ type: "text-end", id: textId });
             throw error;
           }
+        } finally {
+          clearTimeout(stall);
         }
       }
+
+      logger.error(`Every model attempt failed (${chain.length} tried)`, {
+        attempts: chain.map((entry) => `${entry.provider}/${entry.modelId}`).join(", "),
+        error: String(lastError).slice(0, 200),
+      });
 
       void logQuery({
         question,
@@ -174,7 +199,10 @@ export async function POST(request: Request) {
         errorTier: chain[chain.length - 1]?.tier,
       });
 
-      throw lastError ?? new Error("No model tier produced a response.");
+      const failureId = crypto.randomUUID();
+      writer.write({ type: "text-start", id: failureId });
+      writer.write({ type: "text-delta", id: failureId, delta: ALL_TIERS_FAILED_REPLY });
+      writer.write({ type: "text-end", id: failureId });
     },
     onError: (error) => {
       logger.error("Chat stream failed across every model tier", { error: String(error) });
