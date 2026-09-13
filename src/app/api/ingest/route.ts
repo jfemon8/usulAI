@@ -1,44 +1,75 @@
 import { NextResponse } from "next/server";
-import { SOURCE_PRIORITY } from "@/config/site";
+import { z } from "zod";
+import { INGESTION_JOB_CONFIG, SOURCE_PRIORITY } from "@/config/site";
 import { getAppEnv } from "@/lib/utils/env";
-import { runIngestion } from "@/lib/ingestion/runIngestion";
 import { logger } from "@/lib/utils/logger";
-import type { SourceType } from "@/types";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 30;
 
-interface IngestRequestBody {
-  sources?: SourceType[];
-  replace?: boolean;
-}
+const requestSchema = z.object({
+  sources: z.array(z.enum(SOURCE_PRIORITY)).optional(),
+  mode: z.enum(INGESTION_JOB_CONFIG.modes).default("embed-only"),
+  limit: z.number().int().min(1).max(100_000).optional(),
+  replace: z.boolean().default(false),
+});
 
 export async function POST(request: Request) {
-  const { INGEST_API_SECRET } = getAppEnv();
-  const providedSecret = request.headers.get("x-ingest-secret");
+  const { INGEST_API_SECRET, GITHUB_DISPATCH_TOKEN, GITHUB_REPOSITORY } = getAppEnv();
 
-  if (providedSecret !== INGEST_API_SECRET) {
+  if (request.headers.get("x-ingest-secret") !== INGEST_API_SECRET) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = (await request.json().catch(() => ({}))) as IngestRequestBody;
-  const requested = body.sources ?? [...SOURCE_PRIORITY];
-  const unknown = requested.filter((source) => !SOURCE_PRIORITY.includes(source));
-
-  if (unknown.length > 0) {
-    return NextResponse.json({ error: `Unknown sources: ${unknown.join(", ")}` }, { status: 400 });
+  const parsed = requestSchema.safeParse(await request.json().catch(() => ({})));
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message }, { status: 400 });
   }
 
-  try {
-    const reports = await runIngestion(requested, {
-      replace: body.replace ?? false,
-      continueOnError: true,
-    });
-
-    const failed = reports.filter((report) => report.status === "failed");
-    return NextResponse.json({ status: failed.length > 0 ? "partial" : "ok", reports });
-  } catch (error) {
-    logger.error("Ingestion failed", { error: String(error) });
-    return NextResponse.json({ error: "Ingestion failed" }, { status: 500 });
+  if (!GITHUB_DISPATCH_TOKEN || !GITHUB_REPOSITORY) {
+    return NextResponse.json(
+      {
+        error:
+          "Ingestion no longer runs inside a serverless request. Set GITHUB_DISPATCH_TOKEN and GITHUB_REPOSITORY to trigger the ingestion workflow, or run it from the GitHub Actions tab.",
+      },
+      { status: 503 },
+    );
   }
+
+  const { sources, mode, limit, replace } = parsed.data;
+  const endpoint = `https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/${INGESTION_JOB_CONFIG.workflowFile}/dispatches`;
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${GITHUB_DISPATCH_TOKEN}`,
+      accept: "application/vnd.github+json",
+      "x-github-api-version": "2022-11-28",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      ref: INGESTION_JOB_CONFIG.ref,
+      inputs: {
+        sources: (sources ?? []).join(" "),
+        mode,
+        limit: String(limit ?? INGESTION_JOB_CONFIG.defaultEmbedLimit),
+        replace: String(replace),
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = (await response.text()).slice(0, 300);
+    logger.error("Ingestion workflow dispatch failed", { status: response.status, detail });
+    return NextResponse.json({ error: "Workflow dispatch failed", detail }, { status: 502 });
+  }
+
+  return NextResponse.json(
+    {
+      status: "queued",
+      mode,
+      runs: `https://github.com/${GITHUB_REPOSITORY}/actions/workflows/${INGESTION_JOB_CONFIG.workflowFile}`,
+    },
+    { status: 202 },
+  );
 }

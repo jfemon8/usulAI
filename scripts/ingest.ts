@@ -32,13 +32,14 @@ function parseArgs(argv: string[]) {
     continueOnError: flags.has("--continue-on-error"),
     textOnly: flags.has("--text-only"),
     dryRun: flags.has("--dry-run"),
+    embedOnly: flags.has("--embed-only"),
     limit: numericFlag(argv, "--limit"),
     skip: numericFlag(argv, "--skip"),
   };
 }
 
 async function main() {
-  const { sources, replace, continueOnError, textOnly, dryRun, limit, skip } = parseArgs(
+  const { sources, replace, continueOnError, textOnly, dryRun, embedOnly, limit, skip } = parseArgs(
     process.argv.slice(2),
   );
   const reports = await runIngestion(sources, {
@@ -46,6 +47,7 @@ async function main() {
     continueOnError,
     textOnly,
     dryRun,
+    embedOnly,
     limit,
     skip,
   });

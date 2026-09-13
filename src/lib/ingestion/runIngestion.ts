@@ -61,11 +61,12 @@ export interface IngestionOptions {
   skip?: number;
   textOnly?: boolean;
   dryRun?: boolean;
+  embedOnly?: boolean;
 }
 
 export interface IngestionReport {
   sourceType: SourceType;
-  status: "ingested" | "empty" | "failed" | "planned";
+  status: "ingested" | "empty" | "failed" | "planned" | "embedded";
   count: number;
   inserted?: number;
   changed?: number;
@@ -125,6 +126,11 @@ async function ingestSource(
   sourceType: SourceType,
   options: IngestionOptions,
 ): Promise<IngestionReport> {
+  if (options.embedOnly) {
+    const embedded = await embedMissing(sourceType, options);
+    return { sourceType, status: "embedded", count: embedded, embedded };
+  }
+
   const loaded = await SOURCE_LOADERS[sourceType]();
 
   if (loaded.length === 0) {

@@ -90,6 +90,10 @@ function lastUserQuestion(messages: UsulUIMessage[], beforeId: string): string {
   return "";
 }
 
+function isRetryable(parts: UsulUIMessage["parts"]): boolean {
+  return parts.some((part) => part.type === "data-outcome" && part.data.retryable);
+}
+
 function messageSources(parts: UsulUIMessage["parts"]): AnswerSource[] | null {
   for (const part of parts) {
     if (part.type === "data-sources") return part.data;
@@ -97,19 +101,33 @@ function messageSources(parts: UsulUIMessage["parts"]): AnswerSource[] | null {
   return null;
 }
 
-function ErrorNotice({ message }: { message: string }) {
+function ErrorNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div role="alert" className="rise-in flex justify-start">
       <div className="glass glass-sheen rounded-(--radius-bubble) border border-red-500/40 px-4 py-3 text-sm text-(--text-1)">
-        {message}
+        <p>{message}</p>
+        <RetryButton onRetry={onRetry} />
       </div>
     </div>
   );
 }
 
+function RetryButton({ onRetry }: { onRetry: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onRetry}
+      className="glass glass-sheen mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-(--text-1) transition duration-200 hover:brightness-[1.08] active:scale-[0.97]"
+    >
+      <span aria-hidden="true">↻</span>
+      আবার চেষ্টা করুন
+    </button>
+  );
+}
+
 function TypingIndicator() {
   return (
-    <div className="rise-in flex justify-start">
+    <div className="rise-in flex justify-start" aria-hidden="true">
       <div className="glass glass-sheen glass-strong flex items-center gap-1.5 rounded-(--radius-bubble) px-4 py-3.5">
         {[0, 1, 2].map((index) => (
           <span
@@ -171,7 +189,7 @@ export function ChatWindow({ compact = false }: ChatWindowProps) {
     () => new DefaultChatTransport<UsulUIMessage>({ api: "/api/chat" }),
     [],
   );
-  const { messages, sendMessage, status, error, clearError } = useChat<UsulUIMessage>({
+  const { messages, sendMessage, regenerate, status, error, clearError } = useChat<UsulUIMessage>({
     transport,
   });
   const errorMessage = readableChatError(error);
@@ -188,6 +206,20 @@ export function ChatWindow({ compact = false }: ChatWindowProps) {
 
     element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
   }, [messages, isWaiting]);
+
+  const liveStatus = isWaiting
+    ? "উত্তর খোঁজা হচ্ছে"
+    : isLoading
+      ? "উত্তর লেখা হচ্ছে"
+      : !errorMessage && lastMessage?.role === "assistant"
+        ? "উত্তর সম্পূর্ণ হয়েছে"
+        : "";
+
+  function retry() {
+    if (isLoading) return;
+    if (error) clearError();
+    void regenerate();
+  }
 
   function send(text: string) {
     const trimmed = text.trim();
@@ -208,7 +240,14 @@ export function ChatWindow({ compact = false }: ChatWindowProps) {
         {messages.length === 0 ? (
           <EmptyState onPick={send} />
         ) : (
-          <div className="flex flex-col gap-3 py-1">
+          <div
+            role="log"
+            aria-label="কথোপকথন"
+            aria-live="polite"
+            aria-relevant="additions"
+            aria-busy={isLoading}
+            className="flex flex-col gap-3 py-1"
+          >
             {messages.map((message) => {
               const isAssistant = message.role !== "user";
               const sources = isAssistant ? messageSources(message.parts) : null;
@@ -225,6 +264,11 @@ export function ChatWindow({ compact = false }: ChatWindowProps) {
                     isAssistant && sources !== null ? (
                       <>
                         <SourceCitationList sources={sources} />
+                        {!isLoading &&
+                        message.id === lastMessage?.id &&
+                        isRetryable(message.parts) ? (
+                          <RetryButton onRetry={retry} />
+                        ) : null}
                         {!isLoading || message.id !== lastMessage?.id ? (
                           <AnswerFeedback
                             question={lastUserQuestion(messages, message.id)}
@@ -240,10 +284,16 @@ export function ChatWindow({ compact = false }: ChatWindowProps) {
             })}
 
             {isWaiting ? <TypingIndicator /> : null}
-            {errorMessage && !isLoading ? <ErrorNotice message={errorMessage} /> : null}
+            {errorMessage && !isLoading ? (
+              <ErrorNotice message={errorMessage} onRetry={retry} />
+            ) : null}
           </div>
         )}
       </div>
+
+      <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+        {liveStatus}
+      </p>
 
       <ChatInput
         value={input}

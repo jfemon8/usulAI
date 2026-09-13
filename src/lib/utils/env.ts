@@ -11,6 +11,13 @@ const appShape = {
   NEXT_PUBLIC_APP_URL: blank(z.string().url().default("http://localhost:3000")),
   INGEST_API_SECRET: z.string().min(1, "INGEST_API_SECRET missing"),
   CRON_SECRET: blank(z.string().min(16).optional()),
+  GITHUB_DISPATCH_TOKEN: blank(z.string().min(1).optional()),
+  GITHUB_REPOSITORY: blank(
+    z
+      .string()
+      .regex(/^[\w.-]+\/[\w.-]+$/, "GITHUB_REPOSITORY must look like owner/repo")
+      .optional(),
+  ),
 };
 
 const aiShape = {

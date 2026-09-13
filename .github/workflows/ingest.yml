@@ -1,0 +1,83 @@
+name: Ingest
+
+on:
+  workflow_dispatch:
+    inputs:
+      sources:
+        description: "Space-separated sources (quran hadith ijma qiyas sirat). Empty means all."
+        required: false
+        default: ""
+      mode:
+        description: "embed-only fills missing embeddings, text-only writes documents, full does both, dry-run only plans."
+        required: true
+        default: embed-only
+        type: choice
+        options:
+          - embed-only
+          - text-only
+          - full
+          - dry-run
+      limit:
+        description: "Maximum embeddings this run (the Gemini free tier allows 1000 per day)."
+        required: false
+        default: "900"
+      replace:
+        description: "Prune documents that disappeared from the source."
+        required: false
+        default: "false"
+        type: choice
+        options:
+          - "false"
+          - "true"
+  schedule:
+    - cron: "15 20 * * *"
+
+concurrency:
+  group: ingest
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    if: github.event_name == 'workflow_dispatch' || vars.SCHEDULED_EMBEDDING == 'on'
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      MONGODB_DB: ${{ secrets.MONGODB_DB }}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+      CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+      CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+      CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
+      HADITH_API_KEY: ${{ secrets.HADITH_API_KEY }}
+      SUNNAH_API_KEY: ${{ secrets.SUNNAH_API_KEY }}
+      SOURCES: ${{ github.event.inputs.sources }}
+      MODE: ${{ github.event.inputs.mode || 'embed-only' }}
+      LIMIT: ${{ github.event.inputs.limit || '900' }}
+      REPLACE: ${{ github.event.inputs.replace || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Run ingestion
+        shell: bash
+        run: |
+          case "$MODE" in
+            embed-only) flags=(--embed-only "--limit=$LIMIT") ;;
+            text-only) flags=(--text-only) ;;
+            full) flags=("--limit=$LIMIT") ;;
+            dry-run) flags=(--dry-run) ;;
+            *) echo "Unknown mode: $MODE"; exit 1 ;;
+          esac
+          if [ "$REPLACE" = "true" ]; then flags+=(--replace); fi
+          read -r -a sources <<< "$SOURCES"
+          npm run ingest -- "${sources[@]}" "${flags[@]}" --continue-on-error
+
+      - name: Report storage
+        if: always()
+        run: npm run storage:report

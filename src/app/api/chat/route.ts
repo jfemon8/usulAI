@@ -20,6 +20,7 @@ import { logger } from "@/lib/utils/logger";
 import type { AnswerSource, UsulUIMessage } from "@/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 300;
 
 const NO_CONTEXT_REPLY = `দুঃখিত, আপনার এই প্রশ্নের উত্তর দেওয়ার মতো কোনো দলিল আমার সংগ্রহে খুঁজে পাইনি।
 
@@ -54,6 +55,7 @@ function jsonError(message: string, status: number): Response {
 }
 
 export async function POST(request: Request) {
+  const deadline = Date.now() + MODEL_ATTEMPT_CONFIG.requestBudgetMs;
   const limit = await consumeRateLimit("chat", request);
   if (!limit.allowed) return rateLimitResponse(limit);
 
@@ -174,14 +176,27 @@ export async function POST(request: Request) {
       const gateRejections: GateRejection[] = [];
 
       for (const [attempt, { tier, provider, modelId, model }] of chain.entries()) {
+        const remaining = deadline - Date.now();
+
+        if (remaining < MODEL_ATTEMPT_CONFIG.minAttemptMs) {
+          lastError = new Error(
+            `request time budget spent after ${attempt} of ${chain.length} attempts`,
+          );
+          logger.warn(`Stopping before attempt ${attempt + 1}/${chain.length}: time budget spent`, {
+            remainingMs: remaining,
+          });
+          break;
+        }
+
         const textId = crypto.randomUUID();
         let emitted = false;
 
         const controller = new AbortController();
         const stall = setTimeout(
           () => controller.abort(),
-          MODEL_ATTEMPT_CONFIG.firstTokenTimeoutMs,
+          Math.min(MODEL_ATTEMPT_CONFIG.firstTokenTimeoutMs, remaining),
         );
+        const budget = setTimeout(() => controller.abort(), remaining);
 
         const gated = !ANSWER_GATE_CONFIG.trustedModels.includes(modelId);
 
@@ -294,10 +309,15 @@ export async function POST(request: Request) {
 
           if (emitted) {
             writer.write({ type: "text-end", id: textId });
+            if (controller.signal.aborted && Date.now() >= deadline - 1000) {
+              logger.warn("Answer cut at the request time budget", { tier, provider, modelId });
+              return;
+            }
             throw error;
           }
         } finally {
           clearTimeout(stall);
+          clearTimeout(budget);
         }
       }
 
@@ -319,6 +339,7 @@ export async function POST(request: Request) {
         gateRejections: gateRejections.length > 0 ? gateRejections : undefined,
       });
 
+      writer.write({ type: "data-outcome", id: "outcome", data: { retryable: true } });
       const failureId = crypto.randomUUID();
       writer.write({ type: "text-start", id: failureId });
       writer.write({ type: "text-delta", id: failureId, delta: ALL_TIERS_FAILED_REPLY });

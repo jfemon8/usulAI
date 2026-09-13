@@ -12,6 +12,7 @@ const eslintConfig = [
     files: [
       "src/app/**/{icon,apple-icon,opengraph-image,twitter-image}.tsx",
       "src/components/chat/SourceViewer.tsx",
+      "src/lib/pwaIcon.tsx",
     ],
     rules: { "@next/next/no-img-element": "off" },
   },

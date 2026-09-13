@@ -50,8 +50,13 @@ export interface AnswerSource {
   grade?: string;
 }
 
+export interface AnswerOutcome {
+  retryable: boolean;
+}
+
 export type UsulDataParts = {
   sources: AnswerSource[];
+  outcome: AnswerOutcome;
 };
 
 export type UsulUIMessage = UIMessage<never, UsulDataParts>;

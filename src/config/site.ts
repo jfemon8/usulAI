@@ -202,6 +202,8 @@ export const ANSWER_GATE_CONFIG = {
 export const MODEL_ATTEMPT_CONFIG = {
   retries: 1,
   firstTokenTimeoutMs: 45_000,
+  requestBudgetMs: 285_000,
+  minAttemptMs: 15_000,
 } as const;
 
 export const OPENROUTER_FALLBACK_MODELS = [
@@ -260,6 +262,13 @@ export const CONTEXT_CONFIG = {
 
 export const STORAGE_CONFIG = {
   rawSourcesPrefix: "raw-sources",
+} as const;
+
+export const INGESTION_JOB_CONFIG = {
+  workflowFile: "ingest.yml",
+  ref: "main",
+  modes: ["embed-only", "text-only", "full", "dry-run"],
+  defaultEmbedLimit: 900,
 } as const;
 
 export const FILE_INGESTION_CONFIG = {
