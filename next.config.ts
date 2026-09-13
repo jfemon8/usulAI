@@ -12,7 +12,10 @@ const BASE_SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["mongodb"],
+  serverExternalPackages: ["mongodb", "pdfkit"],
+  outputFileTracingIncludes: {
+    "/api/source-view": ["./src/assets/fonts/*.ttf"],
+  },
   devIndicators: false,
   poweredByHeader: false,
   async headers() {

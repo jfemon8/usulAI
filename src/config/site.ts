@@ -303,6 +303,12 @@ export const INGESTION_JOB_CONFIG = {
   defaultEmbedLimit: 900,
 } as const;
 
+export interface OpenItiPageRange {
+  from: readonly [number, number];
+  to: readonly [number, number];
+  heading?: string;
+}
+
 export interface OpenItiBook {
   slug: string;
   repo: string;
@@ -310,7 +316,12 @@ export interface OpenItiBook {
   headingsFrom?: string;
   title: string;
   author: string;
+  part?: string;
+  pages?: readonly OpenItiPageRange[];
+  inlineHeadings?: boolean;
 }
+
+export type OpenItiSource = "ijma" | "qiyas";
 
 export const OPENITI_CONFIG = {
   rawBase: "https://raw.githubusercontent.com/OpenITI",
@@ -347,6 +358,130 @@ export const OPENITI_CONFIG = {
       author: "তাকিউদ্দীন আহমাদ ইবনু আবদিল হালীম ইবনু তাইমিয়া (মৃ. ৭২৮ হি.)",
     },
   ] satisfies OpenItiBook[],
+  qiyas: [
+    {
+      slug: "shafii-al-risala-qiyas",
+      repo: "0225AH",
+      version: "0204Shafici.Risala.Shamela0008180-ara1",
+      title: "আর-রিসালা (ইমাম শাফিঈ)",
+      author: "মুহাম্মাদ ইবনু ইদরীস আশ-শাফিঈ (মৃ. ২০৪ হি.)",
+      part: "কিয়াস, ইজতিহাদ, ইসতিহসান ও মতভেদের অধ্যায়",
+      pages: [{ from: [1, 476], to: [1, 600] }],
+    },
+    {
+      slug: "ghazali-shifa-al-ghalil",
+      repo: "0525AH",
+      version: "0505Ghazali.ShifaGhalil.Sham19Y0017827-ara1",
+      title: "শিফাউল গালীল (ইমাম গাযালী)",
+      author: "আবু হামিদ মুহাম্মাদ ইবনু মুহাম্মাদ আল-গাযালী (মৃ. ৫০৫ হি.)",
+    },
+    {
+      slug: "abu-yala-al-udda-qiyas",
+      repo: "0475AH",
+      version: "0458AbuYaclaIbnFarra.CuddaFiUsulFiqh.ShamAY0038640-ara1",
+      title: "আল-উদ্দা ফী উসূলিল ফিকহ (কাযী আবু ইয়ালা)",
+      author: "কাযী আবু ইয়ালা মুহাম্মাদ ইবনুল হুসাইন ইবনুল ফাররা (মৃ. ৪৫৮ হি.)",
+      part: "কিয়াসের সংজ্ঞা, কিয়াস ও ইল্লাতের অধ্যায়",
+      pages: [
+        { from: [1, 174], to: [1, 178], heading: "تعريف القياس" },
+        { from: [4, 1273], to: [5, 1539] },
+      ],
+    },
+    {
+      slug: "shirazi-al-luma-qiyas",
+      repo: "0500AH",
+      version: "0476AbuIshaqShirazi.LumacFiUsulFiqh.JK000427-ara1",
+      title: "আল-লুমা ফী উসূলিল ফিকহ (আবু ইসহাক আশ-শীরাযী)",
+      author: "আবু ইসহাক ইবরাহীম ইবনু আলী আশ-শীরাযী (মৃ. ৪৭৬ হি.)",
+      part: "কিয়াসের অধ্যায়",
+      inlineHeadings: true,
+      pages: [{ from: [1, 96], to: [1, 124] }],
+    },
+    {
+      slug: "sarakhsi-al-usul-qiyas",
+      repo: "0500AH",
+      version: "0483IbnAhmadSarakhsi.Usul.JK000211-ara1",
+      title: "উসূলুস সারাখসী (ইমাম সারাখসী)",
+      author: "আবু বকর মুহাম্মাদ ইবনু আহমাদ আস-সারাখসী (মৃ. ৪৮৩ হি.)",
+      part: "কিয়াস, ইসতিহসান ও ইল্লাতের আপত্তির অধ্যায়",
+      inlineHeadings: true,
+      pages: [{ from: [2, 118], to: [2, 300], heading: "باب القياس" }],
+    },
+    {
+      slug: "ghazali-al-mustasfa-qiyas",
+      repo: "0525AH",
+      version: "0505Ghazali.Mustasfa.JK000276-ara1",
+      title: "আল-মুসতাসফা (ইমাম গাযালী)",
+      author: "আবু হামিদ মুহাম্মাদ ইবনু মুহাম্মাদ আল-গাযালী (মৃ. ৫০৫ হি.)",
+      part: "কিয়াসের অধ্যায় ও ইল্লাতের অগ্রাধিকার",
+      inlineHeadings: true,
+      pages: [
+        { from: [1, 280], to: [1, 342], heading: "مقدمة في حد القياس" },
+        { from: [1, 379], to: [1, 383] },
+      ],
+    },
+    {
+      slug: "ibn-rushd-al-daruri-qiyas",
+      repo: "0600AH",
+      version: "0595IbnRushdHafid.DaruriFiUsulFiqh.Shamela0001703-ara1",
+      title: "আদ-দারূরী ফী উসূলিল ফিকহ (ইবনু রুশদ)",
+      author: "আবুল ওয়ালীদ মুহাম্মাদ ইবনু আহমাদ ইবনু রুশদ আল-হাফীদ (মৃ. ৫৯৫ হি.)",
+      part: "কিয়াসের অধ্যায়",
+      pages: [{ from: [1, 124], to: [1, 132] }],
+    },
+    {
+      slug: "ibn-qudama-rawdat-al-nazir-qiyas",
+      repo: "0625AH",
+      version: "0620IbnQudamaMaqdisi.RawdatNazir.JK000156-ara1",
+      title: "রওদাতুন নাযির (ইবনু কুদামা)",
+      author: "মুওয়াফফাকুদ্দীন আবদুল্লাহ ইবনু আহমাদ ইবনু কুদামা আল-মাকদিসী (মৃ. ৬২০ হি.)",
+      part: "কিয়াসের অধ্যায়",
+      inlineHeadings: true,
+      pages: [{ from: [1, 275], to: [1, 351] }],
+    },
+    {
+      slug: "shawkani-irshad-al-fuhul-qiyas",
+      repo: "1275AH",
+      version: "1255Shawkani.IrshadFuhul.JK000152-ara1",
+      title: "ইরশাদুল ফুহূল (ইমাম শাওকানী)",
+      author: "মুহাম্মাদ ইবনু আলী আশ-শাওকানী (মৃ. ১২৫০ হি.)",
+      part: "পঞ্চম মাকসাদ: কিয়াস ও ইসতিদলাল",
+      inlineHeadings: true,
+      pages: [{ from: [1, 336], to: [1, 416], heading: "المقصد الخامس في القياس" }],
+    },
+    {
+      slug: "ibn-hazm-al-ihkam-ibtal-al-qiyas",
+      repo: "0475AH",
+      version: "0456IbnHazm.IhkamFiUsulAhkam.JK000122-ara1",
+      title: "আল-ইহকাম ফী উসূলিল আহকাম (ইবনু হাযম)",
+      author: "আবু মুহাম্মাদ আলী ইবনু আহমাদ ইবনু হাযম আল-আন্দালুসী (মৃ. ৪৫৬ হি.)",
+      part: "কিয়াস ও ইল্লাত অস্বীকারের অধ্যায় (যাহিরী মত)",
+      inlineHeadings: true,
+      pages: [{ from: [7, 368], to: [8, 586] }],
+    },
+  ] satisfies OpenItiBook[],
+} as const;
+
+export const SOURCE_VIEW_CONFIG = {
+  maxReferenceChars: 300,
+  maxChunkOverlapChars: 400,
+  cacheSeconds: 86_400,
+  page: { width: 420, height: 595, margin: 36 },
+  fontSize: { title: 14, detail: 9.5, label: 9.5, text: 11, arabic: 16, footer: 7.5 },
+  colors: {
+    text: "#1b1d21",
+    muted: "#5f6368",
+    accent: "#0f766e",
+    highlight: "#fff1a8",
+    highlightEdge: "#e0b400",
+    rule: "#dadce0",
+  },
+  fonts: {
+    bangla: "HindSiliguri-Regular.ttf",
+    banglaBold: "HindSiliguri-SemiBold.ttf",
+    arabic: "Amiri-Regular.ttf",
+  },
+  renderScale: 2.5,
 } as const;
 
 export const FILE_INGESTION_CONFIG = {
@@ -359,6 +494,7 @@ export const RATE_LIMIT_CONFIG = {
     chat: { minute: 5, hour: 30, day: 100, globalPerDay: 1500 },
     feedback: { minute: 10, hour: 60, day: 200, globalPerDay: 5000 },
     maintenance: { minute: 1, hour: 2, day: 4, globalPerDay: 6 },
+    sourceView: { minute: 30, hour: 300, day: 1000, globalPerDay: 30000 },
   },
   maxQuestionChars: 1000,
   maxMessages: 30,

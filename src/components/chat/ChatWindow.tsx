@@ -165,7 +165,7 @@ function ThinkingRow({ foundSources }: { foundSources: boolean }) {
         <p className="shimmer-text text-base font-medium">{label}…</p>
         {seconds >= 12 ? (
           <p className="mt-1 text-xs text-(--text-3)">
-            {seconds} সেকেন্ড · নির্ভুল দলিলসহ উত্তর তৈরি হতে কিছুটা সময় লাগতে পারে
+            {seconds} সেকেন্ড · দলিলসহ নির্ভুল উত্তর তৈরি হতে কিছুটা সময় লাগতে পারে
           </p>
         ) : null}
       </div>

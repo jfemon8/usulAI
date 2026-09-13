@@ -79,6 +79,14 @@ const EQUIVALENTS: readonly ArabicEquivalent[] = [
   { match: ["কিবলা", "কিবলাহ", "কেবলা"], arabic: ["القبلة"] },
   { match: ["মসজিদ"], arabic: ["المسجد"] },
   { match: ["খিলাফত", "খলিফা", "ইমামত"], arabic: ["الإمامة", "الخلافة"] },
+  { match: ["কিয়াস", "কেয়াস", "qiyas", "analogy", "analogical"], arabic: ["القياس"] },
+  { match: ["ইল্লত", "ইল্লাত", "illah", "ratio legis"], arabic: ["العلة"] },
+  { match: ["ইসতিহসান", "ইস্তিহসান", "istihsan"], arabic: ["الاستحسان"] },
+  { match: ["ইজতিহাদ", "ইজতেহাদ", "ijtihad"], arabic: ["الاجتهاد"] },
+  { match: ["তাকলিদ", "তাকলীদ", "taqlid"], arabic: ["التقليد"] },
+  { match: ["ইসতিসহাব", "ইস্তিসহাব", "istishab"], arabic: ["الاستصحاب"] },
+  { match: ["মাসলাহা", "মাসালিহ", "maslaha"], arabic: ["المصلحة", "المصالح المرسلة"] },
+  { match: ["সাদৃশ্য", "শাবাহ"], arabic: ["الشبه"] },
 ];
 
 const BOUNDARY = String.raw`(?:^|[\s,.।?!"'()\[\]/:;-])`;

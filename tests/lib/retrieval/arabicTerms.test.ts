@@ -19,6 +19,16 @@ describe("arabicQueryTerms", () => {
     expect(arabicQueryTerms("consensus on inheritance")).toContain("المواريث");
   });
 
+  it("maps usul terms to the Arabic the qiyas books use", () => {
+    expect(arabicQueryTerms("কিয়াসের ইল্লত কীভাবে নির্ণয় হয়?")).toEqual(
+      expect.arrayContaining(["القياس", "العلة"]),
+    );
+    expect(arabicQueryTerms("istihsan ki qiyas er biporit?")).toEqual(
+      expect.arrayContaining(["الاستحسان", "القياس"]),
+    );
+    expect(arabicQueryTerms("লা ইলাহা ইল্লাল্লাহ")).toEqual([]);
+  });
+
   it("does not fire inside an unrelated word", () => {
     expect(arabicQueryTerms("মাসুদের গল্প")).toEqual([]);
   });

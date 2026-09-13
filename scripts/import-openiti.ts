@@ -1,7 +1,7 @@
 import "./loadEnv";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
-import { OPENITI_CONFIG, type OpenItiBook } from "@/config/site";
+import { OPENITI_CONFIG, type OpenItiBook, type OpenItiSource } from "@/config/site";
 import { convertOpenIti, headingsByPage } from "@/lib/ingestion/sources/openiti";
 import { logger } from "@/lib/utils/logger";
 
@@ -20,11 +20,14 @@ async function download(url: string): Promise<string> {
   throw new Error(`Download failed: ${url}`);
 }
 
-async function main() {
-  const directory = path.join(process.cwd(), "data", "ijma");
-  await mkdir(directory, { recursive: true });
+const SOURCES: readonly OpenItiSource[] = ["ijma", "qiyas"];
 
-  for (const book of OPENITI_CONFIG.ijma) {
+async function importSource(sourceType: OpenItiSource) {
+  const directory = path.join(process.cwd(), "data", sourceType);
+  await mkdir(directory, { recursive: true });
+  const books: readonly OpenItiBook[] = OPENITI_CONFIG[sourceType];
+
+  for (const book of books) {
     const source = versionUrl(book, book.version);
     const raw = await download(source);
     const injected = book.headingsFrom
@@ -36,18 +39,30 @@ async function main() {
       {
         title: book.title,
         author: book.author,
+        part: book.part,
         license: OPENITI_CONFIG.license,
         source,
         version: book.version,
       },
       injected,
+      {
+        ranges: book.pages,
+        inlineHeadings: book.inlineHeadings,
+        tidyHeadings: sourceType !== "ijma",
+      },
     );
 
     await writeFile(path.join(directory, `${book.slug}.md`), markdown, "utf8");
     await writeFile(
       path.join(directory, `${book.slug}.json`),
       `${JSON.stringify(
-        { title: book.title, author: book.author, license: OPENITI_CONFIG.license, source },
+        {
+          title: book.title,
+          author: book.author,
+          ...(book.part ? { edition: book.part } : {}),
+          license: OPENITI_CONFIG.license,
+          source,
+        },
         null,
         2,
       )}\n`,
@@ -55,8 +70,17 @@ async function main() {
     );
 
     logger.info(
-      `${book.slug}: ${pages} pages, ${headings} headings, ${markdown.length} characters`,
+      `${sourceType}/${book.slug}: ${pages} pages, ${headings} headings, ${markdown.length} characters`,
     );
+  }
+}
+
+async function main() {
+  const requested = process.argv
+    .slice(2)
+    .filter((arg): arg is OpenItiSource => SOURCES.includes(arg as OpenItiSource));
+  for (const sourceType of requested.length > 0 ? requested : SOURCES) {
+    await importSource(sourceType);
   }
 }
 

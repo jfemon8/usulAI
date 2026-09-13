@@ -74,4 +74,19 @@ export const GOLDEN_SET: GoldenCase[] = [
     expectSources: ["ijma"],
     forbidSources: ["quran", "hadith"],
   },
+  {
+    question: "কিয়াস কী এবং কিয়াসের রুকন কয়টি?",
+    expectSources: ["qiyas"],
+    forbidSources: ["quran", "hadith", "ijma"],
+  },
+  {
+    question: "কিয়াসে ইল্লত কীভাবে নির্ণয় করা হয়?",
+    expectSources: ["qiyas"],
+    forbidSources: ["quran", "hadith", "ijma"],
+  },
+  {
+    question: "what is qiyas and who rejected it",
+    expectSources: ["qiyas"],
+    forbidSources: ["quran", "hadith", "ijma"],
+  },
 ];

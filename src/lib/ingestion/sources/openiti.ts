@@ -1,6 +1,9 @@
+import type { OpenItiPageRange } from "@/config/site";
+
 export interface OpenItiFrontMatter {
   title: string;
   author: string;
+  part?: string;
   license: string;
   source: string;
   version: string;
@@ -15,6 +18,49 @@ export interface OpenItiConversion {
 const HEADER_END = "#META#Header#End#";
 const PAGE = /PageV(\d+)P(\d+)/g;
 const HEADING = /^###\s*\|+\s*(?:AUTO\s+|CHECK\s+)?(.*)$/;
+const PRINTED_PAGE_HEADING = /^\[?ص:\s*\d+\]?$/;
+const INLINE_HEADING = /^#\s*\|\s*(.+)$/;
+const GENERIC_HEADING = /^(?:فصل|فصول|مسألة|مسائل|فرع|فائدة|تنبيه|تتمة|باب)[\s:.]*$/;
+const MAX_INLINE_HEADING_CHARS = 90;
+
+export interface OpenItiOptions {
+  ranges?: readonly OpenItiPageRange[];
+  inlineHeadings?: boolean;
+  tidyHeadings?: boolean;
+}
+
+function headingTitle(raw: string | undefined, tidy = false): string | undefined {
+  const trimmed = raw?.replace(/^-\[|\]-$/g, "").trim();
+  const title = tidy ? trimmed?.replace(/^\[([^\]]+)\][\s:.]*$/, "$1").trim() : trimmed;
+  return title && !PRINTED_PAGE_HEADING.test(title) ? title : undefined;
+}
+
+function inlineHeadingTitle(line: string, tidy: boolean): string | undefined {
+  const title = line
+    .match(INLINE_HEADING)?.[1]
+    ?.replace(/^[-*\s]+/, "")
+    .trim();
+  if (!title || title.length > MAX_INLINE_HEADING_CHARS || GENERIC_HEADING.test(title)) {
+    return undefined;
+  }
+  return headingTitle(title, tidy);
+}
+
+function pageOrder(volume: number, page: number): number {
+  return volume * 100_000 + page;
+}
+
+export function pageRangeIndex(
+  ranges: readonly OpenItiPageRange[],
+  volume: number,
+  page: number,
+): number {
+  if (ranges.length === 0) return 0;
+  const order = pageOrder(volume, page);
+  return ranges.findIndex(
+    ({ from, to }) => order >= pageOrder(from[0], from[1]) && order <= pageOrder(to[0], to[1]),
+  );
+}
 
 export function openItiBody(raw: string): string {
   const index = raw.indexOf(HEADER_END);
@@ -50,8 +96,7 @@ export function headingsByPage(raw: string): Map<string, string[]> {
     }
 
     for (const line of piece.split("\n")) {
-      const heading = line.trim().match(HEADING);
-      const title = heading?.[1]?.replace(/^-\[|\]-$/g, "").trim();
+      const title = headingTitle(line.trim().match(HEADING)?.[1]);
       if (title) pending.push(title);
     }
   }
@@ -64,7 +109,9 @@ function pageLabel(volume: number, page: number, multiVolume: boolean): string {
 }
 
 function frontMatter(meta: OpenItiFrontMatter): string {
-  const lines = Object.entries(meta).map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
+  const lines = Object.entries(meta)
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${key}: ${JSON.stringify(value)}`);
   return ["---", ...lines, "---", ""].join("\n");
 }
 
@@ -72,6 +119,7 @@ export function convertOpenIti(
   raw: string,
   meta: OpenItiFrontMatter,
   injectedHeadings: Map<string, string[]> = new Map(),
+  { ranges = [], inlineHeadings = false, tidyHeadings = false }: OpenItiOptions = {},
 ): OpenItiConversion {
   const body = cleanOpenItiText(openItiBody(raw));
   const volumes = new Set(
@@ -83,6 +131,8 @@ export function convertOpenIti(
   let buffered = "";
   let pages = 0;
   let headings = 0;
+  let skippedHeading: string | undefined;
+  let currentRange = -1;
 
   const renderLines = (text: string): string[] =>
     text
@@ -91,14 +141,16 @@ export function convertOpenIti(
       .flatMap((line) => {
         const heading = line.match(HEADING);
         if (heading) {
-          const title = heading[1]?.replace(/^-\[|\]-$/g, "").trim();
-          if (!title) return [];
-          headings += 1;
-          return [`## ${title}`];
+          const title = headingTitle(heading[1], tidyHeadings);
+          return title ? [`## ${title}`] : [];
         }
-        const paragraph = line.replace(/^#\s*/, "").trim();
+        const inline = inlineHeadings ? inlineHeadingTitle(line, tidyHeadings) : undefined;
+        if (inline) return [`## ${inline}`];
+        const paragraph = line.replace(inlineHeadings ? /^#\s*\|?\s*/ : /^#\s*/, "").trim();
         return paragraph.length > 0 ? [paragraph] : [];
       });
+
+  const isHeading = (line: string): boolean => line.startsWith("## ");
 
   for (const piece of body.split(/(PageV\d+P\d+)/)) {
     const marker = piece.match(/^PageV(\d+)P(\d+)$/);
@@ -115,20 +167,38 @@ export function convertOpenIti(
 
     const lines = renderLines(buffered);
     buffered = "";
+    const injected = (injectedHeadings.get(`${volume}:${page}`) ?? []).map(
+      (title) => `## ${title}`,
+    );
+
+    const rangeIndex = pageRangeIndex(ranges, volume, page);
+    if (rangeIndex < 0) {
+      skippedHeading = [...injected, ...lines].findLast(isHeading) ?? skippedHeading;
+      continue;
+    }
+    if (rangeIndex !== currentRange) {
+      currentRange = rangeIndex;
+      const opening = ranges[rangeIndex]?.heading;
+      if (opening) skippedHeading = `## ${opening}`;
+    }
+
     if (lines.length === 0) continue;
 
-    const injected = injectedHeadings.get(`${volume}:${page}`) ?? [];
-    headings += injected.length;
-    output.push(
-      "",
-      ...injected.map((title) => `## ${title}`),
-      pageLabel(volume, page, multiVolume),
-      ...lines,
-    );
+    if (tidyHeadings && lines.every(isHeading)) {
+      skippedHeading = [...injected, ...lines].findLast(isHeading);
+      continue;
+    }
+
+    const opensWithHeading = injected.length > 0 || (lines[0] !== undefined && isHeading(lines[0]));
+    const carried = skippedHeading && !opensWithHeading ? [skippedHeading] : [];
+    skippedHeading = undefined;
+
+    headings += carried.length + injected.length + lines.filter(isHeading).length;
+    output.push("", ...carried, ...injected, pageLabel(volume, page, multiVolume), ...lines);
     pages += 1;
   }
 
-  const tail = renderLines(buffered);
+  const tail = ranges.length === 0 ? renderLines(buffered) : [];
   if (tail.length > 0) output.push("", ...tail);
 
   return {

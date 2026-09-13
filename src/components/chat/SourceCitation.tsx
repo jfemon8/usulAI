@@ -15,10 +15,6 @@ const SOURCE_LABELS: Record<SourceType, string> = {
 const CHIP_CLASS =
   "inline-flex max-w-full items-center gap-1.5 rounded-full border border-(--border) bg-(--bg) px-3 py-1.5 text-xs font-medium text-(--text-2) transition hover:border-(--border-strong) hover:bg-(--surface-2) hover:text-(--text-1)";
 
-function isViewable(source: AnswerSource): boolean {
-  return Boolean(source.url) && (source.media === "image" || source.media === "pdf");
-}
-
 function chipBody(source: AnswerSource) {
   return (
     <>
@@ -33,7 +29,6 @@ function chipBody(source: AnswerSource) {
 
 export function SourceCitationList({ sources }: { sources: AnswerSource[] }) {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
-  const viewable = sources.filter(isViewable);
 
   if (sources.length === 0) {
     return (
@@ -50,54 +45,28 @@ export function SourceCitationList({ sources }: { sources: AnswerSource[] }) {
         {sources.map((source) => {
           const title = `${SOURCE_LABELS[source.sourceType]} · ${source.reference}${source.grade ? ` · ${source.grade}` : ""}`;
 
-          if (isViewable(source)) {
-            return (
-              <button
-                key={source.index}
-                type="button"
-                title={title}
-                onClick={() =>
-                  setViewerIndex(viewable.findIndex((item) => item.index === source.index))
-                }
-                className={`${CHIP_CLASS} active:scale-[0.97]`}
-              >
-                {chipBody(source)}
-                <span aria-hidden="true" className="text-(--text-3)">
-                  ⤢
-                </span>
-              </button>
-            );
-          }
-
-          if (source.url) {
-            return (
-              <a
-                key={source.index}
-                href={source.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                title={title}
-                className={CHIP_CLASS}
-              >
-                {chipBody(source)}
-                <span aria-hidden="true" className="text-(--text-3)">
-                  ↗
-                </span>
-              </a>
-            );
-          }
-
           return (
-            <span key={source.index} title={title} className={CHIP_CLASS}>
+            <button
+              key={source.index}
+              type="button"
+              title={`${title} · মূল পাতা দেখুন`}
+              onClick={() =>
+                setViewerIndex(sources.findIndex((item) => item.index === source.index))
+              }
+              className={`${CHIP_CLASS} active:scale-[0.97]`}
+            >
               {chipBody(source)}
-            </span>
+              <span aria-hidden="true" className="text-(--text-3)">
+                ⤢
+              </span>
+            </button>
           );
         })}
       </div>
 
       {viewerIndex !== null && viewerIndex >= 0 ? (
         <SourceViewer
-          sources={viewable}
+          sources={sources}
           startIndex={viewerIndex}
           onClose={() => setViewerIndex(null)}
         />
