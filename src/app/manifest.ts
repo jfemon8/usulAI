@@ -14,8 +14,8 @@ export default function manifest(): MetadataRoute.Manifest {
     categories: ["education", "books", "lifestyle"],
     display: "standalone",
     orientation: "portrait",
-    background_color: "#e8edf5",
-    theme_color: "#e8edf5",
+    background_color: "#ffffff",
+    theme_color: "#ffffff",
     icons: [
       { src: "/icon.svg", sizes: "any", type: "image/svg+xml", purpose: "any" },
       { src: "/apple-icon", sizes: "180x180", type: "image/png" },

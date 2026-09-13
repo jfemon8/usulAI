@@ -34,8 +34,8 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#e8edf5" },
-    { media: "(prefers-color-scheme: dark)", color: "#080d15" },
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#1b1d21" },
   ],
   width: "device-width",
   initialScale: 1,
@@ -46,9 +46,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="bn">
       <body>
-        <div className="ambient-light" aria-hidden="true">
-          <span />
-        </div>
         {children}
       </body>
     </html>

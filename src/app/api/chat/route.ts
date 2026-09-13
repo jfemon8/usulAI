@@ -1,4 +1,4 @@
-import { createUIMessageStream, createUIMessageStreamResponse, smoothStream, streamText } from "ai";
+import { createUIMessageStream, createUIMessageStreamResponse, streamText } from "ai";
 import { ANSWER_GATE_CONFIG, MODEL_ATTEMPT_CONFIG, RATE_LIMIT_CONFIG } from "@/config/site";
 import { logQuery, summariseRetrieval, type GateRejection } from "@/lib/analytics/queryLog";
 import { detectConversationLanguage } from "@/lib/ai/language";
@@ -11,6 +11,7 @@ import { previousSourceReferences } from "@/lib/retrieval/carryForward";
 import { findChunksByReferences } from "@/lib/retrieval/vectorStore";
 import { attachQuranNotes } from "@/lib/retrieval/quranNotes";
 import { createRepetitionGuard } from "@/lib/ai/repetitionGuard";
+import { createWordPacer } from "@/lib/ai/wordPacer";
 import { validateAnswer, type GateInput } from "@/lib/ai/answerGate";
 import { preferredGrade } from "@/lib/ai/hadithGrade";
 import { sanitizeSourceContent, splitSourceBlocks } from "@/lib/ingestion/translations";
@@ -199,6 +200,10 @@ export async function POST(request: Request) {
         const budget = setTimeout(() => controller.abort(), remaining);
 
         const gated = !ANSWER_GATE_CONFIG.trustedModels.includes(modelId);
+        let streamError: unknown;
+        const pacer = createWordPacer({
+          write: (chunk) => writer.write({ type: "text-delta", id: textId, delta: chunk }),
+        });
 
         try {
           const result = streamText({
@@ -207,9 +212,9 @@ export async function POST(request: Request) {
             prompt,
             maxRetries: MODEL_ATTEMPT_CONFIG.retries,
             abortSignal: controller.signal,
-            ...(gated
-              ? {}
-              : { experimental_transform: smoothStream({ chunking: "word", delayInMs: 12 }) }),
+            onError: ({ error }) => {
+              streamError = error;
+            },
           });
 
           const guard = createRepetitionGuard(contextText);
@@ -220,7 +225,7 @@ export async function POST(request: Request) {
               writer.write({ type: "text-start", id: textId });
               emitted = true;
             }
-            writer.write({ type: "text-delta", id: textId, delta: piece });
+            pacer.push(piece);
           };
 
           if (gated) {
@@ -273,6 +278,7 @@ export async function POST(request: Request) {
           }
 
           if (emitted) {
+            await pacer.finish();
             writer.write({ type: "text-end", id: textId });
             void logQuery({
               question,
@@ -292,11 +298,12 @@ export async function POST(request: Request) {
             return;
           }
 
-          lastError = new Error(`${provider}/${modelId} returned an empty stream`);
+          lastError = streamError ?? new Error(`${provider}/${modelId} returned an empty stream`);
           logger.warn(`Attempt ${attempt + 1}/${chain.length} produced no output, trying next`, {
             tier,
             provider,
             modelId,
+            ...(streamError ? { error: String(streamError).slice(0, 200) } : {}),
           });
         } catch (error) {
           lastError = error;
@@ -308,6 +315,7 @@ export async function POST(request: Request) {
           });
 
           if (emitted) {
+            await pacer.finish();
             writer.write({ type: "text-end", id: textId });
             if (controller.signal.aborted && Date.now() >= deadline - 1000) {
               logger.warn("Answer cut at the request time budget", { tier, provider, modelId });

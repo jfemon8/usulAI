@@ -199,6 +199,19 @@ export const ANSWER_GATE_CONFIG = {
   maxForeignLatinWords: 1,
 } as const;
 
+export const CHAT_HISTORY_CONFIG = {
+  storageKey: "usul-ai:conversations:v1",
+  maxConversations: 30,
+  maxMessagesPerConversation: 40,
+  maxStorageBytes: 2_500_000,
+  titleChars: 48,
+} as const;
+
+export const STREAM_PACING_CONFIG = {
+  tickMs: 24,
+  maxLagMs: 3_000,
+} as const;
+
 export const MODEL_ATTEMPT_CONFIG = {
   retries: 1,
   firstTokenTimeoutMs: 45_000,

@@ -3,15 +3,21 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
-import { MessageBubble } from "@/components/chat/MessageBubble";
-import { ChatInput } from "@/components/chat/ChatInput";
+import { clsx } from "clsx";
+import { AnswerMarkdown } from "@/components/chat/AnswerMarkdown";
+import { Composer } from "@/components/chat/Composer";
+import { MessageActions } from "@/components/chat/MessageActions";
 import { SourceCitationList } from "@/components/chat/SourceCitation";
-import { AnswerFeedback } from "@/components/chat/AnswerFeedback";
-import { LogoBadge } from "@/components/ui/Logo";
+import { ArrowDownIcon, RetryIcon } from "@/components/ui/Icons";
+import { LogoMark } from "@/components/ui/Logo";
+import { messageText } from "@/lib/chat/conversations";
 import { readableChatError } from "@/lib/utils/chatError";
 import type { AnswerSource, UsulUIMessage } from "@/types";
 
 interface ChatWindowProps {
+  chatId: string;
+  initialMessages?: UsulUIMessage[];
+  onMessagesSettled?: (messages: UsulUIMessage[]) => void;
   compact?: boolean;
 }
 
@@ -27,280 +33,384 @@ const QUESTION_POOL = [
   "হজ কার উপর ফরজ হয়?",
   "গীবত কাকে বলে, এর বিধান কী?",
   "তাওবার শর্তগুলো কী কী?",
-  "ইস্তিগফারের ফজিলত সম্পর্কে কী এসেছে?",
   "প্রতিবেশীর হক সম্পর্কে হাদিসে কী আছে?",
-  "সদকায়ে জারিয়া বলতে কী বোঝায়?",
   "ধৈর্য সম্পর্কে কুরআন কী বলে?",
-  "হালাল রিজিক অন্বেষণ নিয়ে কী নির্দেশনা আছে?",
-  "রাসূলুল্লাহ ﷺ কীভাবে দিন শুরু করতেন?",
-  "সালামের আদব কী কী?",
   "ইয়াতিমের অধিকার নিয়ে ইসলাম কী বলে?",
-  "আমানত রক্ষা সম্পর্কে কী বলা হয়েছে?",
   "ঋণ পরিশোধ নিয়ে শরীয়তের বিধান কী?",
-  "রমজানের রাতের ইবাদত সম্পর্কে কী এসেছে?",
-  "কবিরা গুনাহ কাকে বলে?",
   "মিথ্যা বলার ব্যাপারে হাদিসে কী সতর্কতা আছে?",
 ];
 
-const SUGGESTION_COUNT = 3;
 const NO_SUGGESTIONS: string[] = [];
+const BOTTOM_THRESHOLD_PX = 96;
+let cachedSuggestions: string[] | null = null;
 
-function pickRandomQuestions(pool: readonly string[], count: number): string[] {
-  const remaining = [...pool];
+function pickSuggestions(): string[] {
+  if (cachedSuggestions) return cachedSuggestions;
+  const pool = [...QUESTION_POOL];
   const picked: string[] = [];
-
-  while (picked.length < count && remaining.length > 0) {
-    const index = Math.floor(Math.random() * remaining.length);
-    const [question] = remaining.splice(index, 1);
+  while (picked.length < 4 && pool.length > 0) {
+    const [question] = pool.splice(Math.floor(Math.random() * pool.length), 1);
     if (question) picked.push(question);
   }
-
+  cachedSuggestions = picked;
   return picked;
 }
 
-let cachedSuggestions: string[] | null = null;
-
-function subscribeToSuggestions(): () => void {
-  return () => {};
+function useSuggestions(): string[] {
+  return useSyncExternalStore(
+    () => () => {},
+    pickSuggestions,
+    () => NO_SUGGESTIONS,
+  );
 }
 
-function getClientSuggestions(): string[] {
-  if (!cachedSuggestions) {
-    cachedSuggestions = pickRandomQuestions(QUESTION_POOL, SUGGESTION_COUNT);
-  }
-  return cachedSuggestions;
-}
-
-function getServerSuggestions(): string[] {
-  return NO_SUGGESTIONS;
-}
-
-function messageText(parts: UsulUIMessage["parts"]): string {
-  return parts.map((part) => (part.type === "text" ? part.text : "")).join("");
-}
-
-function lastUserQuestion(messages: UsulUIMessage[], beforeId: string): string {
-  const position = messages.findIndex((message) => message.id === beforeId);
-  const earlier = position === -1 ? messages : messages.slice(0, position);
-
-  for (let index = earlier.length - 1; index >= 0; index--) {
-    const candidate = earlier[index];
-    if (candidate?.role === "user") return messageText(candidate.parts);
-  }
-  return "";
-}
-
-function isRetryable(parts: UsulUIMessage["parts"]): boolean {
-  return parts.some((part) => part.type === "data-outcome" && part.data.retryable);
-}
-
-function messageSources(parts: UsulUIMessage["parts"]): AnswerSource[] | null {
-  for (const part of parts) {
+function messageSources(message: UsulUIMessage): AnswerSource[] | null {
+  for (const part of message.parts) {
     if (part.type === "data-sources") return part.data;
   }
   return null;
 }
 
-function ErrorNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
-  return (
-    <div role="alert" className="rise-in flex justify-start">
-      <div className="glass glass-sheen rounded-(--radius-bubble) border border-red-500/40 px-4 py-3 text-sm text-(--text-1)">
-        <p>{message}</p>
-        <RetryButton onRetry={onRetry} />
-      </div>
-    </div>
-  );
+function isRetryable(message: UsulUIMessage): boolean {
+  return message.parts.some((part) => part.type === "data-outcome" && part.data.retryable);
 }
 
-function RetryButton({ onRetry }: { onRetry: () => void }) {
+function questionBefore(messages: UsulUIMessage[], index: number): string {
+  for (let cursor = index - 1; cursor >= 0; cursor--) {
+    const candidate = messages[cursor];
+    if (candidate?.role === "user") return messageText(candidate);
+  }
+  return "";
+}
+
+function AssistantAvatar({ pulsing }: { pulsing?: boolean }) {
   return (
-    <button
-      type="button"
-      onClick={onRetry}
-      className="glass glass-sheen mt-2 inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium text-(--text-1) transition duration-200 hover:brightness-[1.08] active:scale-[0.97]"
+    <div
+      className={clsx(
+        "mt-0.5 hidden h-8 w-8 shrink-0 items-center justify-center rounded-full border border-(--border) text-(--accent) sm:flex",
+        pulsing && "animate-pulse",
+      )}
+      aria-hidden="true"
     >
-      <span aria-hidden="true">↻</span>
-      আবার চেষ্টা করুন
-    </button>
+      <LogoMark className="h-5 w-5" />
+    </div>
   );
 }
 
-function TypingIndicator() {
+function ThinkingRow({ foundSources }: { foundSources: boolean }) {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => setSeconds((value) => value + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const label = foundSources ? "দলিল পাওয়া গেছে, উত্তর সাজানো হচ্ছে" : "দলিল খোঁজা হচ্ছে";
+
   return (
-    <div className="rise-in flex justify-start" aria-hidden="true">
-      <div className="glass glass-sheen glass-strong flex items-center gap-1.5 rounded-(--radius-bubble) px-4 py-3.5">
-        {[0, 1, 2].map((index) => (
-          <span
-            key={index}
-            className="h-1.5 w-1.5 rounded-full bg-(--text-2)"
-            style={{ animation: `pulse-dot 1.3s ${index * 0.16}s infinite ease-in-out` }}
-          />
-        ))}
+    <div className="flex gap-4" aria-hidden="true">
+      <AssistantAvatar pulsing />
+      <div className="flex min-h-8 flex-col justify-center">
+        <p className="shimmer-text text-base font-medium">{label}…</p>
+        {seconds >= 12 ? (
+          <p className="mt-1 text-xs text-(--text-3)">
+            {seconds} সেকেন্ড · নির্ভুল দলিলসহ উত্তর তৈরি হতে কিছুটা সময় লাগতে পারে
+          </p>
+        ) : null}
       </div>
     </div>
   );
 }
 
-function EmptyState({ onPick }: { onPick: (question: string) => void }) {
-  const suggestions = useSyncExternalStore(
-    subscribeToSuggestions,
-    getClientSuggestions,
-    getServerSuggestions,
-  );
+function EmptyState({ onPick, compact }: { onPick: (question: string) => void; compact: boolean }) {
+  const suggestions = useSuggestions();
 
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-5 px-2 py-8 text-center">
-      <LogoBadge className="h-16 w-16 rounded-2xl" />
-
-      <div className="space-y-2">
-        <p className="arabic text-center text-(--accent)" dir="rtl">
-          بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
-        </p>
-        <p className="text-base font-medium text-(--text-1)">আসসালামু আলাইকুম ওয়া রাহমাতুল্লাহ</p>
-        <p className="mx-auto text-sm text-balance text-(--text-2)">
-          আপনার জিজ্ঞাসার উত্তর খোঁজা হবে কুরআনুল কারীম, সহীহ হাদিস, ইজমায়ে উম্মাহ, কিয়াস ও
-          সীরাতুন্নবী ﷺ তারতীব মেনে ইং-শা-আল্লাহ।
-        </p>
-        <p className="mx-auto text-xs text-balance text-(--text-3)">
-          জটিল ও ব্যক্তিগত মাসআলায় নিকটস্থ যোগ্য আলেমের পরামর্শ নিন।
-        </p>
+    <div className="flex w-full flex-col items-center text-center">
+      <div
+        className={clsx(
+          "mb-4 flex items-center justify-center rounded-2xl border border-(--border) text-(--accent)",
+          compact ? "h-11 w-11" : "h-14 w-14",
+        )}
+      >
+        <LogoMark className={compact ? "h-7 w-7" : "h-9 w-9"} />
       </div>
+      <p className="arabic mb-1 text-center text-(--text-2)" dir="rtl">
+        بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
+      </p>
+      <h2
+        className={clsx(
+          "font-semibold tracking-tight text-(--text-1)",
+          compact ? "text-xl" : "text-2xl sm:text-[1.75rem]",
+        )}
+      >
+        আসসালামু আলাইকুম, কী জানতে চান?
+      </h2>
+      <p className="mt-2 max-w-xl text-sm text-balance text-(--text-3)">
+        আপনার প্রশ্নের উত্তর আসবে শুধুমাত্র কুরআন, হাদিস, ইজমা, কিয়াস ও সীরাতের দলিল থেকে,
+        ইং-শা-আল্লাহ।
+      </p>
 
-      <div className="flex min-h-18 flex-wrap content-start justify-center gap-2">
-        {suggestions.map((question) => (
-          <button
-            key={question}
-            type="button"
-            onClick={() => onPick(question)}
-            className="glass glass-sheen rise-in rounded-full px-3.5 py-2 text-xs text-(--text-1) transition duration-200 hover:brightness-[1.08] active:scale-[0.97]"
-          >
-            {question}
-          </button>
-        ))}
-      </div>
+      {suggestions.length > 0 ? (
+        <div
+          className={clsx(
+            "mt-6 grid w-full gap-2 text-start",
+            compact ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2",
+          )}
+        >
+          {suggestions.slice(0, compact ? 3 : 4).map((question, index) => (
+            <button
+              key={question}
+              type="button"
+              onClick={() => onPick(question)}
+              className={clsx(
+                "rounded-2xl border border-(--border) px-4 py-3 text-start text-sm text-(--text-2) transition hover:bg-(--surface-2) hover:text-(--text-1)",
+                index >= 2 && "hidden sm:block",
+              )}
+            >
+              {question}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
 
-export function ChatWindow({ compact = false }: ChatWindowProps) {
+export function ChatWindow({
+  chatId,
+  initialMessages,
+  onMessagesSettled,
+  compact = false,
+}: ChatWindowProps) {
   const [input, setInput] = useState("");
+  const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const stickRef = useRef(true);
+
   const transport = useMemo(
     () => new DefaultChatTransport<UsulUIMessage>({ api: "/api/chat" }),
     [],
   );
-  const { messages, sendMessage, regenerate, status, error, clearError } = useChat<UsulUIMessage>({
-    transport,
-  });
-  const errorMessage = readableChatError(error);
+  const { messages, sendMessage, regenerate, stop, status, error, clearError } =
+    useChat<UsulUIMessage>({
+      id: chatId,
+      messages: initialMessages,
+      transport,
+      experimental_throttle: 40,
+    });
 
   const isLoading = status === "submitted" || status === "streaming";
   const lastMessage = messages[messages.length - 1];
-  const answerStarted =
-    lastMessage?.role !== "user" && messageText(lastMessage?.parts ?? []).length > 0;
+  const lastIsAssistant = lastMessage?.role === "assistant";
+  const answerStarted = lastIsAssistant && messageText(lastMessage).length > 0;
   const isWaiting = isLoading && !answerStarted;
-
-  useEffect(() => {
-    const element = scrollRef.current;
-    if (!element) return;
-
-    element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
-  }, [messages, isWaiting]);
+  const errorMessage = readableChatError(error);
+  const isEmpty = messages.length === 0;
 
   const liveStatus = isWaiting
     ? "উত্তর খোঁজা হচ্ছে"
     : isLoading
       ? "উত্তর লেখা হচ্ছে"
-      : !errorMessage && lastMessage?.role === "assistant"
+      : !errorMessage && lastIsAssistant
         ? "উত্তর সম্পূর্ণ হয়েছে"
         : "";
 
-  function retry() {
-    if (isLoading) return;
-    if (error) clearError();
-    void regenerate();
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (element && stickRef.current) element.scrollTop = element.scrollHeight;
+  }, [messages, isWaiting, errorMessage]);
+
+  useEffect(() => {
+    if (status === "ready" && messages.length > 0) onMessagesSettled?.(messages);
+  }, [status, messages, onMessagesSettled]);
+
+  function handleScroll() {
+    const element = scrollRef.current;
+    if (!element) return;
+    const near =
+      element.scrollHeight - element.scrollTop - element.clientHeight < BOTTOM_THRESHOLD_PX;
+    stickRef.current = near;
+    setAtBottom(near);
+  }
+
+  function scrollToBottom() {
+    const element = scrollRef.current;
+    if (!element) return;
+    stickRef.current = true;
+    setAtBottom(true);
+    element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
   }
 
   function send(text: string) {
     const trimmed = text.trim();
     if (trimmed.length === 0 || isLoading) return;
-
     if (error) clearError();
+    stickRef.current = true;
     sendMessage({ text: trimmed });
     setInput("");
+    requestAnimationFrame(scrollToBottom);
+  }
+
+  function retry() {
+    if (isLoading) return;
+    if (error) clearError();
+    stickRef.current = true;
+    void regenerate();
+  }
+
+  const column = compact ? "max-w-none px-3" : "max-w-3xl px-4 sm:px-6";
+
+  const composer = (
+    <Composer
+      value={input}
+      onChange={setInput}
+      onSubmit={() => send(input)}
+      onStop={() => void stop()}
+      busy={isLoading}
+      autoFocus
+      compact={compact}
+    />
+  );
+
+  if (isEmpty) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div
+          className={clsx(
+            "thin-scroll flex min-h-0 flex-1 flex-col overflow-y-auto",
+            compact ? "justify-center" : "justify-center md:pb-[8vh]",
+          )}
+        >
+          <div className={clsx("mx-auto w-full py-6", column)}>
+            <EmptyState onPick={send} compact={compact} />
+            {!compact ? <div className="mt-6 hidden md:block">{composer}</div> : null}
+          </div>
+        </div>
+        <div
+          className={clsx(
+            "shrink-0 pb-[max(0.75rem,env(safe-area-inset-bottom))]",
+            !compact && "md:hidden",
+          )}
+        >
+          <div className={clsx("mx-auto w-full", column)}>{composer}</div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div
-      className={
-        compact ? "flex h-full min-h-0 flex-col gap-3" : "flex min-h-0 flex-1 flex-col gap-3"
-      }
-    >
-      <div ref={scrollRef} className="scroll-area -mx-1 min-h-0 flex-1 px-1">
-        {messages.length === 0 ? (
-          <EmptyState onPick={send} />
-        ) : (
-          <div
-            role="log"
-            aria-label="কথোপকথন"
-            aria-live="polite"
-            aria-relevant="additions"
-            aria-busy={isLoading}
-            className="flex flex-col gap-3 py-1"
-          >
-            {messages.map((message) => {
-              const isAssistant = message.role !== "user";
-              const sources = isAssistant ? messageSources(message.parts) : null;
-              const text = messageText(message.parts);
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="thin-scroll min-h-0 flex-1 overflow-y-auto"
+      >
+        <div
+          role="log"
+          aria-label="কথোপকথন"
+          aria-live="polite"
+          aria-relevant="additions"
+          aria-busy={isLoading}
+          className={clsx("mx-auto flex w-full flex-col gap-8 pt-6 pb-10", column)}
+        >
+          {messages.map((message, index) => {
+            const isLast = index === messages.length - 1;
 
-              if (isAssistant && text.length === 0) return null;
-
+            if (message.role === "user") {
               return (
-                <MessageBubble
-                  key={message.id}
-                  role={isAssistant ? "assistant" : "user"}
-                  text={text}
-                  footer={
-                    isAssistant && sources !== null ? (
-                      <>
-                        <SourceCitationList sources={sources} />
-                        {!isLoading &&
-                        message.id === lastMessage?.id &&
-                        isRetryable(message.parts) ? (
-                          <RetryButton onRetry={retry} />
-                        ) : null}
-                        {!isLoading || message.id !== lastMessage?.id ? (
-                          <AnswerFeedback
-                            question={lastUserQuestion(messages, message.id)}
-                            answer={text}
-                            sources={sources}
-                          />
-                        ) : null}
-                      </>
-                    ) : null
-                  }
-                />
+                <div key={message.id} className="flex justify-end">
+                  <div className="max-w-[85%] rounded-3xl bg-(--surface-2) px-4 py-2.5 text-base leading-7 wrap-break-word whitespace-pre-wrap text-(--text-1) sm:max-w-[75%] sm:px-5">
+                    {messageText(message)}
+                  </div>
+                </div>
               );
-            })}
+            }
 
-            {isWaiting ? <TypingIndicator /> : null}
-            {errorMessage && !isLoading ? (
-              <ErrorNotice message={errorMessage} onRetry={retry} />
-            ) : null}
-          </div>
-        )}
+            const text = messageText(message);
+            const sources = messageSources(message);
+            const streaming = isLast && isLoading;
+
+            if (text.length === 0) {
+              return streaming ? (
+                <ThinkingRow key={message.id} foundSources={sources !== null} />
+              ) : null;
+            }
+
+            return (
+              <article key={message.id} className="flex gap-4">
+                <AssistantAvatar />
+                <div className="min-w-0 flex-1">
+                  <AnswerMarkdown text={text} streaming={streaming} />
+                  {!streaming && sources !== null ? <SourceCitationList sources={sources} /> : null}
+                  {!streaming && isLast && isRetryable(message) ? (
+                    <button
+                      type="button"
+                      onClick={retry}
+                      className="mt-4 inline-flex items-center gap-2 rounded-full border border-(--border) px-4 py-2 text-sm font-medium text-(--text-1) transition hover:bg-(--surface-2)"
+                    >
+                      <RetryIcon className="h-4 w-4" />
+                      আবার চেষ্টা করুন
+                    </button>
+                  ) : null}
+                  {!streaming ? (
+                    <MessageActions
+                      question={questionBefore(messages, index)}
+                      answer={text}
+                      sources={sources ?? []}
+                      onRetry={isLast && !isLoading ? retry : undefined}
+                    />
+                  ) : null}
+                </div>
+              </article>
+            );
+          })}
+
+          {isWaiting && !lastIsAssistant ? <ThinkingRow foundSources={false} /> : null}
+
+          {errorMessage && !isLoading ? (
+            <div role="alert" className="flex gap-4">
+              <AssistantAvatar />
+              <div className="min-w-0 flex-1 rounded-2xl border border-red-500/30 bg-red-500/5 px-4 py-3">
+                <p className="text-sm text-(--text-1)">{errorMessage}</p>
+                <button
+                  type="button"
+                  onClick={retry}
+                  className="mt-3 inline-flex items-center gap-2 rounded-full border border-(--border) bg-(--bg) px-3.5 py-1.5 text-sm font-medium text-(--text-1) transition hover:bg-(--surface-2)"
+                >
+                  <RetryIcon className="h-4 w-4" />
+                  আবার চেষ্টা করুন
+                </button>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {!atBottom ? (
+        <button
+          type="button"
+          onClick={scrollToBottom}
+          className="absolute bottom-28 left-1/2 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border border-(--border) bg-(--bg) text-(--text-2) shadow-(--composer-shadow) transition hover:text-(--text-1)"
+          aria-label="নিচে যান"
+        >
+          <ArrowDownIcon className="h-4 w-4" />
+        </button>
+      ) : null}
+
+      <div className="shrink-0 bg-(--bg) pb-[max(0.5rem,env(safe-area-inset-bottom))]">
+        <div className={clsx("mx-auto w-full", column)}>
+          {composer}
+          <p className="py-2 text-center text-[0.6875rem] leading-4 text-(--text-3)">
+            Usul AI ভুল করতে পারে। অনুগ্রহ পূর্বক গুরুত্বপূর্ণ মাসআলার জন্য যোগ্য আলেমের পরামর্শ
+            নিন।
+          </p>
+        </div>
       </div>
 
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {liveStatus}
       </p>
-
-      <ChatInput
-        value={input}
-        onChange={setInput}
-        onSubmit={() => send(input)}
-        disabled={isLoading}
-      />
     </div>
   );
 }

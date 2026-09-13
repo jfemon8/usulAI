@@ -13,7 +13,7 @@ const SOURCE_LABELS: Record<SourceType, string> = {
 };
 
 const CHIP_CLASS =
-  "glass glass-sheen inline-flex max-w-full items-center gap-1.5 rounded-full px-2.5 py-1 text-[0.6875rem] font-medium text-(--text-1) transition duration-200 hover:brightness-[1.08]";
+  "inline-flex max-w-full items-center gap-1.5 rounded-full border border-(--border) bg-(--bg) px-3 py-1.5 text-xs font-medium text-(--text-2) transition hover:border-(--border-strong) hover:bg-(--surface-2) hover:text-(--text-1)";
 
 function isViewable(source: AnswerSource): boolean {
   return Boolean(source.url) && (source.media === "image" || source.media === "pdf");
@@ -37,18 +37,16 @@ export function SourceCitationList({ sources }: { sources: AnswerSource[] }) {
 
   if (sources.length === 0) {
     return (
-      <p className="mt-3 border-t border-(--glass-border) pt-2.5 text-xs text-(--text-3)">
+      <p className="mt-4 text-xs text-(--text-3)">
         কোনো সোর্স পাওয়া যায়নি, তাই এই উত্তরের ভিত্তি যাচাই করা যাচ্ছে না।
       </p>
     );
   }
 
   return (
-    <div className="mt-3 border-t border-(--glass-border) pt-2.5">
-      <p className="text-faint mb-1.5 text-[0.6875rem] font-semibold tracking-wide uppercase">
-        সূত্র
-      </p>
-      <div className="flex flex-wrap gap-1.5">
+    <div className="mt-4">
+      <p className="mb-2 text-xs font-medium text-(--text-3)">সূত্র</p>
+      <div className="flex flex-wrap gap-2">
         {sources.map((source) => {
           const title = `${SOURCE_LABELS[source.sourceType]} · ${source.reference}${source.grade ? ` · ${source.grade}` : ""}`;
 
@@ -64,7 +62,7 @@ export function SourceCitationList({ sources }: { sources: AnswerSource[] }) {
                 className={`${CHIP_CLASS} active:scale-[0.97]`}
               >
                 {chipBody(source)}
-                <span aria-hidden="true" className="text-faint">
+                <span aria-hidden="true" className="text-(--text-3)">
                   ⤢
                 </span>
               </button>
@@ -82,7 +80,7 @@ export function SourceCitationList({ sources }: { sources: AnswerSource[] }) {
                 className={CHIP_CLASS}
               >
                 {chipBody(source)}
-                <span aria-hidden="true" className="text-faint">
+                <span aria-hidden="true" className="text-(--text-3)">
                   ↗
                 </span>
               </a>

@@ -12,6 +12,14 @@
 :root {
   color-scheme: light dark;
 
+  --bg: #ffffff;
+  --sidebar-bg: #f7f8fa;
+  --surface-2: #f2f4f7;
+  --surface-3: #e8ebf0;
+  --border: #e3e6eb;
+  --border-strong: #cfd4dc;
+  --composer-shadow: 0 10px 30px -12px rgba(20, 32, 52, 0.18);
+
   --app-bg: #e8edf5;
   --app-bg-2: #dae3ef;
   --glow-1: rgba(112, 156, 210, 0.42);
@@ -28,9 +36,9 @@
   --shadow-soft: 0 20px 48px -24px rgba(33, 53, 82, 0.42);
   --shadow-lift: 0 28px 64px -28px rgba(33, 53, 82, 0.5);
 
-  --text-1: #15202f;
-  --text-2: #46586f;
-  --text-3: #6a7d95;
+  --text-1: #1d232b;
+  --text-2: #4a5462;
+  --text-3: #6b7482;
 
   --accent: #3d6d9e;
   --accent-strong: #2f5a87;
@@ -46,6 +54,14 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
+    --bg: #1b1d21;
+    --sidebar-bg: #141518;
+    --surface-2: #2a2d33;
+    --surface-3: #34383f;
+    --border: #30343a;
+    --border-strong: #454a52;
+    --composer-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.6);
+
     --app-bg: #080d15;
     --app-bg-2: #0d1622;
     --glow-1: rgba(58, 106, 166, 0.34);
@@ -62,9 +78,9 @@
     --shadow-soft: 0 20px 48px -24px rgba(0, 0, 0, 0.72);
     --shadow-lift: 0 28px 64px -28px rgba(0, 0, 0, 0.8);
 
-    --text-1: #e7eefa;
-    --text-2: #a9b8cb;
-    --text-3: #8194ab;
+    --text-1: #ececf1;
+    --text-2: #b6bcc6;
+    --text-3: #8f96a1;
 
     --accent: #7fb2e4;
     --accent-strong: #9cc5ef;
@@ -82,8 +98,7 @@
   body {
     min-height: 100dvh;
     margin: 0;
-    background: linear-gradient(168deg, var(--app-bg) 0%, var(--app-bg-2) 100%);
-    background-attachment: fixed;
+    background: var(--bg);
     color: var(--text-1);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
@@ -122,50 +137,6 @@
 }
 
 @layer components {
-  .ambient-light {
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    overflow: hidden;
-    pointer-events: none;
-  }
-
-  .ambient-light::before,
-  .ambient-light::after {
-    content: "";
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(90px);
-  }
-
-  .ambient-light::before {
-    width: 62vmax;
-    height: 62vmax;
-    top: -26vmax;
-    left: -18vmax;
-    background: radial-gradient(circle, var(--glow-1) 0%, transparent 68%);
-  }
-
-  .ambient-light::after {
-    width: 54vmax;
-    height: 54vmax;
-    right: -20vmax;
-    bottom: -24vmax;
-    background: radial-gradient(circle, var(--glow-2) 0%, transparent 68%);
-  }
-
-  .ambient-light > span {
-    position: absolute;
-    left: 50%;
-    top: 38%;
-    width: 40vmax;
-    height: 40vmax;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    filter: blur(100px);
-    background: radial-gradient(circle, var(--glow-3) 0%, transparent 70%);
-  }
-
   .glass {
     position: relative;
     background: var(--glass-bg);
@@ -237,6 +208,39 @@
     border-radius: 999px;
   }
 
+  .answer-streaming > .answer-block:last-child > :last-child::after {
+    content: "";
+    display: inline-block;
+    width: 0.55em;
+    height: 0.55em;
+    margin-inline-start: 0.3em;
+    border-radius: 999px;
+    background: var(--text-1);
+    vertical-align: middle;
+    animation: caret-pulse 1s ease-in-out infinite;
+  }
+
+  .shimmer-text {
+    background: linear-gradient(
+      90deg,
+      var(--text-3) 0%,
+      var(--text-3) 35%,
+      var(--text-1) 50%,
+      var(--text-3) 65%,
+      var(--text-3) 100%
+    );
+    background-size: 220% 100%;
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    animation: shimmer 2.2s linear infinite;
+  }
+
+  .thin-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+
   .rise-in {
     animation: rise-in 0.42s cubic-bezier(0.22, 0.9, 0.28, 1) both;
   }
@@ -249,6 +253,36 @@
   }
   to {
     opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes caret-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.8);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 110% 0;
+  }
+  to {
+    background-position: -110% 0;
+  }
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
     transform: none;
   }
 }

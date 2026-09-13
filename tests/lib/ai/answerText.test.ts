@@ -4,6 +4,8 @@ import {
   isArabicDominant,
   normalizeDashes,
   prepareAnswer,
+  separateArabicQuotes,
+  splitMarkdownBlocks,
   stripTrailingSources,
 } from "@/lib/ai/answerText";
 
@@ -120,5 +122,56 @@ describe("attachOrphanCitations", () => {
 
   it("runs as part of preparing an answer for display", () => {
     expect(prepareAnswer(`জ্ঞান উঠে যাবে।${nl}${nl}[1]`)).toBe("জ্ঞান উঠে যাবে। [1]");
+  });
+});
+
+describe("neutralizeBackticks via prepareAnswer", () => {
+  it("does not let a transliteration backtick turn hadith text into code", () => {
+    const prepared = prepareAnswer(
+      "English Meaning: Narrated Ibn `Abbas: The Prophet sent Mu`adh to Yemen",
+    );
+    expect(prepared).not.toContain("`");
+    expect(prepared).toContain("Ibn \u2018Abbas");
+  });
+});
+
+describe("splitMarkdownBlocks", () => {
+  it("splits paragraphs on blank lines so finished blocks can be memoised", () => {
+    expect(splitMarkdownBlocks("প্রথম অনুচ্ছেদ\n\n## শিরোনাম\n\n- এক\n- দুই")).toEqual([
+      "প্রথম অনুচ্ছেদ",
+      "## শিরোনাম",
+      "- এক\n- দুই",
+    ]);
+  });
+
+  it("never splits inside a fenced block or display math", () => {
+    const text = "```\nএক\n\nদুই\n```\n\n$$\na\n\nb\n$$";
+    expect(splitMarkdownBlocks(text)).toEqual(["```\nএক\n\nদুই\n```", "$$\na\n\nb\n$$"]);
+  });
+
+  it("rejoins to the same text apart from repeated blank lines", () => {
+    const text = "ক\n\n\n\nখ";
+    expect(splitMarkdownBlocks(text).join("\n\n")).toBe("ক\n\nখ");
+  });
+});
+
+describe("separateArabicQuotes", () => {
+  it("moves an ayah written after an intro colon into its own right-to-left paragraph", () => {
+    const line =
+      "আল্লাহ তা'আলা আরেক আয়াতে বলেন: يَمْحَقُ ٱللَّهُ ٱلرِّبَوٰا۟ وَيُرْبِى ٱلصَّدَقَٰتِ";
+    const [intro, quote] = separateArabicQuotes(line).split("\n\n");
+
+    expect(intro).toBe("আল্লাহ তা'আলা আরেক আয়াতে বলেন:");
+    expect(isArabicDominant(quote ?? "")).toBe(true);
+  });
+
+  it("leaves label lines whose content is a translation alone", () => {
+    const line = "বাংলা অর্থঃ আল্লাহ সুদকে নিশ্চিহ্ন করেন [2]";
+    expect(separateArabicQuotes(line)).toBe(line);
+  });
+
+  it("leaves a short Arabic word inside a sentence alone", () => {
+    const line = "এর অর্থ: الله মহান";
+    expect(separateArabicQuotes(line)).toBe(line);
   });
 });
