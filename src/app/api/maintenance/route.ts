@@ -1,24 +1,22 @@
 import { NextResponse } from "next/server";
 import { runMaintenance } from "@/lib/maintenance/retention";
-import { getAppEnv } from "@/lib/utils/env";
+import { maintenanceAccess } from "@/lib/security/maintenanceAccess";
+import { consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
 import { logger } from "@/lib/utils/logger";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-function authorised(request: Request): boolean {
-  const { INGEST_API_SECRET, CRON_SECRET } = getAppEnv();
-  const bearer = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  const header = request.headers.get("x-ingest-secret");
-
-  return Boolean(
-    (CRON_SECRET && bearer === CRON_SECRET) || (header && header === INGEST_API_SECRET),
-  );
-}
-
 export async function GET(request: Request) {
-  if (!authorised(request)) {
+  const access = maintenanceAccess(request);
+
+  if (access === "denied") {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (access === "vercel-cron") {
+    const limit = await consumeRateLimit("maintenance", request);
+    if (!limit.allowed) return rateLimitResponse(limit);
   }
 
   try {

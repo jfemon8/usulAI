@@ -195,7 +195,6 @@ export async function loadTranslations(keys: string[]): Promise<Map<string, Sour
       .find({
         _id: { $in: keys },
         segments: { $exists: true },
-        model: { $in: [...SOURCE_TRANSLATION_CONFIG.approvedModels] },
       })
       .toArray();
     return new Map(rows.map(({ _id, segments }) => [_id, { segments }]));
@@ -208,7 +207,7 @@ export async function loadTranslations(keys: string[]): Promise<Map<string, Sour
 export async function translateSource(
   arabic: string,
   reference: string,
-  models: readonly string[] = SOURCE_TRANSLATION_CONFIG.approvedModels,
+  models: readonly string[] = SOURCE_TRANSLATION_CONFIG.models,
 ): Promise<SourceTranslation | null> {
   const segments = splitPassage(arabic);
   if (segments.length === 0) return null;
@@ -227,7 +226,15 @@ export async function translateSource(
   if (!result) return null;
 
   const translation = parseTranslation(result.text, segments);
-  if (!translation) return null;
+  if (!translation) {
+    logger.warn("Source translation rejected by validation", {
+      reference,
+      model: result.modelId,
+      segments: segments.length,
+      replyChars: result.text.length,
+    });
+    return null;
+  }
 
   await (
     await collection()
@@ -256,6 +263,81 @@ export function withTranslation(
     segments: translation.segments,
     machineTranslated: true,
   };
+}
+
+const inFlight = new Map<string, Promise<SourceTranslation | null>>();
+const failedAt = new Map<string, number>();
+let running = 0;
+const waiting: (() => void)[] = [];
+
+async function withSlot<T>(task: () => Promise<T>): Promise<T> {
+  if (running >= SOURCE_TRANSLATION_CONFIG.maxConcurrent) {
+    await new Promise<void>((resolve) => waiting.push(resolve));
+  }
+  running += 1;
+  try {
+    return await task();
+  } finally {
+    running -= 1;
+    waiting.shift()?.();
+  }
+}
+
+export function translateOnDemand(chunk: RetrievedChunk): Promise<SourceTranslation | null> {
+  const key = translationKey(chunk.content);
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+
+  const lastFailure = failedAt.get(key);
+  if (lastFailure && Date.now() - lastFailure < SOURCE_TRANSLATION_CONFIG.failureCooldownMs) {
+    return Promise.resolve(null);
+  }
+
+  const job = withSlot(() => translateSource(chunk.content, chunk.citation.reference))
+    .then((translation) => {
+      if (translation) failedAt.delete(key);
+      else failedAt.set(key, Date.now());
+      return translation;
+    })
+    .catch((error: unknown) => {
+      failedAt.set(key, Date.now());
+      logger.warn("On-demand source translation failed", {
+        reference: chunk.citation.reference,
+        error: String(error).slice(0, 160),
+      });
+      return null;
+    })
+    .finally(() => inFlight.delete(key));
+
+  inFlight.set(key, job);
+  return job;
+}
+
+export interface TranslationJobs {
+  jobs: Promise<unknown>[];
+  results: Map<string, SourceTranslation>;
+}
+
+export function startMissingTranslations(context: RetrievedChunk[]): TranslationJobs {
+  const results = new Map<string, SourceTranslation>();
+  const jobs = context.filter(needsTranslation).map((chunk) =>
+    translateOnDemand(chunk).then((translation) => {
+      if (translation) results.set(chunk.id, translation);
+    }),
+  );
+  return { jobs, results };
+}
+
+export async function settleWithin(jobs: Promise<unknown>[], waitMs: number): Promise<void> {
+  if (jobs.length === 0) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    Promise.allSettled(jobs),
+    new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, waitMs);
+    }),
+  ]);
+  clearTimeout(timer);
 }
 
 export async function attachSourceTranslations(

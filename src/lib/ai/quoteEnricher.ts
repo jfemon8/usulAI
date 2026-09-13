@@ -233,7 +233,7 @@ function enrichBlock(lines: string[], options: EnricherOptions): EnrichedBlock {
         ? run
         : null;
 
-    if (reading) {
+    if (reading && vocalizationRatio(reading) >= QUOTE_ENRICHMENT_CONFIG.minVocalizationRatio) {
       const text = transliterateArabic(reading, bangla ? "bn" : "en");
       if (text) readings.push(text);
     }

@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { SITE_NAME } from "@/config/site";
+import { siteUrl } from "@/lib/utils/siteUrl";
 import "./globals.css";
 
 const DESCRIPTION = "কুরআন, হাদিস, ইজমা, কিয়াস ও সীরাতের আলোকে দলিলসহ উত্তর, এই তারতীব মেনে।";
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"),
+  metadataBase: new URL(siteUrl()),
   title: {
     default: `${SITE_NAME}: ইসলামিক প্রশ্নোত্তর`,
     template: `%s · ${SITE_NAME}`,
@@ -45,9 +46,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="bn">
-      <body>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

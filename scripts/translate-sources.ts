@@ -13,7 +13,7 @@ const BOOK_ORDER = OPENITI_CONFIG.ijma.map((book) => `${book.slug}.md`);
 async function main() {
   const limit = Number(flag("limit") ?? "25");
   const book = flag("book");
-  const models = flag("models")?.split(",") ?? SOURCE_TRANSLATION_CONFIG.approvedModels;
+  const models = flag("models")?.split(",") ?? SOURCE_TRANSLATION_CONFIG.models;
   const documents = await getDocumentsCollection();
 
   const rows = await documents

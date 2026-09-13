@@ -1,5 +1,10 @@
 import { createUIMessageStream, createUIMessageStreamResponse, streamText } from "ai";
-import { ANSWER_GATE_CONFIG, MODEL_ATTEMPT_CONFIG, RATE_LIMIT_CONFIG } from "@/config/site";
+import {
+  ANSWER_GATE_CONFIG,
+  MODEL_ATTEMPT_CONFIG,
+  RATE_LIMIT_CONFIG,
+  SOURCE_TRANSLATION_CONFIG,
+} from "@/config/site";
 import { logQuery, summariseRetrieval, type GateRejection } from "@/lib/analytics/queryLog";
 import { detectConversationLanguage } from "@/lib/ai/language";
 import { getModelChain } from "@/lib/ai/providers";
@@ -10,7 +15,12 @@ import { retrieveForQuestion } from "@/lib/retrieval/search";
 import { previousSourceReferences } from "@/lib/retrieval/carryForward";
 import { findChunksByReferences } from "@/lib/retrieval/vectorStore";
 import { attachQuranNotes } from "@/lib/retrieval/quranNotes";
-import { attachSourceTranslations } from "@/lib/ai/sourceTranslation";
+import {
+  attachSourceTranslations,
+  settleWithin,
+  startMissingTranslations,
+  withTranslation,
+} from "@/lib/ai/sourceTranslation";
 import { createRepetitionGuard } from "@/lib/ai/repetitionGuard";
 import { createWordPacer } from "@/lib/ai/wordPacer";
 import { validateAnswer, type GateInput } from "@/lib/ai/answerGate";
@@ -18,8 +28,9 @@ import { preferredGrade } from "@/lib/ai/hadithGrade";
 import { sanitizeSourceContent, splitSourceBlocks } from "@/lib/ingestion/translations";
 import { createQuoteEnricher, enrichAnswer, type EnricherOptions } from "@/lib/ai/quoteEnricher";
 import { consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
 import { logger } from "@/lib/utils/logger";
-import type { AnswerSource, UsulUIMessage } from "@/types";
+import type { AnswerSource, RetrievedChunk, UsulUIMessage } from "@/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -148,8 +159,8 @@ export async function POST(request: Request) {
     language,
   };
   const contextText = gateInput.contextTexts.join("\n\n");
-  const enrichmentOptions: EnricherOptions = {
-    sources: context.map((chunk, index) => ({
+  const enrichmentFor = (chunks: RetrievedChunk[]): EnricherOptions => ({
+    sources: chunks.map((chunk, index) => ({
       index: index + 1,
       reference: chunk.citation.reference,
       ...splitSourceBlocks(chunk.content),
@@ -158,7 +169,23 @@ export async function POST(request: Request) {
       ...(chunk.segments ? { segments: chunk.segments } : {}),
     })),
     language: gateInput.language,
-  };
+  });
+  let enrichmentOptions = enrichmentFor(context);
+
+  const translations = startMissingTranslations(context);
+  if (translations.jobs.length > 0) runAfterResponse(() => Promise.allSettled(translations.jobs));
+  const translationsReady = settleWithin(
+    translations.jobs,
+    SOURCE_TRANSLATION_CONFIG.responseWaitMs,
+  ).then(() => {
+    if (translations.results.size === 0) return;
+    enrichmentOptions = enrichmentFor(
+      context.map((chunk) => {
+        const translation = translations.results.get(chunk.id);
+        return translation ? withTranslation(chunk, translation) : chunk;
+      }),
+    );
+  });
   const chain = getModelChain();
 
   const sources: AnswerSource[] = context.map((chunk, index) => ({
@@ -197,11 +224,8 @@ export async function POST(request: Request) {
         let emitted = false;
 
         const controller = new AbortController();
-        const stall = setTimeout(
-          () => controller.abort(),
-          Math.min(MODEL_ATTEMPT_CONFIG.firstTokenTimeoutMs, remaining),
-        );
         const budget = setTimeout(() => controller.abort(), remaining);
+        let stall: ReturnType<typeof setTimeout> | undefined;
 
         const gated = !ANSWER_GATE_CONFIG.trustedModels.includes(modelId);
         let streamError: unknown;
@@ -220,6 +244,12 @@ export async function POST(request: Request) {
               streamError = error;
             },
           });
+
+          await translationsReady;
+          stall = setTimeout(
+            () => controller.abort(),
+            Math.min(MODEL_ATTEMPT_CONFIG.firstTokenTimeoutMs, Math.max(0, deadline - Date.now())),
+          );
 
           const guard = createRepetitionGuard(contextText);
 

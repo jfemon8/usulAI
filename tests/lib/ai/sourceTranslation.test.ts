@@ -158,3 +158,67 @@ describe("attaching a translation", () => {
     expect(translationKey(`${first}  `)).toBe(translationKey(first));
   });
 });
+
+describe("translating at response time", () => {
+  it("translates each missing passage once even when two requests need it together", async () => {
+    vi.resetModules();
+    const translateCalls: string[] = [];
+    vi.doMock("@/lib/ai/auxiliaryModel", () => ({
+      generateWithPreferredModels: vi.fn(async (_purpose: string, options: { prompt: string }) => {
+        translateCalls.push(options.prompt);
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return {
+          modelId: "glm-4.5-flash",
+          text: JSON.stringify([
+            { bangla, english },
+            { bangla: bangla2, english: english2 },
+          ]),
+        };
+      }),
+    }));
+    vi.doMock("@/lib/db/mongoClient", () => ({
+      getDb: async () => ({ collection: () => ({ replaceOne: async () => ({}) }) }),
+    }));
+
+    const translation = await import("@/lib/ai/sourceTranslation");
+    const chunk = {
+      id: "p41",
+      sourceType: "ijma" as const,
+      content: `${first}\n${second}`,
+      citation: { sourceType: "ijma" as const, reference: "কিতাবুল ইজমা, পৃষ্ঠা 41" },
+      similarity: 5,
+      retrievedBy: "text" as const,
+    };
+
+    const one = translation.startMissingTranslations([chunk]);
+    const two = translation.startMissingTranslations([chunk]);
+    await translation.settleWithin([...one.jobs, ...two.jobs], 1000);
+
+    expect(translateCalls).toHaveLength(1);
+    expect(one.results.get("p41")?.segments).toHaveLength(2);
+    expect(two.results.get("p41")?.segments).toHaveLength(2);
+  });
+
+  it("stops waiting after the limit so the answer is never held up for long", async () => {
+    const { settleWithin } = await import("@/lib/ai/sourceTranslation");
+    const started = Date.now();
+    await settleWithin([new Promise(() => {})], 30);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it("skips translating book sources that already carry a translation", async () => {
+    const { startMissingTranslations, withTranslation } =
+      await import("@/lib/ai/sourceTranslation");
+    const chunk = {
+      id: "done",
+      sourceType: "ijma" as const,
+      content: first,
+      citation: { sourceType: "ijma" as const, reference: "কিতাবুল ইজমা, পৃষ্ঠা 41" },
+      similarity: 5,
+      retrievedBy: "text" as const,
+    };
+    const translated = withTranslation(chunk, { segments: [{ arabic: first, bangla, english }] });
+
+    expect(startMissingTranslations([translated]).jobs).toHaveLength(0);
+  });
+});

@@ -328,3 +328,18 @@ ${firstPlain}
     expect(enriched).not.toContain("দলিল [3]");
   });
 });
+
+describe("pronunciation needs harakat", () => {
+  it("does not invent a pronunciation for an unvocalised book quote that has no vocalised source", () => {
+    const plain = "واتفق أهل القبلة جميعا على أن الخمر حرام بتحريم الله تعالى إياها";
+    const enriched = enrichAnswer(
+      `ইবনুল কাত্তান উল্লেখ করেছেন [1]।\n\n${plain}\n\nঅর্থাৎ মদ হারাম।`,
+      {
+        sources: [{ index: 1, arabic: plain }],
+        language: "bangla",
+      },
+    );
+
+    expect(enriched).not.toContain("বাংলা উচ্চারণঃ");
+  });
+});
