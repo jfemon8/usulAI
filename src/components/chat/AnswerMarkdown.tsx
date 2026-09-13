@@ -5,21 +5,21 @@ import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
 import rehypeKatex from "rehype-katex";
 import rehypeSanitize from "rehype-sanitize";
+import { isValidElement } from "react";
 import { clsx } from "clsx";
-import { prepareAnswer } from "@/lib/ai/answerText";
-
-const ARABIC_RANGE = /[؀-ۿ]/;
-const TRANSLATION_LABEL = /^(বাংলা|English)\s*:/;
+import { isArabicDominant, prepareAnswer } from "@/lib/ai/answerText";
 
 function childrenToText(children: unknown): string {
-  if (typeof children === "string") return children;
+  if (typeof children === "string" || typeof children === "number") return String(children);
   if (Array.isArray(children)) return children.map(childrenToText).join("");
+  if (isValidElement<{ children?: unknown }>(children)) {
+    return childrenToText(children.props.children);
+  }
   return "";
 }
 
 function isArabicBlock(children: unknown): boolean {
-  const text = childrenToText(children).trim();
-  return ARABIC_RANGE.test(text) && !TRANSLATION_LABEL.test(text);
+  return isArabicDominant(childrenToText(children));
 }
 
 const COMPONENTS: Components = {

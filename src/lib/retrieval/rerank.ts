@@ -1,6 +1,6 @@
 import { AUXILIARY_CONFIG, RERANK_CONFIG } from "@/config/site";
 import { generateWithChain } from "@/lib/ai/auxiliaryModel";
-import { TRANSLATION_LABELS } from "@/lib/ingestion/translations";
+import { TRANSLATION_LABELS, sanitizeSourceContent } from "@/lib/ingestion/translations";
 import { logger } from "@/lib/utils/logger";
 import { createLru, normalizeCacheKey } from "@/lib/utils/lru";
 import type { RetrievedChunk, SourceType } from "@/types";
@@ -20,7 +20,7 @@ const TRANSLATION_BLOCK = new RegExp(
 );
 
 export function buildRerankSnippet(content: string): string {
-  const translations = content
+  const translations = sanitizeSourceContent(content)
     .split(/\n{2,}/)
     .map((block) => block.trim())
     .filter((block) => TRANSLATION_BLOCK.test(block));

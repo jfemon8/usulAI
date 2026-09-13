@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeDashes, stripTrailingSources } from "@/lib/ai/answerText";
+import { isArabicDominant, normalizeDashes, stripTrailingSources } from "@/lib/ai/answerText";
 
 const body = "সুদ হারাম [1]। ব্যবসা হালাল [2]।";
 
@@ -52,5 +52,41 @@ describe("normalizeDashes", () => {
 
   it("leaves text without dashes alone", () => {
     expect(normalizeDashes("সুদ হারাম, এটি স্পষ্ট।")).toBe("সুদ হারাম, এটি স্পষ্ট।");
+  });
+});
+
+const ayah = "مَا زَالَ جِبْرِيلُ يُوصِينِي بِالْجَارِ حَتَّى ظَنَنْتُ أَنَّهُ سَيُوَرِّثُهُ";
+
+describe("isArabicDominant", () => {
+  it("treats a quoted ayah or narration as an Arabic block", () => {
+    expect(isArabicDominant(ayah)).toBe(true);
+  });
+
+  it("still treats it as Arabic with a citation marker attached", () => {
+    expect(isArabicDominant(`${ayah} [1]`)).toBe(true);
+  });
+
+  it("tolerates a short Latin reference beside a long Arabic quote", () => {
+    expect(isArabicDominant(`${ayah} ${ayah} (Al-Baqara 2:275)`)).toBe(true);
+  });
+
+  it("does not flip a Bangla sentence that introduces an Arabic quote, as in the screenshot", () => {
+    const line = "এই হাদিসের মূল আরবি অংশটি হলো: ما زال جبريل يوصيني بالجار حتى ظننت أنه سيورثه";
+
+    expect(isArabicDominant(line)).toBe(false);
+  });
+
+  it("does not flip an intro line even when the quote carries full harakat", () => {
+    expect(isArabicDominant(`আল্লাহ বলেন: ${ayah}`)).toBe(false);
+  });
+
+  it("does not flip a translation line", () => {
+    expect(
+      isArabicDominant("বাংলা: জিবরীল (আঃ) অবিরত আমাকে প্রতিবেশীর হক সম্বন্ধে গুরুত্ব দিচ্ছিলেন।"),
+    ).toBe(false);
+  });
+
+  it("never marks text without any Arabic", () => {
+    expect(isArabicDominant("প্রতিবেশীর হক [1]")).toBe(false);
   });
 });

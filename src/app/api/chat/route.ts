@@ -1,12 +1,16 @@
 import { createUIMessageStream, createUIMessageStreamResponse, smoothStream, streamText } from "ai";
-import { MODEL_ATTEMPT_CONFIG } from "@/config/site";
-import { logQuery, summariseRetrieval } from "@/lib/analytics/queryLog";
+import { ANSWER_GATE_CONFIG, MODEL_ATTEMPT_CONFIG } from "@/config/site";
+import { logQuery, summariseRetrieval, type GateRejection } from "@/lib/analytics/queryLog";
 import { detectQuestionLanguage } from "@/lib/ai/language";
 import { getModelChain } from "@/lib/ai/providers";
 import { rewriteQuery, type ConversationTurn } from "@/lib/ai/queryRewriter";
 import { buildSystemPrompt, buildRagPrompt } from "@/lib/ai/prompt";
 import { findVerifiedAnswer } from "@/lib/analytics/verifiedAnswers";
 import { retrieveAnswerContext } from "@/lib/retrieval/search";
+import { createRepetitionGuard } from "@/lib/ai/repetitionGuard";
+import { validateAnswer, type GateInput } from "@/lib/ai/answerGate";
+import { sanitizeSourceContent, splitSourceBlocks } from "@/lib/ingestion/translations";
+import { createQuoteEnricher, enrichAnswer, type EnricherOptions } from "@/lib/ai/quoteEnricher";
 import { logger } from "@/lib/utils/logger";
 import type { AnswerSource, UsulUIMessage } from "@/types";
 
@@ -94,6 +98,20 @@ export async function POST(request: Request) {
 
   const system = buildSystemPrompt();
   const prompt = buildRagPrompt(question, context, history);
+  const gateInput: GateInput = {
+    contextTexts: context.map((chunk) => sanitizeSourceContent(chunk.content)),
+    references: context.map((chunk) => chunk.citation.reference),
+    question,
+    language: detectQuestionLanguage(question),
+  };
+  const contextText = gateInput.contextTexts.join("\n\n");
+  const enrichmentOptions: EnricherOptions = {
+    sources: context.map((chunk, index) => ({
+      index: index + 1,
+      ...splitSourceBlocks(chunk.content),
+    })),
+    language: gateInput.language,
+  };
   const chain = getModelChain();
 
   const sources: AnswerSource[] = context.map((chunk, index) => ({
@@ -112,6 +130,7 @@ export async function POST(request: Request) {
       writer.write({ type: "data-sources", id: "sources", data: sources });
 
       let lastError: unknown;
+      const gateRejections: GateRejection[] = [];
 
       for (const [attempt, { tier, provider, modelId, model }] of chain.entries()) {
         const textId = crypto.randomUUID();
@@ -123,6 +142,8 @@ export async function POST(request: Request) {
           MODEL_ATTEMPT_CONFIG.firstTokenTimeoutMs,
         );
 
+        const gated = ANSWER_GATE_CONFIG.gatedTiers.includes(tier);
+
         try {
           const result = streamText({
             model,
@@ -130,16 +151,69 @@ export async function POST(request: Request) {
             prompt,
             maxRetries: MODEL_ATTEMPT_CONFIG.retries,
             abortSignal: controller.signal,
-            experimental_transform: smoothStream({ chunking: "word", delayInMs: 12 }),
+            ...(gated
+              ? {}
+              : { experimental_transform: smoothStream({ chunking: "word", delayInMs: 12 }) }),
           });
 
-          for await (const delta of result.textStream) {
+          const guard = createRepetitionGuard(contextText);
+
+          const send = (piece: string) => {
+            if (piece.length === 0) return;
             if (!emitted) {
-              clearTimeout(stall);
               writer.write({ type: "text-start", id: textId });
               emitted = true;
             }
-            writer.write({ type: "text-delta", id: textId, delta });
+            writer.write({ type: "text-delta", id: textId, delta: piece });
+          };
+
+          if (gated) {
+            let full = "";
+
+            for await (const delta of result.textStream) {
+              clearTimeout(stall);
+              full += delta;
+            }
+
+            if (full.trim().length > 0) {
+              const verdict = validateAnswer(full, gateInput);
+
+              if (!verdict.ok) {
+                gateRejections.push({ modelId, reasons: verdict.reasons });
+                lastError = new Error(`${provider}/${modelId} rejected by the answer gate`);
+                logger.warn(`Attempt ${attempt + 1}/${chain.length} rejected by the answer gate`, {
+                  tier,
+                  provider,
+                  modelId,
+                  reasons: verdict.reasons.join(" | "),
+                });
+                continue;
+              }
+
+              send(enrichAnswer(full, enrichmentOptions));
+            }
+          } else {
+            const enricher = createQuoteEnricher(enrichmentOptions);
+
+            for await (const delta of result.textStream) {
+              clearTimeout(stall);
+              const step = guard.push(delta);
+              send(enricher.push(step.emit));
+              if (step.stopped) break;
+            }
+
+            if (guard.wasCut()) {
+              controller.abort();
+              logger.warn(`Attempt ${attempt + 1}/${chain.length} started looping, answer cut`, {
+                tier,
+                provider,
+                modelId,
+              });
+              send(enricher.flush());
+            } else {
+              send(enricher.push(guard.flush()));
+              send(enricher.flush());
+            }
           }
 
           if (emitted) {
@@ -155,6 +229,8 @@ export async function POST(request: Request) {
               modelTier: tier,
               modelId,
               attempt: attempt + 1,
+              loopCut: guard.wasCut(),
+              gateRejections: gateRejections.length > 0 ? gateRejections : undefined,
             });
             return;
           }
@@ -197,6 +273,7 @@ export async function POST(request: Request) {
         ...summariseRetrieval(context),
         answered: false,
         errorTier: chain[chain.length - 1]?.tier,
+        gateRejections: gateRejections.length > 0 ? gateRejections : undefined,
       });
 
       const failureId = crypto.randomUUID();

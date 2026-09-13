@@ -4,6 +4,11 @@ import { logger } from "@/lib/utils/logger";
 import type { QuestionLanguage } from "@/lib/ai/language";
 import type { RetrievedChunk, SourceType } from "@/types";
 
+export interface GateRejection {
+  modelId: string;
+  reasons: string[];
+}
+
 export interface QueryLogEntry {
   question: string;
   searchQuery?: string;
@@ -21,6 +26,8 @@ export interface QueryLogEntry {
   modelTier?: string;
   modelId?: string;
   attempt?: number;
+  loopCut?: boolean;
+  gateRejections?: GateRejection[];
   errorTier?: string;
 }
 

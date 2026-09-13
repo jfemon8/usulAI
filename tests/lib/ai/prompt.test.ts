@@ -35,13 +35,13 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("উত্তর অবশ্যই বাংলায় দিতে হবে");
   });
 
-  it("requires the Arabic to be kept and paired with a translation", () => {
+  it("requires the Arabic verbatim and leaves pronunciation and meaning to the app", () => {
     const prompt = buildSystemPrompt();
 
     expect(prompt).toContain("আরবি কখনো বাদ দিও না");
-    expect(prompt).toContain("বাংলা অনুবাদ");
-    expect(prompt).toContain("ইংরেজি অনুবাদ");
-    expect(prompt).toContain("নিজে নতুন করে অনুবাদ করো না");
+    expect(prompt).toContain("নিজের আলাদা অনুচ্ছেদে");
+    expect(prompt).toContain("উচ্চারণ, বাংলা অর্থ বা ইংরেজি অর্থ তুমি নিজে লিখবে না");
+    expect(prompt).toContain("নিজে নতুন করে অনুবাদ বানিও না");
   });
 
   it("lists every configured source in priority order", () => {
@@ -78,22 +78,35 @@ describe("buildRagPrompt", () => {
     const prompt = buildRagPrompt("What are the conditions of prayer?", [chunk]);
 
     expect(prompt).toContain("ইউজারের প্রশ্ন যে ভাষায়, উত্তরও সেই ভাষায়");
+    expect(prompt).toContain("never in Bangla");
   });
 
-  it("asks for the Bangla translation on Bangla and Banglish questions", () => {
-    for (const question of ["নামাজের নিয়ম কী?", "namaz er niyom ki"]) {
+  it("tells every language to quote Arabic alone and not to write its own translation", () => {
+    for (const question of [
+      "নামাজের নিয়ম কী?",
+      "namaz er niyom ki",
+      "What are the conditions of prayer?",
+    ]) {
       const prompt = buildRagPrompt(question, [chunk]);
 
-      expect(prompt, question).toContain('"বাংলা:" অনুবাদটা দাও');
-      expect(prompt, question).not.toContain('"English:" অনুবাদটা দাও');
+      expect(prompt, question).toContain("মূল আরবি আলাদা অনুচ্ছেদে হুবহু দাও");
+      expect(prompt, question).toContain("উচ্চারণ বা অর্থ লিখবে না");
+      expect(prompt, question).not.toContain("অনুবাদটা দাও");
     }
   });
 
-  it("asks for the English translation on other-language questions", () => {
-    const prompt = buildRagPrompt("What are the conditions of prayer?", [chunk]);
+  it("strips source footnotes without touching the context numbering", () => {
+    const footnoted: RetrievedChunk = {
+      ...chunk,
+      sourceType: "hadith",
+      content: "আরবি\n\nবাংলা: । উত্তরাধিকারী বানিয়ে দিবেন।[1] সহীহ।",
+      citation: { sourceType: "hadith", reference: "সুনানে আবু দাউদ 5152" },
+    };
+    const prompt = buildRagPrompt("প্রশ্ন", [footnoted]);
 
-    expect(prompt).toContain('"English:" অনুবাদটা দাও');
-    expect(prompt).not.toContain('"বাংলা:" অনুবাদটা দাও');
+    expect(prompt).toContain("[1] (হাদিস, সুনানে আবু দাউদ 5152)");
+    expect(prompt).toContain("বাংলা: উত্তরাধিকারী বানিয়ে দিবেন। সহীহ।");
+    expect(prompt).not.toContain("দিবেন।[1]");
   });
 
   it("says plainly when no context was retrieved", () => {

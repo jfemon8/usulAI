@@ -161,6 +161,26 @@ export const EMBEDDING_RUNTIME_CONFIG = {
   providerCooldownMs: 300_000,
 } as const;
 
+export const REPETITION_GUARD_CONFIG = {
+  minRepeats: 4,
+  maxPhraseWords: 8,
+  holdbackWords: 40,
+} as const;
+
+export const QUOTE_ENRICHMENT_CONFIG = {
+  minQuoteWords: 3,
+  minMatchRatio: 0.5,
+  minVocalizationRatio: 0.5,
+  labelWindowChars: 48,
+} as const;
+
+export const ANSWER_GATE_CONFIG = {
+  gatedTiers: ["secondary"] as readonly string[],
+  minArabicRunWords: 3,
+  minArabicMatchRatio: 0.5,
+  maxForeignLatinWords: 1,
+} as const;
+
 export const MODEL_ATTEMPT_CONFIG = {
   retries: 1,
   firstTokenTimeoutMs: 45_000,

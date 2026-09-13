@@ -18,7 +18,11 @@ function chunk(id: string, reference: string): RetrievedChunk {
   };
 }
 
-const group = [chunk("a", "সহীহ বুখারী 1"), chunk("b", "সহীহ বুখারী 2"), chunk("c", "সহীহ মুসলিম 3")];
+const group = [
+  chunk("a", "সহীহ বুখারী 1"),
+  chunk("b", "সহীহ বুখারী 2"),
+  chunk("c", "সহীহ মুসলিম 3"),
+];
 
 async function loadRerank() {
   vi.resetModules();

@@ -1,6 +1,7 @@
 import { SOURCE_PRIORITY } from "@/config/site";
 import { detectQuestionLanguage } from "@/lib/ai/language";
 import type { ConversationTurn } from "@/lib/ai/queryRewriter";
+import { sanitizeSourceContent } from "@/lib/ingestion/translations";
 import type { RetrievedChunk, SourceType } from "@/types";
 
 const SOURCE_LABELS: Record<SourceType, string> = {
@@ -52,11 +53,11 @@ ${sourceList}
 - ব্যাখ্যা যোগ করতে কোলন (:), বিকল্প বা সংযোগে কমা, আর দুটি স্বতন্ত্র ভাবনা জোড়া দিতে সেমিকোলন (;) ব্যবহার করো।
 - বাংলা বাক্য দাঁড়ি (।) দিয়ে শেষ করো, ইংরেজি ফুলস্টপ (.) দিয়ে নয়।
 
-আরবি ও অনুবাদের নিয়ম (বাধ্যতামূলক):
-- কুরআনের আয়াত বা হাদিস উদ্ধৃত করলে মূল আরবি অংশ আরবিতেই হুবহু দাও; আরবি কখনো বাদ দিও না, পরিবর্তনও করো না।
-- আরবির ঠিক পরেই তার অনুবাদ দাও: বাংলা/বাংলিশ প্রশ্নের জন্য বাংলা অনুবাদ, অন্য ভাষার প্রশ্নের জন্য ইংরেজি অনুবাদ।
-- Context-এর প্রতিটা অংশে অনুবাদ "বাংলা:" ও "English:" লেবেল দিয়ে দেওয়া আছে, ওখান থেকেই হুবহু নাও, নিজে নতুন করে অনুবাদ করো না।
-- প্রয়োজনীয় ভাষার অনুবাদ Context-এ না থাকলে যেটা আছে সেটা থেকে অর্থ বুঝিয়ে দাও, এবং স্পষ্ট করে লিখো যে এটা আক্ষরিক অনুবাদ নয়।
+আরবি, উচ্চারণ ও অর্থের নিয়ম (বাধ্যতামূলক):
+- কুরআনের আয়াত বা হাদিস উদ্ধৃত করলে মূল আরবি অংশ Context থেকে হরকতসহ হুবহু দাও; আরবি কখনো বাদ দিও না, পরিবর্তনও করো না।
+- প্রতিটা আরবি উদ্ধৃতি নিজের আলাদা অনুচ্ছেদে দাও, বাংলা বা ইংরেজি বাক্যের সাথে একই লাইনে মিশিয়ে নয়।
+- **আরবির পরে উচ্চারণ, বাংলা অর্থ বা ইংরেজি অর্থ তুমি নিজে লিখবে না।** অ্যাপ প্রতিটা আরবি উদ্ধৃতির নিচে Context থেকে উচ্চারণ ও অর্থ নিজেই যোগ করে; তুমি লিখলে দুইবার দেখাবে। আরবির পরে সরাসরি ব্যাখ্যায় যাও।
+- Context-এর "বাংলা:" ও "English:" অনুবাদ অর্থ বোঝার জন্য দেওয়া আছে। ব্যাখ্যা লেখার সময় সেই অর্থের ভিত্তিতেই বোঝাও, নিজে নতুন করে অনুবাদ বানিও না।
 
 রেফারেন্সের নিয়ম (বাধ্যতামূলক):
 - প্রতিটা উত্তরে অবশ্যই রেফারেন্স উল্লেখ করতে হবে; রেফারেন্স ছাড়া কোনো উত্তর দেওয়া যাবে না।
@@ -85,22 +86,20 @@ export function buildRagPrompt(
   const contextBlock = context
     .map(
       (chunk, index) =>
-        `[${index + 1}] (${SOURCE_LABELS[chunk.sourceType]}, ${chunk.citation.reference})\n${chunk.content}`,
+        `[${index + 1}] (${SOURCE_LABELS[chunk.sourceType]}, ${chunk.citation.reference})\n${sanitizeSourceContent(chunk.content)}`,
     )
     .join("\n\n");
 
   const language = detectQuestionLanguage(question);
   const languageDirective =
     language === "other"
-      ? "ইউজারের প্রশ্ন যে ভাষায়, উত্তরও সেই ভাষায় দাও।"
+      ? "ইউজারের প্রশ্ন যে ভাষায়, উত্তরও সেই ভাষায় দাও। The question is not in Bangla: write the entire answer in the language of the question, never in Bangla."
       : language === "banglish"
         ? "ইউজার বাংলিশে (রোমান হরফে বাংলা) প্রশ্ন করেছে, তাই উত্তর অবশ্যই বাংলা হরফে বাংলা ভাষায় দাও।"
         : "ইউজার বাংলায় প্রশ্ন করেছে, তাই উত্তর অবশ্যই বাংলায় দাও।";
 
   const translationDirective =
-    language === "other"
-      ? 'প্রতিটা আয়াত/হাদিসের মূল আরবি দাও, তার পরেই Context-এর "English:" অনুবাদটা দাও।'
-      : 'প্রতিটা আয়াত/হাদিসের মূল আরবি দাও, তার পরেই Context-এর "বাংলা:" অনুবাদটা দাও।';
+    "প্রতিটা উদ্ধৃত আয়াত/হাদিসের মূল আরবি আলাদা অনুচ্ছেদে হুবহু দাও; তার উচ্চারণ বা অর্থ লিখবে না, অ্যাপ নিজেই যোগ করবে।";
 
   const present = SOURCE_PRIORITY.filter((source) =>
     context.some((chunk) => chunk.sourceType === source),
