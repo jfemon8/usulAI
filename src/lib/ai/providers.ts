@@ -23,10 +23,11 @@ export function getSecondaryModel(): LanguageModel {
   return groq(MODEL_CONFIG.secondary.model);
 }
 
-export function getFallbackModel(): LanguageModel {
-  return openrouter(MODEL_CONFIG.fallback.model, {
-    extraBody: { models: [MODEL_CONFIG.fallback.model, ...OPENROUTER_FALLBACK_MODELS] },
-  });
+export function getFallbackModels(): { modelId: string; model: LanguageModel }[] {
+  return [MODEL_CONFIG.fallback.model, ...OPENROUTER_FALLBACK_MODELS].map((modelId) => ({
+    modelId,
+    model: openrouter(modelId),
+  }));
 }
 
 const zaiFetch: typeof fetch = async (input, init) => {
@@ -52,7 +53,7 @@ export function getReserveModels(): { modelId: string; model: LanguageModel }[] 
 const TIER_FACTORIES: Record<ModelTier, () => { modelId: string; model: LanguageModel }[]> = {
   primary: () => [{ modelId: MODEL_CONFIG.primary.model, model: getPrimaryModel() }],
   secondary: () => [{ modelId: MODEL_CONFIG.secondary.model, model: getSecondaryModel() }],
-  fallback: () => [{ modelId: MODEL_CONFIG.fallback.model, model: getFallbackModel() }],
+  fallback: getFallbackModels,
   reserve: getReserveModels,
 };
 

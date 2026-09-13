@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { MODEL_CHAIN, MODEL_CONFIG, ZAI_CONFIG } from "@/config/site";
+import { MODEL_CONFIG, OPENROUTER_FALLBACK_MODELS, ZAI_CONFIG } from "@/config/site";
 
 const KEYS = [
   "GOOGLE_GENERATIVE_AI_API_KEY",
@@ -30,16 +30,24 @@ afterEach(() => {
 });
 
 describe("getModelChain", () => {
-  it("offers one attempt per configured model, Z.ai contributing all of its models", async () => {
+  it("offers one attempt per configured model, so every model is tried before failing", async () => {
     const chain = await loadChain();
 
-    expect(chain).toHaveLength(MODEL_CHAIN.length - 1 + ZAI_CONFIG.models.length);
     expect(chain.map((entry) => entry.modelId)).toEqual([
       MODEL_CONFIG.primary.model,
       MODEL_CONFIG.secondary.model,
       MODEL_CONFIG.fallback.model,
+      ...OPENROUTER_FALLBACK_MODELS,
       ...ZAI_CONFIG.models,
     ]);
+  });
+
+  it("is not capped by OpenRouter's three-model routing limit", async () => {
+    const chain = await loadChain();
+    const openrouter = chain.filter((entry) => entry.tier === "fallback");
+
+    expect(openrouter).toHaveLength(1 + OPENROUTER_FALLBACK_MODELS.length);
+    expect(openrouter.length).toBeGreaterThan(3);
   });
 
   it("keeps the tiers in priority order so the fastest healthy one answers first", async () => {
@@ -48,7 +56,7 @@ describe("getModelChain", () => {
     expect(chain.map((entry) => entry.tier)).toEqual([
       "primary",
       "secondary",
-      "fallback",
+      ...[MODEL_CONFIG.fallback.model, ...OPENROUTER_FALLBACK_MODELS].map(() => "fallback"),
       ...ZAI_CONFIG.models.map(() => "reserve"),
     ]);
   });
@@ -60,7 +68,7 @@ describe("getModelChain", () => {
     const chain = await loadChain();
 
     expect(chain.map((entry) => entry.tier)).toEqual([
-      "fallback",
+      ...[MODEL_CONFIG.fallback.model, ...OPENROUTER_FALLBACK_MODELS].map(() => "fallback"),
       ...ZAI_CONFIG.models.map(() => "reserve"),
     ]);
   });

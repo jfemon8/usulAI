@@ -204,6 +204,7 @@ export const MODEL_ATTEMPT_CONFIG = {
 
 export const OPENROUTER_FALLBACK_MODELS = [
   "nex-agi/nex-n2.5-mini:free",
+  "nvidia/nemotron-3-super-120b-a12b:free",
   "google/gemma-4-26b-a4b-it:free",
 ] as const;
 
