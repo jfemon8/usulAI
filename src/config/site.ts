@@ -145,6 +145,7 @@ export const DB_CONFIG = {
   feedbackCollection: "answer_feedback",
   verifiedAnswerCollection: "verified_answers",
   rankingSignalCollection: "ranking_signals",
+  queryEmbeddingCollection: "query_embeddings",
   vectorIndex: "documents_embedding_idx",
   textIndex: "documents_text_idx",
   embeddingPath: "embedding",
@@ -159,6 +160,7 @@ export const HYBRID_CONFIG = {
 export const EMBEDDING_RUNTIME_CONFIG = {
   queryCacheSize: 300,
   providerCooldownMs: 300_000,
+  storedQueryTtlDays: 180,
 } as const;
 
 export const REPETITION_GUARD_CONFIG = {
@@ -167,11 +169,20 @@ export const REPETITION_GUARD_CONFIG = {
   holdbackWords: 40,
 } as const;
 
+export const QURANENC_CONFIG = {
+  baseUrl: "https://quranenc.com/api/v1",
+  translationKey: "bengali_zakaria",
+  translator: "ড. আবু বকর মুহাম্মাদ যাকারিয়া",
+  requestDelayMs: 400,
+  maxNoteChars: 900,
+} as const;
+
 export const QUOTE_ENRICHMENT_CONFIG = {
   minQuoteWords: 3,
   minMatchRatio: 0.5,
   minVocalizationRatio: 0.5,
   labelWindowChars: 48,
+  maxAppendedEvidence: 3,
 } as const;
 
 export const ANSWER_GATE_CONFIG = {
@@ -225,6 +236,7 @@ export const RERANK_CONFIG = {
 
 export const CONTEXT_CONFIG = {
   maxContextChunks: 12,
+  carriedSources: 4,
   perSourceCap: {
     quran: 4,
     hadith: 4,
@@ -232,7 +244,11 @@ export const CONTEXT_CONFIG = {
     qiyas: 2,
     sirat: 2,
   },
-} as const satisfies { maxContextChunks: number; perSourceCap: Record<SourceName, number> };
+} as const satisfies {
+  maxContextChunks: number;
+  carriedSources: number;
+  perSourceCap: Record<SourceName, number>;
+};
 
 export const STORAGE_CONFIG = {
   rawSourcesPrefix: "raw-sources",

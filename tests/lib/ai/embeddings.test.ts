@@ -12,6 +12,15 @@ vi.mock("@/lib/ai/providers", () => ({
   getEmbeddingModel: () => "model",
 }));
 
+const readStored = vi.fn();
+const storeStored = vi.fn();
+
+vi.mock("@/lib/ai/queryEmbeddingStore", () => ({
+  queryEmbeddingKey: (query: string) => `key:${query}`,
+  readStoredQueryEmbedding: (key: string) => readStored(key),
+  storeQueryEmbedding: (key: string, embedding: number[]) => storeStored(key, embedding),
+}));
+
 async function loadModule() {
   vi.resetModules();
   return import("@/lib/ai/embeddings");
@@ -20,6 +29,48 @@ async function loadModule() {
 beforeEach(() => {
   embed.mockReset();
   embedMany.mockReset();
+  readStored.mockReset().mockResolvedValue(null);
+  storeStored.mockReset().mockResolvedValue(undefined);
+});
+
+describe("stored query embeddings", () => {
+  it("serves a query embedded by an earlier process without calling the provider", async () => {
+    const { embedText } = await loadModule();
+    readStored.mockResolvedValue([0.9, 0.8]);
+
+    expect(await embedText("যাকাতের নিসাব কত")).toEqual([0.9, 0.8]);
+    expect(embed).not.toHaveBeenCalled();
+  });
+
+  it("stores a freshly embedded query so the next cold start reuses it", async () => {
+    const { embedText } = await loadModule();
+    embed.mockResolvedValue({ embedding: [0.1] });
+
+    await embedText("  নামাজ   কেন ফরজ ");
+
+    expect(storeStored).toHaveBeenCalledWith("key:নামাজ কেন ফরজ", [0.1]);
+  });
+
+  it("does not ask the store again once the query is in memory", async () => {
+    const { embedText } = await loadModule();
+    embed.mockResolvedValue({ embedding: [0.2] });
+
+    await embedText("প্রশ্ন");
+    await embedText("প্রশ্ন");
+
+    expect(readStored).toHaveBeenCalledTimes(1);
+    expect(embed).toHaveBeenCalledTimes(1);
+  });
+
+  it("can answer from the store even while the provider is cooling down", async () => {
+    const { cachedQueryEmbedding, embedText, embeddingsCoolingDown } = await loadModule();
+    embed.mockRejectedValue(new Error("403 PERMISSION_DENIED"));
+    await expect(embedText("নতুন প্রশ্ন")).rejects.toThrow();
+    expect(embeddingsCoolingDown()).toBe(true);
+
+    readStored.mockResolvedValue([0.5]);
+    expect(await cachedQueryEmbedding("পুরোনো প্রশ্ন")).toEqual([0.5]);
+  });
 });
 
 describe("embedText", () => {

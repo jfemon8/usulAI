@@ -113,3 +113,37 @@ describe("buildRagPrompt", () => {
     expect(buildRagPrompt("প্রশ্ন", [])).toContain("কোনো প্রাসঙ্গিক তথ্য পাওয়া যায়নি");
   });
 });
+
+describe("buildRagPrompt enrichment of the context", () => {
+  it("labels a graded hadith with every grader's verdict", () => {
+    const graded: RetrievedChunk = {
+      ...chunk,
+      sourceType: "hadith",
+      citation: { sourceType: "hadith", reference: "সুনানে আবু দাউদ 5" },
+      grades: [
+        { name: "Al-Albani", grade: "Shadh" },
+        { name: "Zubair Ali Zai", grade: "Isnaad Sahih" },
+      ],
+    };
+
+    expect(buildRagPrompt("প্রশ্ন", [graded])).toContain(
+      "[1] (হাদিস, সুনানে আবু দাউদ 5, মান: শায (আলবানী); সনদ সহীহ (যুবাইর আলী যাই))",
+    );
+  });
+
+  it("adds the tafsir note under an ayah and names its author", () => {
+    const prompt = buildRagPrompt("প্রশ্ন", [
+      { ...chunk, note: "সকল প্রশংসা আল্লাহর টীকা: (১) ব্যাখ্যা" },
+    ]);
+
+    expect(prompt).toContain(
+      "তাফসীরি অনুবাদ ও টীকা (ড. আবু বকর মুহাম্মাদ যাকারিয়া, QuranEnc.com)",
+    );
+  });
+
+  it("tells the model never to present a note as part of the ayah", () => {
+    expect(buildSystemPrompt()).toContain(
+      "টীকাকে কখনো আয়াতের অংশ বা আল্লাহর বাণী হিসেবে উপস্থাপন করবে না",
+    );
+  });
+});

@@ -14,13 +14,20 @@ export interface SourceCitation {
   pageCount?: number;
 }
 
+export interface HadithGrade {
+  name: string;
+  grade: string;
+}
+
 export interface RetrievedChunk {
   id: string;
   sourceType: SourceType;
   content: string;
   citation: SourceCitation;
   similarity: number;
-  retrievedBy: "vector" | "text";
+  retrievedBy: "vector" | "text" | "history";
+  grades?: HadithGrade[];
+  note?: string;
 }
 
 export interface IngestionDocument {
@@ -39,6 +46,7 @@ export interface AnswerSource {
   page?: number;
   pageCount?: number;
   similarity: number;
+  grade?: string;
 }
 
 export type UsulDataParts = {

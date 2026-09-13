@@ -25,6 +25,7 @@ function chipBody(source: AnswerSource) {
       <span className="text-(--accent) tabular-nums">[{source.index}]</span>
       <span className="truncate">
         {SOURCE_LABELS[source.sourceType]} · {source.reference}
+        {source.grade ? ` · ${source.grade}` : ""}
       </span>
     </>
   );
@@ -49,7 +50,7 @@ export function SourceCitationList({ sources }: { sources: AnswerSource[] }) {
       </p>
       <div className="flex flex-wrap gap-1.5">
         {sources.map((source) => {
-          const title = `${SOURCE_LABELS[source.sourceType]} · ${source.reference}`;
+          const title = `${SOURCE_LABELS[source.sourceType]} · ${source.reference}${source.grade ? ` · ${source.grade}` : ""}`;
 
           if (isViewable(source)) {
             return (

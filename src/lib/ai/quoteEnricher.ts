@@ -11,6 +11,7 @@ import { transliterateArabic } from "@/lib/ai/transliterate";
 
 export interface EnrichmentSource {
   index: number;
+  reference?: string;
   arabic: string;
   bangla?: string;
   english?: string;
@@ -34,6 +35,7 @@ interface SourceToken {
 interface QuoteMatch {
   sources: EnrichmentSource[];
   segment: string;
+  primary: EnrichmentSource;
 }
 
 const LABEL_ROOTS = [
@@ -134,7 +136,27 @@ function locateQuote(run: string, sources: EnrichmentSource[]): QuoteMatch | nul
     return null;
   }
 
-  return { sources: matches.map((match) => match.source), segment: matches[0]!.segment };
+  return {
+    sources: matches.map((match) => match.source),
+    segment: matches[0]!.segment,
+    primary: matches[0]!.source,
+  };
+}
+
+function skeletonLine(text: string): string {
+  return tokenize(text)
+    .map((token) => token.skeleton)
+    .filter(Boolean)
+    .join(" ");
+}
+
+function readingFor(match: QuoteMatch): string {
+  const matn = extractMatn(match.primary.arabic);
+  const matnSkeleton = skeletonLine(matn);
+  const segmentSkeleton = skeletonLine(match.segment);
+
+  const quotedChainToo = matnSkeleton.length > 0 && segmentSkeleton.length > matnSkeleton.length;
+  return quotedChainToo && segmentSkeleton.includes(matnSkeleton) ? matn : match.segment;
 }
 
 function meaningLine(
@@ -150,10 +172,15 @@ function meaningLine(
   return parts.length > 0 ? `**${label}** ${parts.join(" ")}` : null;
 }
 
-export function buildEnrichment(lines: string[], options: EnricherOptions): string {
+interface EnrichedBlock {
+  text: string;
+  matched: number[];
+}
+
+function enrichBlock(lines: string[], options: EnricherOptions): EnrichedBlock {
   const bangla = options.language !== "other";
   const runs = lines.flatMap(quoteRuns);
-  if (runs.length === 0) return "";
+  if (runs.length === 0) return { text: "", matched: [] };
 
   const readings: string[] = [];
   const matched: EnrichmentSource[] = [];
@@ -161,7 +188,7 @@ export function buildEnrichment(lines: string[], options: EnricherOptions): stri
   for (const run of runs) {
     const match = locateQuote(run, options.sources);
     const reading = match
-      ? match.segment
+      ? readingFor(match)
       : vocalizationRatio(run) >= QUOTE_ENRICHMENT_CONFIG.minVocalizationRatio
         ? run
         : null;
@@ -189,7 +216,58 @@ export function buildEnrichment(lines: string[], options: EnricherOptions): stri
       ]
     : [pronunciation, meaningLine("English Meaning:", matched, (source) => source.english)];
 
-  return entries.filter((line): line is string => line !== null).join("\n\n");
+  return {
+    text: entries.filter((line): line is string => line !== null).join("\n\n"),
+    matched: matched.map((source) => source.index),
+  };
+}
+
+export function buildEnrichment(lines: string[], options: EnricherOptions): string {
+  return enrichBlock(lines, options).text;
+}
+
+const INVISIBLE_MARKS = new Set([0x200e, 0x200f, 0x061c]);
+
+export function extractMatn(arabic: string): string {
+  const visible = [...arabic]
+    .filter((char) => !INVISIBLE_MARKS.has(char.codePointAt(0)!))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const first = visible.indexOf('"');
+  const last = visible.lastIndexOf('"');
+
+  if (first >= 0 && last > first) {
+    const inner = visible.slice(first + 1, last).trim();
+    if (arabicWordCount(inner) >= QUOTE_ENRICHMENT_CONFIG.minQuoteWords) return inner;
+  }
+
+  return visible;
+}
+
+function evidenceAppendix(seen: string, quoted: Set<number>, options: EnricherOptions): string {
+  const bangla = options.language !== "other";
+  const cited = [...new Set([...seen.matchAll(/\[(\d+)\]/g)].map((match) => Number(match[1])))];
+
+  const missing = cited
+    .filter((index) => !quoted.has(index))
+    .map((index) => options.sources.find((source) => source.index === index))
+    .filter((source): source is EnrichmentSource => {
+      if (!source) return false;
+      return arabicWordCount(extractMatn(source.arabic)) >= QUOTE_ENRICHMENT_CONFIG.minQuoteWords;
+    })
+    .slice(0, QUOTE_ENRICHMENT_CONFIG.maxAppendedEvidence);
+
+  return missing
+    .map((source) => {
+      const matn = extractMatn(source.arabic);
+      const title = `${bangla ? "দলিল" : "Evidence"} [${source.index}]`;
+      const heading = `**${title}${source.reference ? `: ${source.reference}` : ""}**`;
+      const block = enrichBlock([matn], { ...options, sources: [source] }).text;
+      return [heading, matn, block].filter(Boolean).join("\n\n");
+    })
+    .join("\n\n");
 }
 
 export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
@@ -199,6 +277,8 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
   let pending: string[] = [];
   let output = "";
   let tail = "";
+  let seen = "";
+  const quoted = new Set<number>();
 
   const emit = (text: string) => {
     if (text.length === 0) return;
@@ -208,8 +288,9 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
 
   const flushPending = () => {
     if (pending.length === 0) return;
-    const block = buildEnrichment(pending, options);
+    const { text: block, matched } = enrichBlock(pending, options);
     pending = [];
+    for (const index of matched) quoted.add(index);
     if (!block) return;
 
     if (!tail.endsWith("\n\n")) emit(tail.endsWith("\n") ? "\n" : "\n\n");
@@ -256,6 +337,7 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
   return {
     push(text) {
       output = "";
+      seen += text;
       const pieces = text.split("\n");
 
       pieces.forEach((piece, index) => {
@@ -289,6 +371,13 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
         lineEmitted = 0;
       }
       flushPending();
+
+      const appendix = evidenceAppendix(seen, quoted, options);
+      if (appendix) {
+        if (!tail.endsWith("\n\n")) emit(tail.endsWith("\n") ? "\n" : "\n\n");
+        emit(appendix);
+      }
+
       return output;
     },
   };

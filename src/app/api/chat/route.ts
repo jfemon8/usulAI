@@ -1,14 +1,18 @@
 import { createUIMessageStream, createUIMessageStreamResponse, smoothStream, streamText } from "ai";
 import { ANSWER_GATE_CONFIG, MODEL_ATTEMPT_CONFIG } from "@/config/site";
 import { logQuery, summariseRetrieval, type GateRejection } from "@/lib/analytics/queryLog";
-import { detectQuestionLanguage } from "@/lib/ai/language";
+import { detectConversationLanguage } from "@/lib/ai/language";
 import { getModelChain } from "@/lib/ai/providers";
 import { rewriteQuery, type ConversationTurn } from "@/lib/ai/queryRewriter";
 import { buildSystemPrompt, buildRagPrompt } from "@/lib/ai/prompt";
 import { findVerifiedAnswer } from "@/lib/analytics/verifiedAnswers";
 import { retrieveAnswerContext } from "@/lib/retrieval/search";
+import { mergeCarriedContext, previousSourceReferences } from "@/lib/retrieval/carryForward";
+import { findChunksByReferences } from "@/lib/retrieval/vectorStore";
+import { attachQuranNotes } from "@/lib/retrieval/quranNotes";
 import { createRepetitionGuard } from "@/lib/ai/repetitionGuard";
 import { validateAnswer, type GateInput } from "@/lib/ai/answerGate";
+import { preferredGrade } from "@/lib/ai/hadithGrade";
 import { sanitizeSourceContent, splitSourceBlocks } from "@/lib/ingestion/translations";
 import { createQuoteEnricher, enrichAnswer, type EnricherOptions } from "@/lib/ai/quoteEnricher";
 import { logger } from "@/lib/utils/logger";
@@ -51,6 +55,10 @@ export async function POST(request: Request) {
 
   const question = extractText(lastUserMessage);
   const history = toHistory(messages);
+  const language = detectConversationLanguage(
+    question,
+    history.filter((turn) => turn.role === "user").map((turn) => turn.text),
+  );
 
   const verified = history.length === 0 ? await findVerifiedAnswer(question) : null;
 
@@ -70,7 +78,10 @@ export async function POST(request: Request) {
 
   const { query, rewritten } = await rewriteQuery(question, history);
 
-  const context = await retrieveAnswerContext(query);
+  const retrieved = await retrieveAnswerContext(query);
+  const carried =
+    history.length > 0 ? await findChunksByReferences(previousSourceReferences(messages)) : [];
+  const context = await attachQuranNotes(mergeCarriedContext(retrieved, carried));
 
   if (context.length === 0) {
     void logQuery({
@@ -78,7 +89,7 @@ export async function POST(request: Request) {
       searchQuery: query,
       rewritten,
       historyTurns: history.length,
-      language: detectQuestionLanguage(question),
+      language,
       ...summariseRetrieval(context),
       answered: false,
     });
@@ -102,12 +113,13 @@ export async function POST(request: Request) {
     contextTexts: context.map((chunk) => sanitizeSourceContent(chunk.content)),
     references: context.map((chunk) => chunk.citation.reference),
     question,
-    language: detectQuestionLanguage(question),
+    language,
   };
   const contextText = gateInput.contextTexts.join("\n\n");
   const enrichmentOptions: EnricherOptions = {
     sources: context.map((chunk, index) => ({
       index: index + 1,
+      reference: chunk.citation.reference,
       ...splitSourceBlocks(chunk.content),
     })),
     language: gateInput.language,
@@ -123,6 +135,7 @@ export async function POST(request: Request) {
     page: chunk.citation.page,
     pageCount: chunk.citation.pageCount,
     similarity: chunk.similarity,
+    grade: preferredGrade(chunk.grades),
   }));
 
   const stream = createUIMessageStream<UsulUIMessage>({
@@ -223,7 +236,7 @@ export async function POST(request: Request) {
               searchQuery: query,
               rewritten,
               historyTurns: history.length,
-              language: detectQuestionLanguage(question),
+              language,
               ...summariseRetrieval(context),
               answered: true,
               modelTier: tier,
@@ -269,7 +282,7 @@ export async function POST(request: Request) {
         searchQuery: query,
         rewritten,
         historyTurns: history.length,
-        language: detectQuestionLanguage(question),
+        language,
         ...summariseRetrieval(context),
         answered: false,
         errorTier: chain[chain.length - 1]?.tier,

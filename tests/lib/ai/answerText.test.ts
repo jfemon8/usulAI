@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isArabicDominant, normalizeDashes, stripTrailingSources } from "@/lib/ai/answerText";
+import {
+  attachOrphanCitations,
+  isArabicDominant,
+  normalizeDashes,
+  prepareAnswer,
+  stripTrailingSources,
+} from "@/lib/ai/answerText";
 
 const body = "সুদ হারাম [1]। ব্যবসা হালাল [2]।";
 
@@ -88,5 +94,31 @@ describe("isArabicDominant", () => {
 
   it("never marks text without any Arabic", () => {
     expect(isArabicDominant("প্রতিবেশীর হক [1]")).toBe(false);
+  });
+});
+
+describe("attachOrphanCitations", () => {
+  const nl = String.fromCharCode(10);
+
+  it("joins a paragraph that holds only a citation to the paragraph before it, as in the screenshot", () => {
+    const text = `মূর্খতা বিস্তার পাবে।${nl}${nl}[1]`;
+
+    expect(attachOrphanCitations(text)).toBe("মূর্খতা বিস্তার পাবে। [1]");
+  });
+
+  it("handles several markers and a dash before them", () => {
+    const text = `সুদ হারাম।${nl}${nl}— [1], [2]${nl}${nl}পরের অনুচ্ছেদ।`;
+
+    expect(attachOrphanCitations(text)).toBe(`সুদ হারাম। [1], [2]${nl}${nl}পরের অনুচ্ছেদ।`);
+  });
+
+  it("leaves markers that already sit inside a sentence alone", () => {
+    const text = `সুদ হারাম [1]।${nl}${nl}ব্যবসা হালাল [2]।`;
+
+    expect(attachOrphanCitations(text)).toBe(text);
+  });
+
+  it("runs as part of preparing an answer for display", () => {
+    expect(prepareAnswer(`জ্ঞান উঠে যাবে।${nl}${nl}[1]`)).toBe("জ্ঞান উঠে যাবে। [1]");
   });
 });

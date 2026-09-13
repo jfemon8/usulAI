@@ -192,3 +192,84 @@ describe("layout", () => {
     expect(output).not.toContain(labelLine);
   });
 });
+
+const RLM = String.fromCharCode(0x200f);
+const bukhari7066: EnrichmentSource = {
+  index: 1,
+  reference: "সহীহ বুখারী 7066",
+  arabic: `حَدَّثَنَا مُحَمَّدٌ، حَدَّثَنَا غُنْدَرٌ، عَنْ عَبْدِ اللَّهِ، قَالَ ${RLM}"${RLM} بَيْنَ يَدَىِ السَّاعَةِ أَيَّامُ الْهَرْجِ، يَزُولُ الْعِلْمُ، وَيَظْهَرُ فِيهَا الْجَهْلُ ${RLM}"${RLM}\u200F.`,
+  bangla: "কিয়ামতের আগে হারজ অর্থাৎ হত্যার যুগ শুরু হবে। তখন ইল্ম বিলুপ্ত হয়ে যাবে।",
+  english: "Near the establishment of the Hour, there will be the days of Al-Harj.",
+};
+
+describe("evidence the model cited but never quoted", () => {
+  const screenshotAnswer =
+    "শেষ জামানায় ধর্মীয় জ্ঞান বিলুপ্ত হবে এবং মূর্খতা বিস্তার পাবে।\n\n[1]";
+  const options: EnricherOptions = { sources: [bukhari7066], language: "bangla" };
+
+  it("appends the cited hadith itself when the answer only gave its number, as in the screenshot", () => {
+    const output = enrichAnswer(screenshotAnswer, options);
+
+    expect(output).toContain("**দলিল [1]: সহীহ বুখারী 7066**");
+    expect(output).toContain("بَيْنَ يَدَىِ السَّاعَةِ أَيَّامُ الْهَرْجِ");
+    expect(output).toContain("**বাংলা উচ্চারণঃ** বাইনা ইয়াদায়িস সাআতি আয়্যামুল হারজি");
+    expect(output).toContain(`**বাংলা অর্থঃ** ${bukhari7066.bangla} [1]`);
+    expect(output).toContain(`**English Meaning:** ${bukhari7066.english} [1]`);
+  });
+
+  it("shows the Prophet's words without the chain of narrators", () => {
+    const output = enrichAnswer(screenshotAnswer, options);
+
+    expect(output).not.toContain("حَدَّثَنَا");
+  });
+
+  it("keeps the answer first and the evidence after it", () => {
+    const output = enrichAnswer(screenshotAnswer, options);
+
+    expect(output.indexOf("মূর্খতা বিস্তার পাবে")).toBeLessThan(output.indexOf("দলিল [1]"));
+  });
+
+  it("adds nothing when the answer already quoted that source", () => {
+    const answer = `জ্ঞান উঠে যাবে [1]।\n\nبَيْنَ يَدَىِ السَّاعَةِ أَيَّامُ الْهَرْجِ، يَزُولُ الْعِلْمُ\n\nব্যাখ্যা।`;
+
+    expect(enrichAnswer(answer, options)).not.toContain("দলিল [1]");
+  });
+
+  it("adds nothing for a source the answer never cited", () => {
+    expect(enrichAnswer("জ্ঞান উঠে যাবে।", options)).not.toContain("দলিল");
+  });
+
+  it("labels the evidence in English for an English question", () => {
+    const output = enrichAnswer("Knowledge will vanish [1].", { ...options, language: "other" });
+
+    expect(output).toContain("**Evidence [1]: সহীহ বুখারী 7066**");
+    expect(output).toContain("**English Pronunciation:** bayna yadayis saa'ati");
+    expect(output).not.toContain("বাংলা অর্থঃ");
+  });
+
+  it("streams to the same result as enriching the whole answer", () => {
+    expect(streamWords(screenshotAnswer, options)).toBe(enrichAnswer(screenshotAnswer, options));
+  });
+});
+
+describe("pronouncing a hadith quoted with its chain of narrators", () => {
+  it("reads only the Prophet's words, not the whole isnad", () => {
+    const quotedWithChain = bukhari7066.arabic;
+    const output = enrichAnswer(`${quotedWithChain}\n\nব্যাখ্যা [1]।`, {
+      sources: [bukhari7066],
+      language: "bangla",
+    });
+
+    expect(output).toContain("**বাংলা উচ্চারণঃ** বাইনা ইয়াদায়িস সাআতি");
+    expect(output).not.toContain("হাদ্দাছানা");
+  });
+
+  it("reads the quoted words as they are when the model already quoted only the matn", () => {
+    const output = enrichAnswer("بَيْنَ يَدَىِ السَّاعَةِ أَيَّامُ الْهَرْجِ\n\nব্যাখ্যা।", {
+      sources: [bukhari7066],
+      language: "bangla",
+    });
+
+    expect(output).toContain("**বাংলা উচ্চারণঃ** বাইনা ইয়াদায়িস সাআতি আয়্যামুল হারজ");
+  });
+});

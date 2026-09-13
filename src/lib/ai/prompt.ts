@@ -1,6 +1,7 @@
-import { SOURCE_PRIORITY } from "@/config/site";
-import { detectQuestionLanguage } from "@/lib/ai/language";
+import { QURANENC_CONFIG, SOURCE_PRIORITY } from "@/config/site";
+import { detectConversationLanguage } from "@/lib/ai/language";
 import type { ConversationTurn } from "@/lib/ai/queryRewriter";
+import { describeGrades } from "@/lib/ai/hadithGrade";
 import { sanitizeSourceContent } from "@/lib/ingestion/translations";
 import type { RetrievedChunk, SourceType } from "@/types";
 
@@ -13,6 +14,17 @@ const SOURCE_LABELS: Record<SourceType, string> = {
 };
 
 const HISTORY_TURNS_IN_PROMPT = 6;
+
+function noteBlock(chunk: RetrievedChunk): string {
+  return chunk.note
+    ? `\n\nতাফসীরি অনুবাদ ও টীকা (${QURANENC_CONFIG.translator}, QuranEnc.com): ${chunk.note}`
+    : "";
+}
+
+function gradeLabel(chunk: RetrievedChunk): string {
+  const described = describeGrades(chunk.grades);
+  return described ? `, মান: ${described}` : "";
+}
 const HISTORY_TURN_CHARS = 600;
 
 const BANGLA_COUNTS: Record<number, string> = {
@@ -56,6 +68,7 @@ ${sourceList}
 আরবি, উচ্চারণ ও অর্থের নিয়ম (বাধ্যতামূলক):
 - কুরআনের আয়াত বা হাদিস উদ্ধৃত করলে মূল আরবি অংশ Context থেকে হরকতসহ হুবহু দাও; আরবি কখনো বাদ দিও না, পরিবর্তনও করো না।
 - প্রতিটা আরবি উদ্ধৃতি নিজের আলাদা অনুচ্ছেদে দাও, বাংলা বা ইংরেজি বাক্যের সাথে একই লাইনে মিশিয়ে নয়।
+- হাদিস উদ্ধৃত করলে বর্ণনাকারীদের সনদ (যেমন "حَدَّثَنَا ... عَنْ ...") বাদ দিয়ে শুধু মূল বাণী (মতন) আরবিতে দাও; সনদের বর্ণনাকারী কে ছিলেন তা বাংলায় এক বাক্যে বলে দিলেই যথেষ্ট।
 - **আরবির পরে উচ্চারণ, বাংলা অর্থ বা ইংরেজি অর্থ তুমি নিজে লিখবে না।** অ্যাপ প্রতিটা আরবি উদ্ধৃতির নিচে Context থেকে উচ্চারণ ও অর্থ নিজেই যোগ করে; তুমি লিখলে দুইবার দেখাবে। আরবির পরে সরাসরি ব্যাখ্যায় যাও।
 - Context-এর "বাংলা:" ও "English:" অনুবাদ অর্থ বোঝার জন্য দেওয়া আছে। ব্যাখ্যা লেখার সময় সেই অর্থের ভিত্তিতেই বোঝাও, নিজে নতুন করে অনুবাদ বানিও না।
 
@@ -72,6 +85,15 @@ ${sourceList}
 - সবচেয়ে মূল ও জোরালো অংশটা উঁচু priority-র উৎস থেকে আসবে; নিচের উৎসগুলো সেটাকে সমর্থন, ব্যাখ্যা বা প্রয়োগ হিসেবে যুক্ত হবে, মূল দলিলের সমকক্ষ হিসেবে নয়।
 - কোনো উৎসে প্রাসঙ্গিক কিছু না থাকলে সেটা নীরবে বাদ দাও, "পাওয়া যায়নি" লিখে জায়গা নষ্ট করো না।
 
+তাফসীরি টীকার নিয়ম:
+- কোনো আয়াতের নিচে "তাফসীরি অনুবাদ ও টীকা" থাকলে সেটা আয়াতের ব্যাখ্যা বোঝার জন্য; ব্যাখ্যা লিখতে কাজে লাগাও।
+- টীকা থেকে কিছু নিলে জানাও যে এটা ড. আবু বকর মুহাম্মাদ যাকারিয়ার টীকা থেকে। টীকাকে কখনো আয়াতের অংশ বা আল্লাহর বাণী হিসেবে উপস্থাপন করবে না।
+
+হাদিসের মানের নিয়ম (বাধ্যতামূলক):
+- Context-এ কোনো হাদিসের পাশে "মান" দেওয়া থাকলে উত্তরে সেই মান মূল্যায়নকারীর নামসহ উল্লেখ করো, যেমন: "(আলবানী: সহীহ)"।
+- কোনো হাদিস যঈফ, মাওযূ (জাল), মুনকার বা শায হলে স্পষ্ট করে জানাও যে এটি দুর্বল, এবং শুধু এর ভিত্তিতে কোনো বিধান দিও না।
+- মূল্যায়নকারীদের মধ্যে মতভেদ থাকলে সেটাও জানাও; নিজে থেকে কোনো হাদিসকে সহীহ বা যঈফ বলবে না।
+
 অন্যান্য নিয়ম:
 - শুধুমাত্র "Context" অংশে দেওয়া তথ্যের উপর ভিত্তি করে উত্তর দাও।
 - Context খালি বা অপ্রতুল হলে স্পষ্টভাবে বলো যে নিশ্চিত উত্তর দেওয়ার মতো তথ্য পাওয়া যায়নি; অনুমান করে উত্তর দিও না, রেফারেন্সও বানিও না।
@@ -86,11 +108,14 @@ export function buildRagPrompt(
   const contextBlock = context
     .map(
       (chunk, index) =>
-        `[${index + 1}] (${SOURCE_LABELS[chunk.sourceType]}, ${chunk.citation.reference})\n${sanitizeSourceContent(chunk.content)}`,
+        `[${index + 1}] (${SOURCE_LABELS[chunk.sourceType]}, ${chunk.citation.reference}${gradeLabel(chunk)})\n${sanitizeSourceContent(chunk.content)}${noteBlock(chunk)}`,
     )
     .join("\n\n");
 
-  const language = detectQuestionLanguage(question);
+  const language = detectConversationLanguage(
+    question,
+    history.filter((turn) => turn.role === "user").map((turn) => turn.text),
+  );
   const languageDirective =
     language === "other"
       ? "ইউজারের প্রশ্ন যে ভাষায়, উত্তরও সেই ভাষায় দাও। The question is not in Bangla: write the entire answer in the language of the question, never in Bangla."

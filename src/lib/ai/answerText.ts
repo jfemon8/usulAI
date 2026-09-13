@@ -28,6 +28,15 @@ export function stripTrailingSources(text: string): string {
   return text.replace(TRAILING_SOURCE_BLOCK, "").trimEnd();
 }
 
+const ORPHAN_CITATIONS = /\n{2,}[ \t]*(?:[-–—*•>][ \t]*)?((?:\[\d+\][ \t,]*)+)(?=\n|$)/g;
+
+export function attachOrphanCitations(text: string): string {
+  return text.replace(
+    ORPHAN_CITATIONS,
+    (_, markers: string) => ` ${markers.trim().replace(/,$/, "")}`,
+  );
+}
+
 export function prepareAnswer(text: string): string {
-  return normalizeDashes(stripTrailingSources(text));
+  return normalizeDashes(attachOrphanCitations(stripTrailingSources(text)));
 }

@@ -1,5 +1,10 @@
 import { CONTEXT_CONFIG, HYBRID_CONFIG, RERANK_CONFIG, SOURCE_PRIORITY } from "@/config/site";
-import { embedText, embedTexts, embeddingsCoolingDown } from "@/lib/ai/embeddings";
+import {
+  cachedQueryEmbedding,
+  embedText,
+  embedTexts,
+  embeddingsCoolingDown,
+} from "@/lib/ai/embeddings";
 import {
   attachEmbeddings,
   findUnembedded,
@@ -16,6 +21,8 @@ const MIN_SIMILARITY = 0.8;
 const embeddingsInFlight = new Set<string>();
 
 async function embedQuestion(question: string): Promise<number[] | null> {
+  const known = await cachedQueryEmbedding(question);
+  if (known) return known;
   if (embeddingsCoolingDown()) return null;
 
   try {
@@ -122,7 +129,11 @@ async function backfillEmbeddings(candidates: RetrievedChunk[]): Promise<void> {
 
     const embeddings = await embedTexts(missing.map((row) => row.content));
     const updated = await attachEmbeddings(
-      missing.map((row, index) => ({ id: row.id, embedding: embeddings[index] as number[] })),
+      missing.map((row, index) => ({
+        id: row.id,
+        content: row.content,
+        embedding: embeddings[index] as number[],
+      })),
     );
 
     logger.info(`Lazy-embedded ${updated} retrieved documents`);

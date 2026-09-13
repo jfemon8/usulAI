@@ -8,8 +8,10 @@ export interface DocumentRecord {
   content: string;
   citation: SourceCitation;
   metadata: Record<string, unknown>;
+  contentHash?: string;
   embedding?: Binary;
   embeddedAt?: Date;
+  embeddingModel?: string;
   createdAt: Date;
 }
 

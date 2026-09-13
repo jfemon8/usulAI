@@ -109,3 +109,20 @@ describe("validateAnswer", () => {
     expect(validateAnswer(answer, { ...quranInput, language: "other" }).ok).toBe(true);
   });
 });
+
+describe("validateAnswer on the replayed screenshot conversation", () => {
+  it.each(["জ্ঞан", "খিদমতকারীদের رحمتের"])(
+    "rejects a word fusing Bangla with another script: %s",
+    (word) => {
+      const verdict = validateAnswer(`এখানে ${word} উঠিয়ে নেওয়া হবে [1]।`, hadithInput);
+
+      expect(verdict.reasons.some((reason) => reason.startsWith("mixed-script-word"))).toBe(true);
+    },
+  );
+
+  it("still accepts an Arabic quote that stands apart from the Bangla words", () => {
+    const answer = `নবীজি (সা.) বলেছেন:\n\nمَا زَالَ جِبْرِيلُ يُوصِينِي بِالْجَارِ\n\nঅর্থাৎ প্রতিবেশীর হক গুরুত্বপূর্ণ [1]।`;
+
+    expect(validateAnswer(answer, hadithInput).ok).toBe(true);
+  });
+});

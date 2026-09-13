@@ -6,6 +6,11 @@ import {
   RETRIEVAL_CONFIG,
 } from "@/config/site";
 import { getEmbeddingModel } from "@/lib/ai/providers";
+import {
+  queryEmbeddingKey,
+  readStoredQueryEmbedding,
+  storeQueryEmbedding,
+} from "@/lib/ai/queryEmbeddingStore";
 import { createLru, normalizeCacheKey } from "@/lib/utils/lru";
 
 function providerOptions(taskType: string) {
@@ -34,10 +39,21 @@ export function queryCacheStats(): { size: number; hits: number } {
   return queryCache.stats();
 }
 
-export async function embedText(text: string): Promise<number[]> {
+export async function cachedQueryEmbedding(text: string): Promise<number[] | null> {
   const key = normalizeCacheKey(text);
   const cached = queryCache.get(key);
   if (cached) return cached;
+
+  const stored = await readStoredQueryEmbedding(queryEmbeddingKey(key));
+  if (stored) queryCache.set(key, stored);
+  return stored;
+}
+
+export async function embedText(text: string): Promise<number[]> {
+  const known = await cachedQueryEmbedding(text);
+  if (known) return known;
+
+  const key = normalizeCacheKey(text);
 
   try {
     const { embedding } = await embed({
@@ -47,6 +63,7 @@ export async function embedText(text: string): Promise<number[]> {
     });
 
     queryCache.set(key, embedding);
+    void storeQueryEmbedding(queryEmbeddingKey(key), embedding);
     return embedding;
   } catch (error) {
     if (isProviderRejection(error)) {

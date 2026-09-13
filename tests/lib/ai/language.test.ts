@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { detectQuestionLanguage, shouldAnswerInBangla } from "@/lib/ai/language";
+import {
+  detectConversationLanguage,
+  detectQuestionLanguage,
+  shouldAnswerInBangla,
+} from "@/lib/ai/language";
 
 describe("detectQuestionLanguage", () => {
   it("detects Bengali script", () => {
@@ -47,5 +51,34 @@ describe("detectQuestionLanguage", () => {
     expect(shouldAnswerInBangla("নামাজ")).toBe(true);
     expect(shouldAnswerInBangla("namaz er niyom ki")).toBe(true);
     expect(shouldAnswerInBangla("What is the ruling on this?")).toBe(false);
+  });
+});
+
+describe("follow-ups from the screenshot", () => {
+  it("recognises a long Banglish follow-up that only had one known marker before", () => {
+    expect(
+      detectQuestionLanguage("Shudhu hadiser reference dila but main hadis ta dila na keno?"),
+    ).toBe("banglish");
+  });
+
+  it("keeps an ambiguous follow-up in Bangla when the conversation started in Bangla", () => {
+    const question =
+      "but why did you only give the reference, keno main text nai in this long answer here";
+
+    expect(detectQuestionLanguage(question)).toBe("banglish");
+    expect(
+      detectConversationLanguage(
+        "ok but the main text, tahole show the full reference list please",
+        ["শেষ জামানায় কী হবে?"],
+      ),
+    ).toBe("banglish");
+  });
+
+  it("does not drag a genuinely English follow-up into Bangla", () => {
+    expect(
+      detectConversationLanguage("Can you show the full text of that hadith please?", [
+        "শেষ জামানায় কী হবে?",
+      ]),
+    ).toBe("other");
   });
 });

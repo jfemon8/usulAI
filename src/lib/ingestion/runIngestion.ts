@@ -1,11 +1,18 @@
 import { INGESTION_CONFIG, SOURCE_PRIORITY } from "@/config/site";
 import { embedTexts } from "@/lib/ai/embeddings";
+import { planIngestion } from "@/lib/ingestion/fingerprint";
 import { fetchQuranCorpus } from "@/lib/ingestion/sources/quran";
 import { fetchHadithCorpus } from "@/lib/ingestion/sources/hadith";
 import { loadIjmaDocuments } from "@/lib/ingestion/sources/ijma";
 import { loadQiyasDocuments } from "@/lib/ingestion/sources/qiyas";
 import { loadSiratDocuments } from "@/lib/ingestion/sources/sirat";
-import { deleteSourceChunks, existingReferences, upsertChunks } from "@/lib/retrieval/vectorStore";
+import {
+  applyIngestionPlan,
+  attachEmbeddings,
+  findUnembedded,
+  listIdsNeedingEmbedding,
+  loadFingerprints,
+} from "@/lib/retrieval/vectorStore";
 import { logger } from "@/lib/utils/logger";
 import type { IngestionDocument, SourceType } from "@/types";
 
@@ -46,22 +53,71 @@ const SOURCE_LOADERS: Record<SourceType, () => Promise<IngestionDocument[]>> = {
   sirat: loadSiratDocuments,
 };
 
-const TEXT_ONLY_BATCH_SIZE = 500;
-
 export interface IngestionOptions {
   replace?: boolean;
   continueOnError?: boolean;
   limit?: number;
   skip?: number;
-  resume?: boolean;
   textOnly?: boolean;
+  dryRun?: boolean;
 }
 
 export interface IngestionReport {
   sourceType: SourceType;
-  status: "ingested" | "empty" | "failed";
+  status: "ingested" | "empty" | "failed" | "planned";
   count: number;
+  inserted?: number;
+  changed?: number;
+  metadataUpdated?: number;
+  unchanged?: number;
+  duplicatesRemoved?: number;
+  staleRemoved?: number;
+  embedded?: number;
   error?: string;
+}
+
+async function embedMissing(sourceType: SourceType, options: IngestionOptions): Promise<number> {
+  const skip = options.skip ?? 0;
+  const pendingIds = await listIdsNeedingEmbedding(sourceType);
+  const ids = pendingIds.slice(skip, options.limit ? skip + options.limit : undefined);
+
+  logger.info(
+    `${sourceType}: ${pendingIds.length} documents lack a current embedding, embedding ${ids.length} this run`,
+  );
+
+  let embedded = 0;
+  const minBatchIntervalMs = Math.ceil(
+    (60_000 * INGESTION_CONFIG.embeddingBatchSize) / INGESTION_CONFIG.embeddingDocsPerMinute,
+  );
+
+  for (let start = 0; start < ids.length; start += INGESTION_CONFIG.embeddingBatchSize) {
+    const startedAt = Date.now();
+    const batch = await findUnembedded(
+      ids.slice(start, start + INGESTION_CONFIG.embeddingBatchSize),
+    );
+    if (batch.length === 0) continue;
+
+    const embeddings = await embedBatchWaitingOutRateLimits(
+      batch.map((row) => row.content),
+      sourceType,
+    );
+
+    embedded += await attachEmbeddings(
+      batch.map((row, index) => ({
+        id: row.id,
+        content: row.content,
+        embedding: embeddings[index] as number[],
+      })),
+    );
+    logger.info(`${sourceType}: embedded ${embedded}/${ids.length}`);
+
+    const remaining = minBatchIntervalMs - (Date.now() - startedAt);
+    if (remaining > 0 && start + INGESTION_CONFIG.embeddingBatchSize < ids.length) {
+      await delay(remaining);
+    }
+  }
+
+  return embedded;
 }
 
 async function ingestSource(
@@ -75,87 +131,35 @@ async function ingestSource(
     return { sourceType, status: "empty", count: 0 };
   }
 
-  if (options.replace) {
-    const removed = await deleteSourceChunks(sourceType);
-    logger.info(`Removed ${removed} existing ${sourceType} chunks before re-ingest`);
-  }
+  const plan = planIngestion(loaded, await loadFingerprints(sourceType));
+  const summary = {
+    inserted: plan.inserts.length,
+    changed: plan.changed.length,
+    metadataUpdated: plan.metadataOnly.length,
+    unchanged: plan.unchanged,
+    duplicatesRemoved: plan.duplicates.length,
+    staleRemoved: options.replace ? plan.stale.length : 0,
+  };
 
-  const skip = options.skip ?? 0;
-  let documents = loaded.slice(skip, options.limit ? skip + options.limit : undefined);
-
-  if (options.resume && !options.replace) {
-    const already = await existingReferences(sourceType);
-    const before = documents.length;
-    documents = documents.filter((document) => !already.has(document.citation.reference));
-    logger.info(
-      `${sourceType}: ${already.size} already stored, ${before - documents.length} skipped, ${documents.length} to ingest`,
-    );
-  } else if (skip > 0 || options.limit) {
-    logger.info(
-      `${sourceType}: ingesting ${documents.length} of ${loaded.length} documents (skip ${skip})`,
-    );
-  }
-
-  if (documents.length === 0) {
-    logger.info(`${sourceType}: nothing left to ingest`);
-    return { sourceType, status: "ingested", count: 0 };
-  }
-
-  if (options.textOnly) {
-    let stored = 0;
-
-    for (let start = 0; start < documents.length; start += TEXT_ONLY_BATCH_SIZE) {
-      const batch = documents.slice(start, start + TEXT_ONLY_BATCH_SIZE);
-
-      await upsertChunks(
-        batch.map((document) => ({
-          sourceType: document.sourceType,
-          content: document.content,
-          citation: document.citation,
-          metadata: document.metadata,
-        })),
-      );
-
-      stored += batch.length;
-      logger.info(`${sourceType}: stored ${stored}/${documents.length} (text only)`);
-    }
-
-    return { sourceType, status: "ingested", count: stored };
-  }
-
-  let inserted = 0;
-  const minBatchIntervalMs = Math.ceil(
-    (60_000 * INGESTION_CONFIG.embeddingBatchSize) / INGESTION_CONFIG.embeddingDocsPerMinute,
+  logger.info(
+    `${sourceType}: ${summary.inserted} new, ${summary.changed} changed, ${summary.metadataUpdated} metadata-only, ${summary.unchanged} unchanged, ${plan.duplicates.length} duplicates, ${plan.stale.length} no longer in source`,
   );
 
-  for (let start = 0; start < documents.length; start += INGESTION_CONFIG.embeddingBatchSize) {
-    const startedAt = Date.now();
-    const batch = documents.slice(start, start + INGESTION_CONFIG.embeddingBatchSize);
-    const embeddings = await embedBatchWaitingOutRateLimits(
-      batch.map((document) => document.content),
-      sourceType,
-    );
-
-    await upsertChunks(
-      batch.map((document, index) => ({
-        sourceType: document.sourceType,
-        content: document.content,
-        citation: document.citation,
-        metadata: document.metadata,
-        embedding: embeddings[index] as number[],
-      })),
-    );
-
-    inserted += batch.length;
-    logger.info(`${sourceType}: embedded ${inserted}/${documents.length}`);
-
-    const remaining = minBatchIntervalMs - (Date.now() - startedAt);
-    if (remaining > 0 && start + INGESTION_CONFIG.embeddingBatchSize < documents.length) {
-      await delay(remaining);
-    }
+  if (options.dryRun) {
+    return { sourceType, status: "planned", count: summary.inserted + summary.changed, ...summary };
   }
 
-  return { sourceType, status: "ingested", count: inserted };
+  const result = await applyIngestionPlan(plan, { prune: options.replace ?? false });
+  const embedded = options.textOnly ? 0 : await embedMissing(sourceType, options);
+
+  return {
+    sourceType,
+    status: "ingested",
+    count: result.inserted + result.changed,
+    ...result,
+    unchanged: plan.unchanged,
+    embedded,
+  };
 }
 
 export async function runIngestion(

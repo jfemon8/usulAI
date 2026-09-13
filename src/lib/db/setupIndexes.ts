@@ -1,5 +1,6 @@
-import { DB_CONFIG, RETRIEVAL_CONFIG } from "@/config/site";
+import { DB_CONFIG, EMBEDDING_RUNTIME_CONFIG, RETRIEVAL_CONFIG } from "@/config/site";
 import { getDb, getDocumentsCollection } from "@/lib/db/mongoClient";
+import { currentEmbeddingModel } from "@/lib/ingestion/fingerprint";
 import { logger } from "@/lib/utils/logger";
 
 const VECTOR_INDEX_DEFINITION = {
@@ -27,6 +28,25 @@ const TEXT_INDEX_DEFINITION = {
   },
 };
 
+export function definitionMatches(desired: unknown, actual: unknown): boolean {
+  if (Array.isArray(desired)) {
+    return (
+      Array.isArray(actual) &&
+      actual.length === desired.length &&
+      desired.every((item, index) => definitionMatches(item, actual[index]))
+    );
+  }
+
+  if (desired && typeof desired === "object") {
+    if (!actual || typeof actual !== "object") return false;
+    return Object.entries(desired).every(([key, value]) =>
+      definitionMatches(value, (actual as Record<string, unknown>)[key]),
+    );
+  }
+
+  return desired === actual;
+}
+
 async function ensureSearchIndex(
   collection: Awaited<ReturnType<typeof getDocumentsCollection>>,
   name: string,
@@ -34,10 +54,18 @@ async function ensureSearchIndex(
   definition: Record<string, unknown>,
 ): Promise<void> {
   const indexes = await collection.listSearchIndexes().toArray();
+  const existing = (indexes as { name: string; latestDefinition?: unknown }[]).find(
+    (index) => index.name === name,
+  );
 
-  if (indexes.some((index) => index.name === name)) {
+  if (existing) {
+    if (definitionMatches(definition, existing.latestDefinition)) {
+      logger.info(`${type} index "${name}" already matches its definition, not rebuilding`);
+      return;
+    }
+
     await collection.updateSearchIndex(name, definition);
-    logger.info(`Updated ${type} index "${name}"`);
+    logger.info(`Updated ${type} index "${name}", Atlas rebuilds it asynchronously`);
     return;
   }
 
@@ -58,6 +86,29 @@ export async function setupIndexes(): Promise<void> {
   await collection.createIndex({ sourceType: 1 });
   await collection.createIndex({ sourceType: 1, "citation.reference": 1 });
   await collection.createIndex({ embedding: 1 }, { sparse: true });
+  await collection.createIndex({
+    sourceType: 1,
+    "metadata.collection": 1,
+    "metadata.hadithNumber": 1,
+  });
+  await collection.createIndex({ sourceType: 1, "metadata.surah": 1, "metadata.ayah": 1 });
+
+  const labelled = await collection.updateMany(
+    { embedding: { $exists: true }, embeddingModel: { $exists: false } },
+    { $set: { embeddingModel: currentEmbeddingModel() } },
+  );
+  if (labelled.modifiedCount > 0) {
+    logger.info(
+      `Labelled ${labelled.modifiedCount} legacy embeddings as ${currentEmbeddingModel()}`,
+    );
+  }
+
+  await db
+    .collection(DB_CONFIG.queryEmbeddingCollection)
+    .createIndex(
+      { lastUsedAt: 1 },
+      { expireAfterSeconds: EMBEDDING_RUNTIME_CONFIG.storedQueryTtlDays * 86_400 },
+    );
 
   await ensureSearchIndex(
     collection,

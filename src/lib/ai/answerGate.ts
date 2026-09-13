@@ -16,7 +16,7 @@ export interface GateVerdict {
 }
 
 const BENGALI_LETTER = /(?=\p{L})\p{Script=Bengali}/u;
-const LATIN_LETTER = /(?=\p{L})\p{Script=Latin}/u;
+const FOREIGN_LETTER = /(?=\p{L})(?!\p{Script=Bengali})\p{L}/u;
 const LATIN_WORD = /\p{Script=Latin}{3,}/gu;
 const CITATION = /\[(\d+)\]/g;
 
@@ -83,7 +83,7 @@ function checkCitations(answer: string, sourceCount: number): string[] {
 function checkMixedScript(answer: string): string[] {
   const mixed = answer
     .split(/\s+/)
-    .filter((token) => BENGALI_LETTER.test(token) && LATIN_LETTER.test(token));
+    .filter((token) => BENGALI_LETTER.test(token) && FOREIGN_LETTER.test(token));
 
   return mixed.length > 0 ? [`mixed-script-word: ${mixed.slice(0, 3).join(" ")}`] : [];
 }
