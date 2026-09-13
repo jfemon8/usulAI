@@ -26,6 +26,47 @@ const quranInput: GateInput = {
 };
 
 describe("validateAnswer", () => {
+  it("rejects Chinese, Japanese and Devanagari leaking into a Bangla answer", () => {
+    const answer =
+      "এতীমের সম্পদকে তাদের অধিকার ও कल্যাণের ভিত্তিতে রাখতে হয়, চাহিদা থেকেではなく। 下面 হল ব্যাখ্যা [1]।";
+
+    const verdict = validateAnswer(answer, quranInput);
+
+    expect(verdict.ok).toBe(false);
+    expect(verdict.reasons.some((reason) => reason.startsWith("foreign-script-letters"))).toBe(
+      true,
+    );
+  });
+
+  it("rejects Urdu letters that no Quran or hadith source uses", () => {
+    const answer = "নিচে এর تعلیم দেওয়া হলো, কুরআন অনুযায়ী [1]।";
+
+    expect(
+      validateAnswer(answer, quranInput).reasons.some((reason) =>
+        reason.startsWith("foreign-script-letters"),
+      ),
+    ).toBe(true);
+  });
+
+  it("allows a rare letter when the source itself contains it", () => {
+    const input: GateInput = {
+      ...quranInput,
+      contextTexts: [`${quranInput.contextTexts[0]}\n\nEnglish: the Greek word λόγος`],
+    };
+
+    expect(validateAnswer("সূত্রে λόγος শব্দটি এসেছে [1]।", input).reasons).not.toContainEqual(
+      expect.stringMatching(/^foreign-script-letters/),
+    );
+  });
+
+  it("does not treat the Arabic tatweel or harakat as a foreign script", () => {
+    const answer = `আয়াতটি হলো:\n\n${ayah}\n\nঅর্থাৎ আল্লাহ সুদকে নিশ্চিহ্ন করেন [1]।`;
+
+    expect(
+      validateAnswer(answer.replace("ٱللَّهُ", "ٱللَّـهُ"), quranInput).reasons,
+    ).not.toContainEqual(expect.stringMatching(/^foreign-script-letters/));
+  });
+
   it("rejects the screenshot answer, whose Arabic was retyped without harakat", () => {
     const answer =
       "প্রতিবেশীর হক গুরুত্বপূর্ণ।\n\nএই হাদিসের মূল আরবি অংশটি হলো: ما زال جبريل يوصيني بالجار حتى ظننت أنه سيورثه\n\nবাংলায় এর অনুবাদ: জিবরীল (আঃ) অবিরত উপদেশ দিতেন। [1] [2]";

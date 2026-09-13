@@ -151,6 +151,7 @@ export const DB_CONFIG = {
   queryInsightsCollection: "query_insights",
   corpusSourcesCollection: "corpus_sources",
   maintenanceCollection: "maintenance_state",
+  rateLimitCollection: "rate_limits",
   vectorIndex: "documents_embedding_idx",
   textIndex: "documents_text_idx",
   embeddingPath: "embedding",
@@ -192,7 +193,7 @@ export const QUOTE_ENRICHMENT_CONFIG = {
 } as const;
 
 export const ANSWER_GATE_CONFIG = {
-  gatedTiers: ["secondary"] as readonly string[],
+  trustedModels: ["gemini-3.6-flash", "glm-4.5-flash"] as readonly string[],
   minArabicRunWords: 3,
   minArabicMatchRatio: 0.5,
   maxForeignLatinWords: 1,
@@ -259,6 +260,19 @@ export const CONTEXT_CONFIG = {
 
 export const STORAGE_CONFIG = {
   rawSourcesPrefix: "raw-sources",
+} as const;
+
+export const FILE_INGESTION_CONFIG = {
+  minCharsPerPage: 20,
+} as const;
+
+export const RATE_LIMIT_CONFIG = {
+  scopes: {
+    chat: { minute: 5, hour: 30, day: 100, globalPerDay: 1500 },
+    feedback: { minute: 10, hour: 60, day: 200, globalPerDay: 5000 },
+  },
+  maxQuestionChars: 1000,
+  maxMessages: 30,
 } as const;
 
 export const STORAGE_BUDGET = {

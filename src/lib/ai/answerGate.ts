@@ -18,6 +18,8 @@ export interface GateVerdict {
 const BENGALI_LETTER = /(?=\p{L})\p{Script=Bengali}/u;
 const FOREIGN_LETTER = /(?=\p{L})(?!\p{Script=Bengali})\p{L}/u;
 const LATIN_WORD = /\p{Script=Latin}{3,}/gu;
+const FOREIGN_SCRIPT_LETTER =
+  /(?=\p{L})(?![\p{Script=Bengali}\p{Script=Latin}\p{Script=Arabic}\p{Script=Common}\p{Script=Inherited}])\p{L}|[\u067E\u0686\u0698\u0679\u0688\u0691\u06A9\u06AF\u06BA\u06BE\u06CC\u06D2]/gu;
 const CITATION = /\[(\d+)\]/g;
 
 const HONORIFICS = [
@@ -88,6 +90,14 @@ function checkMixedScript(answer: string): string[] {
   return mixed.length > 0 ? [`mixed-script-word: ${mixed.slice(0, 3).join(" ")}`] : [];
 }
 
+function checkForeignScript(answer: string, context: string): string[] {
+  const alien = [...new Set(answer.match(FOREIGN_SCRIPT_LETTER) ?? [])].filter(
+    (letter) => !context.includes(letter),
+  );
+
+  return alien.length > 0 ? [`foreign-script-letters: ${alien.slice(0, 6).join(" ")}`] : [];
+}
+
 function checkForeignLatin(answer: string, input: GateInput): string[] {
   if (input.language === "other") return [];
 
@@ -116,6 +126,7 @@ export function validateAnswer(answer: string, input: GateInput): GateVerdict {
       ? []
       : ["repetition-loop"]),
     ...checkMixedScript(answer),
+    ...checkForeignScript(answer, contextJoined),
     ...checkForeignLatin(answer, input),
   ];
 

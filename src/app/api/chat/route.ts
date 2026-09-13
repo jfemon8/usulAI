@@ -1,5 +1,5 @@
 import { createUIMessageStream, createUIMessageStreamResponse, smoothStream, streamText } from "ai";
-import { ANSWER_GATE_CONFIG, MODEL_ATTEMPT_CONFIG } from "@/config/site";
+import { ANSWER_GATE_CONFIG, MODEL_ATTEMPT_CONFIG, RATE_LIMIT_CONFIG } from "@/config/site";
 import { logQuery, summariseRetrieval, type GateRejection } from "@/lib/analytics/queryLog";
 import { detectConversationLanguage } from "@/lib/ai/language";
 import { getModelChain } from "@/lib/ai/providers";
@@ -15,6 +15,7 @@ import { validateAnswer, type GateInput } from "@/lib/ai/answerGate";
 import { preferredGrade } from "@/lib/ai/hadithGrade";
 import { sanitizeSourceContent, splitSourceBlocks } from "@/lib/ingestion/translations";
 import { createQuoteEnricher, enrichAnswer, type EnricherOptions } from "@/lib/ai/quoteEnricher";
+import { consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
 import { logger } from "@/lib/utils/logger";
 import type { AnswerSource, UsulUIMessage } from "@/types";
 
@@ -45,15 +46,41 @@ function toHistory(messages: UsulUIMessage[]): ConversationTurn[] {
     .filter((turn) => turn.text.trim().length > 0);
 }
 
+function jsonError(message: string, status: number): Response {
+  return new Response(JSON.stringify({ error: message }), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
+}
+
 export async function POST(request: Request) {
-  const { messages }: { messages: UsulUIMessage[] } = await request.json();
+  const limit = await consumeRateLimit("chat", request);
+  if (!limit.allowed) return rateLimitResponse(limit);
+
+  const body = (await request.json().catch(() => null)) as { messages?: unknown } | null;
+  if (!body || !Array.isArray(body.messages)) {
+    return jsonError("অনুরোধটি সঠিক নয়।", 400);
+  }
+
+  const messages = (body.messages as UsulUIMessage[]).slice(-RATE_LIMIT_CONFIG.maxMessages);
   const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
 
   if (!lastUserMessage) {
-    return new Response("No user message found.", { status: 400 });
+    return jsonError("কোনো প্রশ্ন পাওয়া যায়নি।", 400);
   }
 
   const question = extractText(lastUserMessage);
+
+  if (question.trim().length === 0) {
+    return jsonError("কোনো প্রশ্ন পাওয়া যায়নি।", 400);
+  }
+
+  if (question.length > RATE_LIMIT_CONFIG.maxQuestionChars) {
+    return jsonError(
+      `প্রশ্নটি অনেক বড়। অনুগ্রহ করে ${RATE_LIMIT_CONFIG.maxQuestionChars} অক্ষরের মধ্যে সংক্ষেপে লিখুন।`,
+      413,
+    );
+  }
   const history = toHistory(messages);
   const language = detectConversationLanguage(
     question,
@@ -156,7 +183,7 @@ export async function POST(request: Request) {
           MODEL_ATTEMPT_CONFIG.firstTokenTimeoutMs,
         );
 
-        const gated = ANSWER_GATE_CONFIG.gatedTiers.includes(tier);
+        const gated = !ANSWER_GATE_CONFIG.trustedModels.includes(modelId);
 
         try {
           const result = streamText({

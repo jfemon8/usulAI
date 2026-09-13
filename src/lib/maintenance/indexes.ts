@@ -84,6 +84,9 @@ export async function ensureStorageIndexes(db: Db): Promise<{ dropped: string[] 
     RETENTION_CONFIG.queryEmbeddingDays * DAY_SECONDS,
   );
   await db.collection(DB_CONFIG.queryInsightsCollection).createIndex({ lastAskedAt: 1 });
+  await db
+    .collection(DB_CONFIG.rateLimitCollection)
+    .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
   return { dropped };
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { listReviewQueue, recordFeedback, resolveReview } from "@/lib/analytics/feedback";
+import { consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
 import { getAppEnv } from "@/lib/utils/env";
 import { logger } from "@/lib/utils/logger";
 
@@ -34,6 +35,9 @@ function isReviewer(request: Request): boolean {
 }
 
 export async function POST(request: Request) {
+  const limit = await consumeRateLimit("feedback", request);
+  if (!limit.allowed) return rateLimitResponse(limit);
+
   const parsed = submitSchema.safeParse(await request.json().catch(() => null));
 
   if (!parsed.success) {

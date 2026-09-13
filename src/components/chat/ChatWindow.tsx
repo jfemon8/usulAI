@@ -8,6 +8,7 @@ import { ChatInput } from "@/components/chat/ChatInput";
 import { SourceCitationList } from "@/components/chat/SourceCitation";
 import { AnswerFeedback } from "@/components/chat/AnswerFeedback";
 import { LogoBadge } from "@/components/ui/Logo";
+import { readableChatError } from "@/lib/utils/chatError";
 import type { AnswerSource, UsulUIMessage } from "@/types";
 
 interface ChatWindowProps {
@@ -96,6 +97,16 @@ function messageSources(parts: UsulUIMessage["parts"]): AnswerSource[] | null {
   return null;
 }
 
+function ErrorNotice({ message }: { message: string }) {
+  return (
+    <div role="alert" className="rise-in flex justify-start">
+      <div className="glass glass-sheen rounded-(--radius-bubble) border border-red-500/40 px-4 py-3 text-sm text-(--text-1)">
+        {message}
+      </div>
+    </div>
+  );
+}
+
 function TypingIndicator() {
   return (
     <div className="rise-in flex justify-start">
@@ -160,7 +171,10 @@ export function ChatWindow({ compact = false }: ChatWindowProps) {
     () => new DefaultChatTransport<UsulUIMessage>({ api: "/api/chat" }),
     [],
   );
-  const { messages, sendMessage, status } = useChat<UsulUIMessage>({ transport });
+  const { messages, sendMessage, status, error, clearError } = useChat<UsulUIMessage>({
+    transport,
+  });
+  const errorMessage = readableChatError(error);
 
   const isLoading = status === "submitted" || status === "streaming";
   const lastMessage = messages[messages.length - 1];
@@ -179,6 +193,7 @@ export function ChatWindow({ compact = false }: ChatWindowProps) {
     const trimmed = text.trim();
     if (trimmed.length === 0 || isLoading) return;
 
+    if (error) clearError();
     sendMessage({ text: trimmed });
     setInput("");
   }
@@ -225,6 +240,7 @@ export function ChatWindow({ compact = false }: ChatWindowProps) {
             })}
 
             {isWaiting ? <TypingIndicator /> : null}
+            {errorMessage && !isLoading ? <ErrorNotice message={errorMessage} /> : null}
           </div>
         )}
       </div>
