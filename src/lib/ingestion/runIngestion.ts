@@ -6,6 +6,7 @@ import { fetchHadithCorpus } from "@/lib/ingestion/sources/hadith";
 import { loadIjmaDocuments } from "@/lib/ingestion/sources/ijma";
 import { loadQiyasDocuments } from "@/lib/ingestion/sources/qiyas";
 import { loadSiratDocuments } from "@/lib/ingestion/sources/sirat";
+import { countProviders, recordProvenance } from "@/lib/maintenance/provenance";
 import {
   applyIngestionPlan,
   attachEmbeddings,
@@ -150,6 +151,7 @@ async function ingestSource(
   }
 
   const result = await applyIngestionPlan(plan, { prune: options.replace ?? false });
+  await recordProvenance(sourceType, countProviders(loaded), { replace: true });
   const embedded = options.textOnly ? 0 : await embedMissing(sourceType, options);
 
   return {

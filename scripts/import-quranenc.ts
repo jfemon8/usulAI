@@ -1,6 +1,7 @@
 import "./loadEnv";
 import { QURANENC_CONFIG } from "@/config/site";
-import { getDocumentsCollection, getMongoClient } from "@/lib/db/mongoClient";
+import { getMongoClient } from "@/lib/db/mongoClient";
+import { saveSurahNotes, type SurahNotes } from "@/lib/retrieval/quranNoteStore";
 import { logger } from "@/lib/utils/logger";
 
 interface QuranEncAyah {
@@ -25,52 +26,26 @@ async function fetchSurah(surah: number): Promise<QuranEncAyah[]> {
 }
 
 async function main() {
-  const collection = await getDocumentsCollection();
-  await collection.createIndex({ sourceType: 1, "metadata.surah": 1, "metadata.ayah": 1 });
-
-  const retrievedAt = new Date().toISOString();
-  let updated = 0;
+  let written = 0;
   let ayahs = 0;
 
   for (let surah = 1; surah <= SURAH_COUNT; surah += 1) {
     const verses = await fetchSurah(surah);
     ayahs += verses.length;
 
-    const result = await collection.bulkWrite(
-      verses.map((verse) => ({
-        updateOne: {
-          filter: {
-            sourceType: "quran" as const,
-            "metadata.surah": Number(verse.sura),
-            "metadata.ayah": Number(verse.aya),
-            $or: [
-              { "metadata.quranenc.translation": { $ne: verse.translation } },
-              { "metadata.quranenc.footnotes": { $ne: verse.footnotes ?? "" } },
-            ],
-          },
-          update: {
-            $set: {
-              "metadata.quranenc": {
-                key: QURANENC_CONFIG.translationKey,
-                translation: verse.translation,
-                footnotes: verse.footnotes ?? "",
-                source: "QuranEnc.com",
-                retrievedAt,
-              },
-            },
-          },
-        },
-      })),
-      { ordered: false },
+    const notes: SurahNotes = Object.fromEntries(
+      verses.map((verse) => [
+        Number(verse.aya),
+        { translation: verse.translation, footnotes: verse.footnotes ?? "" },
+      ]),
     );
 
-    updated += result.modifiedCount;
-    if (surah % 10 === 0)
-      logger.info(`QuranEnc: ${surah}/${SURAH_COUNT} surahs, ${updated} ayahs stored`);
+    if (await saveSurahNotes(surah, notes)) written += 1;
+    if (surah % 20 === 0) logger.info(`QuranEnc: ${surah}/${SURAH_COUNT} surahs checked`);
     await new Promise((resolve) => setTimeout(resolve, QURANENC_CONFIG.requestDelayMs));
   }
 
-  logger.info(`QuranEnc import finished: ${ayahs} ayahs fetched, ${updated} documents updated`);
+  logger.info(`QuranEnc import finished: ${ayahs} ayahs fetched, ${written} surahs written`);
   await (await getMongoClient()).close();
 }
 

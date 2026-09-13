@@ -14,6 +14,8 @@ interface CaseResult {
   orderOk: boolean;
   missingSources: string[];
   missingReferences: string[];
+  forbiddenReferences: string[];
+  references: string[];
 }
 
 function priorityOrderHolds(context: RetrievedChunk[]): boolean {
@@ -32,6 +34,9 @@ async function evaluateCase(testCase: GoldenCase): Promise<CaseResult> {
   const missingReferences = (testCase.expectReferences ?? []).filter(
     (reference) => !references.some((actual) => actual.includes(reference)),
   );
+  const forbiddenReferences = (testCase.forbidReferences ?? []).filter((reference) =>
+    references.some((actual) => actual.includes(reference)),
+  );
   const orderOk = priorityOrderHolds(context);
 
   return {
@@ -40,12 +45,15 @@ async function evaluateCase(testCase: GoldenCase): Promise<CaseResult> {
       context.length > 0 &&
       missingSources.length === 0 &&
       missingReferences.length === 0 &&
+      forbiddenReferences.length === 0 &&
       orderOk,
     retrieved: context.length,
     sources: [...found].join(","),
     orderOk,
     missingSources,
     missingReferences,
+    forbiddenReferences,
+    references,
   };
 }
 
@@ -66,6 +74,10 @@ async function main() {
     console.log(`      retrieved ${result.retrieved} [${result.sources}] order=${result.orderOk}`);
     if (result.missingSources.length > 0) {
       console.log(`      missing sources: ${result.missingSources.join(", ")}`);
+    }
+    console.log(`      refs: ${result.references.join(" | ")}`);
+    if (result.forbiddenReferences.length > 0) {
+      console.log(`      off-topic refs: ${result.forbiddenReferences.join(", ")}`);
     }
     if (result.missingReferences.length > 0) {
       console.log(`      missing refs: ${result.missingReferences.join(", ")}`);

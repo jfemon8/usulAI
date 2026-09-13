@@ -1,6 +1,7 @@
-import { DB_CONFIG, EMBEDDING_RUNTIME_CONFIG, RETRIEVAL_CONFIG } from "@/config/site";
+import { DB_CONFIG, RETRIEVAL_CONFIG } from "@/config/site";
 import { getDb, getDocumentsCollection } from "@/lib/db/mongoClient";
 import { currentEmbeddingModel } from "@/lib/ingestion/fingerprint";
+import { ensureStorageIndexes } from "@/lib/maintenance/indexes";
 import { logger } from "@/lib/utils/logger";
 
 const VECTOR_INDEX_DEFINITION = {
@@ -83,15 +84,6 @@ export async function setupIndexes(): Promise<void> {
   }
 
   const collection = await getDocumentsCollection();
-  await collection.createIndex({ sourceType: 1 });
-  await collection.createIndex({ sourceType: 1, "citation.reference": 1 });
-  await collection.createIndex({ embedding: 1 }, { sparse: true });
-  await collection.createIndex({
-    sourceType: 1,
-    "metadata.collection": 1,
-    "metadata.hadithNumber": 1,
-  });
-  await collection.createIndex({ sourceType: 1, "metadata.surah": 1, "metadata.ayah": 1 });
 
   const labelled = await collection.updateMany(
     { embedding: { $exists: true }, embeddingModel: { $exists: false } },
@@ -103,12 +95,7 @@ export async function setupIndexes(): Promise<void> {
     );
   }
 
-  await db
-    .collection(DB_CONFIG.queryEmbeddingCollection)
-    .createIndex(
-      { lastUsedAt: 1 },
-      { expireAfterSeconds: EMBEDDING_RUNTIME_CONFIG.storedQueryTtlDays * 86_400 },
-    );
+  await ensureStorageIndexes(db);
 
   await ensureSearchIndex(
     collection,

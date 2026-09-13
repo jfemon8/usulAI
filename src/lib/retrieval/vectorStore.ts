@@ -1,5 +1,5 @@
 import { Binary, ObjectId } from "mongodb";
-import { DB_CONFIG, HYBRID_CONFIG, RETRIEVAL_CONFIG } from "@/config/site";
+import { DB_CONFIG, HYBRID_CONFIG, RETRIEVAL_CONFIG, SOURCE_PRIORITY } from "@/config/site";
 import { getDocumentsCollection } from "@/lib/db/mongoClient";
 import {
   contentHash,
@@ -7,6 +7,7 @@ import {
   type IngestionPlan,
   type StoredFingerprint,
 } from "@/lib/ingestion/fingerprint";
+import { fuseRankings } from "@/lib/retrieval/fusion";
 import { expandQueryTerms } from "@/lib/retrieval/synonyms";
 import type { HadithGrade, RetrievedChunk, SourceCitation, SourceType } from "@/types";
 
@@ -117,13 +118,14 @@ export async function textSearch(
   const [plain, expanded] = await Promise.all([
     runTextSearch(query, sourceType, limit),
     extras.length > 0
-      ? runTextSearch(extras.join(" "), sourceType, limit)
+      ? runTextSearch(`${query} ${extras.join(" ")}`, sourceType, limit)
       : Promise.resolve<RetrievedChunk[]>([]),
   ]);
 
-  const seen = new Set(plain.map((hit) => hit.id));
+  const confident = (hits: RetrievedChunk[]) =>
+    hits.filter((hit) => hit.similarity >= HYBRID_CONFIG.minTextScore);
 
-  return [...plain, ...expanded.filter((hit) => !seen.has(hit.id))];
+  return fuseRankings([confident(plain), confident(expanded)]);
 }
 
 const WRITE_BATCH_SIZE = 500;
@@ -160,7 +162,7 @@ export async function loadFingerprints(sourceType: SourceType): Promise<StoredFi
           },
         },
       },
-      { $unset: ["metadata.quranenc", "metadata.grades"] },
+      { $unset: "metadata.grades" },
     ])
     .toArray();
 
@@ -193,7 +195,6 @@ export async function applyIngestionPlan(
   options: { prune: boolean },
 ): Promise<PlanResult> {
   const collection = await getDocumentsCollection();
-  const createdAt = new Date();
 
   for (let start = 0; start < plan.inserts.length; start += WRITE_BATCH_SIZE) {
     await collection.insertMany(
@@ -203,7 +204,6 @@ export async function applyIngestionPlan(
         contentHash: contentHash(document.content),
         citation: document.citation,
         metadata: document.metadata ?? {},
-        createdAt,
       })),
     );
   }
@@ -219,7 +219,7 @@ export async function applyIngestionPlan(
             citation: document.citation,
             ...metadataSet(document.metadata),
           },
-          $unset: { embedding: "", embeddedAt: "", embeddingModel: "" },
+          $unset: { embedding: "", embeddingModel: "" },
         },
       },
     })),
@@ -266,7 +266,6 @@ export async function attachEmbeddings(
   if (entries.length === 0) return 0;
 
   const collection = await getDocumentsCollection();
-  const embeddedAt = new Date();
   const result = await collection.bulkWrite(
     entries.map((entry) => {
       const hash = contentHash(entry.content);
@@ -282,7 +281,6 @@ export async function attachEmbeddings(
           update: {
             $set: {
               embedding: toFloat32Vector(entry.embedding),
-              embeddedAt,
               embeddingModel: currentEmbeddingModel(),
               contentHash: hash,
             },
@@ -301,7 +299,7 @@ export async function findChunksByReferences(references: string[]): Promise<Retr
   const collection = await getDocumentsCollection();
   const rows = await collection
     .find(
-      { "citation.reference": { $in: references } },
+      { sourceType: { $in: [...SOURCE_PRIORITY] }, "citation.reference": { $in: references } },
       { projection: { content: 1, citation: 1, sourceType: 1, "metadata.grades": 1 } },
     )
     .toArray();
@@ -340,7 +338,7 @@ export async function embeddingCoverage(): Promise<{ total: number; embedded: nu
 
   const [total, embedded] = await Promise.all([
     collection.countDocuments(),
-    collection.countDocuments({ embedding: { $exists: true } }),
+    collection.countDocuments({ embeddingModel: { $exists: true } }),
   ]);
 
   return { total, embedded };

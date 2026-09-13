@@ -10,9 +10,7 @@ export interface DocumentRecord {
   metadata: Record<string, unknown>;
   contentHash?: string;
   embedding?: Binary;
-  embeddedAt?: Date;
   embeddingModel?: string;
-  createdAt: Date;
 }
 
 declare global {

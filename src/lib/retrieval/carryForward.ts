@@ -1,5 +1,5 @@
 import { CONTEXT_CONFIG, SOURCE_PRIORITY } from "@/config/site";
-import type { AnswerSource, RetrievedChunk, UsulUIMessage } from "@/types";
+import type { AnswerSource, RetrievedChunk, SourceType, UsulUIMessage } from "@/types";
 
 function isAnswerSource(value: unknown): value is Pick<AnswerSource, "reference" | "index"> {
   if (typeof value !== "object" || value === null) return false;
@@ -40,4 +40,17 @@ export function mergeCarriedContext(
         a.order - b.order,
     )
     .map(({ chunk }) => chunk);
+}
+
+export function capPerSource(
+  chunks: RetrievedChunk[],
+  carriedIds: ReadonlySet<string>,
+  sources: readonly SourceType[] = SOURCE_PRIORITY,
+): RetrievedChunk[] {
+  return sources.flatMap((sourceType) => {
+    const group = chunks.filter((chunk) => chunk.sourceType === sourceType);
+    const pinned = group.filter((chunk) => carriedIds.has(chunk.id));
+    const rest = group.filter((chunk) => !carriedIds.has(chunk.id));
+    return [...pinned, ...rest].slice(0, CONTEXT_CONFIG.perSourceCap[sourceType]);
+  });
 }

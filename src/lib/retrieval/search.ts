@@ -12,6 +12,7 @@ import {
   textSearch,
 } from "@/lib/retrieval/vectorStore";
 import { applyRankingSignals } from "@/lib/analytics/rankingSignals";
+import { capPerSource, mergeCarriedContext } from "@/lib/retrieval/carryForward";
 import { rerankContext } from "@/lib/retrieval/rerank";
 import { logger } from "@/lib/utils/logger";
 import type { RetrievedChunk, SourceType } from "@/types";
@@ -86,30 +87,37 @@ export async function retrieveAnswerContext(
     ),
   );
 
-  const context: RetrievedChunk[] = [];
+  const judging = options.rerank !== false && RERANK_CONFIG.enabled;
+  const candidates: RetrievedChunk[] = [];
   const leftovers: RetrievedChunk[] = [];
 
   sources.forEach((sourceType, index) => {
     const hits = perSource[index] ?? [];
     const cap = CONTEXT_CONFIG.perSourceCap[sourceType];
-    context.push(...hits.slice(0, cap));
-    leftovers.push(...hits.slice(cap));
+    const pool = judging ? cap * RERANK_CONFIG.poolFactor : cap;
+    candidates.push(...hits.slice(0, pool));
+    leftovers.push(...hits.slice(pool));
   });
 
-  const ordered = dedupe(context)
-    .sort((a, b) => sources.indexOf(a.sourceType) - sources.indexOf(b.sourceType))
-    .slice(0, maxChunks);
+  const carried = options.carried ?? [];
+  const merged = mergeCarriedContext(
+    dedupe(candidates),
+    carried,
+    candidates.length + carried.length,
+  );
+
+  const tuned = await applyRankingSignals(question, merged);
+  const relevant = judging ? await rerankContext(question, tuned) : tuned;
+  const context = capPerSource(relevant, new Set(carried.map((chunk) => chunk.id)), sources).slice(
+    0,
+    maxChunks,
+  );
 
   if (options.lazyEmbed !== false) {
-    void backfillEmbeddings([...ordered, ...leftovers]);
+    void backfillEmbeddings([...context, ...leftovers]);
   }
 
-  const tuned = await applyRankingSignals(question, ordered);
-
-  if (options.rerank === false || !RERANK_CONFIG.enabled) return tuned;
-
-  const relevant = await rerankContext(question, tuned);
-  return relevant.sort((a, b) => sources.indexOf(a.sourceType) - sources.indexOf(b.sourceType));
+  return context;
 }
 
 async function backfillEmbeddings(candidates: RetrievedChunk[]): Promise<void> {

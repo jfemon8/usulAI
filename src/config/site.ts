@@ -146,6 +146,10 @@ export const DB_CONFIG = {
   verifiedAnswerCollection: "verified_answers",
   rankingSignalCollection: "ranking_signals",
   queryEmbeddingCollection: "query_embeddings",
+  quranNotesCollection: "quran_notes",
+  queryInsightsCollection: "query_insights",
+  corpusSourcesCollection: "corpus_sources",
+  maintenanceCollection: "maintenance_state",
   vectorIndex: "documents_embedding_idx",
   textIndex: "documents_text_idx",
   embeddingPath: "embedding",
@@ -155,12 +159,12 @@ export const HYBRID_CONFIG = {
   textCandidatesPerSource: 12,
   minTextScore: 3.5,
   lazyEmbedPerRequest: 12,
+  fusionK: 60,
 } as const;
 
 export const EMBEDDING_RUNTIME_CONFIG = {
   queryCacheSize: 300,
   providerCooldownMs: 300_000,
-  storedQueryTtlDays: 180,
 } as const;
 
 export const REPETITION_GUARD_CONFIG = {
@@ -175,6 +179,7 @@ export const QURANENC_CONFIG = {
   translator: "ড. আবু বকর মুহাম্মাদ যাকারিয়া",
   requestDelayMs: 400,
   maxNoteChars: 900,
+  notesCacheSurahs: 16,
 } as const;
 
 export const QUOTE_ENRICHMENT_CONFIG = {
@@ -199,7 +204,6 @@ export const MODEL_ATTEMPT_CONFIG = {
 
 export const OPENROUTER_FALLBACK_MODELS = [
   "nex-agi/nex-n2.5-mini:free",
-  "nvidia/nemotron-3-super-120b-a12b:free",
   "google/gemma-4-26b-a4b-it:free",
 ] as const;
 
@@ -230,8 +234,9 @@ export const FEEDBACK_LEARNING_CONFIG = {
 
 export const RERANK_CONFIG = {
   enabled: true,
-  minCandidates: 2,
-  snippetChars: 260,
+  minCandidates: 1,
+  poolFactor: 2,
+  snippetChars: 320,
 } as const;
 
 export const CONTEXT_CONFIG = {
@@ -252,4 +257,22 @@ export const CONTEXT_CONFIG = {
 
 export const STORAGE_CONFIG = {
   rawSourcesPrefix: "raw-sources",
+} as const;
+
+export const STORAGE_BUDGET = {
+  quotaMb: 512,
+  warnRatio: 0.8,
+  evictAtRatio: 0.9,
+  targetRatio: 0.8,
+  maxEvictionsPerRun: 5000,
+  vectorBytesPerDocument: 3_100,
+} as const;
+
+export const RETENTION_CONFIG = {
+  queryLogDays: 90,
+  queryEmbeddingDays: 60,
+  maxQueryEmbeddings: 15_000,
+  resolvedFeedbackDays: 365,
+  staleSignalDays: 365,
+  rollupBatchSize: 2_000,
 } as const;

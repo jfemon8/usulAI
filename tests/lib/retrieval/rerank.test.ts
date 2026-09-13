@@ -36,6 +36,24 @@ describe("buildRerankSnippet", () => {
   });
 });
 
+describe("buildRerankSnippet with a question", () => {
+  it("shows the judge the part of a long narration that talks about the question", () => {
+    const chain =
+      "ইয়াহইয়া ইবনু ইয়াহইয়া (রহঃ) থেকে বর্ণিত, তিনি বলেন, আমাদের কাছে বর্ণনা করেছেন ".repeat(8);
+    const matn =
+      "আল্লাহ তার বান্দাদের উপর যে হাজ্জ ফরয করেছেন তা আমার বৃদ্ধ পিতার উপরও ফরয হয়েছে।";
+    const snippet = buildRerankSnippet(
+      `${arabic}
+
+বাংলা: ${chain}${matn}`,
+      "হজ কার উপর ফরজ",
+    );
+
+    expect(snippet).toContain("হাজ্জ ফরয");
+    expect(snippet.length).toBeLessThanOrEqual(RERANK_CONFIG.snippetChars);
+  });
+});
+
 describe("parseKeepList", () => {
   it("reads a plain comma list", () => {
     expect(parseKeepList("1,3,4", 5)).toEqual([1, 3, 4]);

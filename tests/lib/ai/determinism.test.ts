@@ -5,6 +5,10 @@ const generateWithChain = vi.fn();
 
 vi.mock("@/lib/ai/auxiliaryModel", () => ({
   generateWithChain: (purpose: string, options: unknown) => generateWithChain(purpose, options),
+  generateWithChainFrom: async (purpose: string, options: unknown, from: number) => {
+    const text: unknown = await generateWithChain(purpose, options, from);
+    return typeof text === "string" ? { text, attempt: from } : null;
+  },
 }));
 
 function chunk(id: string, reference: string): RetrievedChunk {
@@ -53,11 +57,28 @@ describe("re-rank determinism", () => {
 
   it("replays an empty verdict too, instead of flipping to a full context", async () => {
     const { rerankContext } = await loadRerank();
-    generateWithChain.mockResolvedValueOnce("NONE");
+    generateWithChain.mockResolvedValueOnce("NONE").mockResolvedValueOnce("NONE");
 
     expect(await rerankContext("আজকের আবহাওয়া", group)).toHaveLength(0);
     expect(await rerankContext("আজকের আবহাওয়া", group)).toHaveLength(0);
-    expect(generateWithChain).toHaveBeenCalledTimes(1);
+    expect(generateWithChain).toHaveBeenCalledTimes(2);
+  });
+
+  it("asks the next model before dropping a whole source, and keeps what it keeps", async () => {
+    const { rerankContext } = await loadRerank();
+    generateWithChain.mockResolvedValueOnce("NONE").mockResolvedValueOnce("2,3");
+
+    const kept = await rerankContext("হজ কার উপর ফরজ", group);
+
+    expect(kept.map((item) => item.id)).toEqual(["b", "c"]);
+    expect(generateWithChain.mock.calls[1]?.[2]).toBe(1);
+  });
+
+  it("trusts an empty verdict when no other model can give a second opinion", async () => {
+    const { rerankContext } = await loadRerank();
+    generateWithChain.mockResolvedValueOnce("NONE").mockResolvedValueOnce(null);
+
+    expect(await rerankContext("বিটকয়েনের দাম", group)).toHaveLength(0);
   });
 
   it("judges again when the candidate set changes", async () => {

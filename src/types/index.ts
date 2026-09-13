@@ -35,6 +35,7 @@ export interface IngestionDocument {
   content: string;
   citation: SourceCitation;
   metadata?: Record<string, unknown>;
+  provenance?: string;
 }
 
 export interface AnswerSource {

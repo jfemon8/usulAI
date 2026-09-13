@@ -10,6 +10,7 @@ function blank<T extends z.ZodTypeAny>(schema: T) {
 const appShape = {
   NEXT_PUBLIC_APP_URL: blank(z.string().url().default("http://localhost:3000")),
   INGEST_API_SECRET: z.string().min(1, "INGEST_API_SECRET missing"),
+  CRON_SECRET: blank(z.string().min(16).optional()),
 };
 
 const aiShape = {

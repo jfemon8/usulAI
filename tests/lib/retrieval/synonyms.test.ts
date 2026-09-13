@@ -21,6 +21,15 @@ describe("expandQueryTerms", () => {
     expect(expandQueryTerms("মাসুদের গল্প")).toHaveLength(0);
   });
 
+  it("adds a shorter term even when a longer word in the query starts with it", () => {
+    expect(expandQueryTerms("মদ্যপান সম্পর্কে নিষেধাজ্ঞা")).toContain("মদ");
+  });
+
+  it("covers the Quran translation's own spellings", () => {
+    expect(expandQueryTerms("হজ কার উপর ফরজ")).toEqual(expect.arrayContaining(["হজ্ব", "হজ্জ্ব"]));
+    expect(expandQueryTerms("জিহাদের বিধান")).toContain("জেহাদ");
+  });
+
   it("expands English queries too", () => {
     const extras = expandQueryTerms("prayer facing the qibla");
 

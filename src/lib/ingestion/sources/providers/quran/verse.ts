@@ -1,4 +1,9 @@
 import { buildSourceContent, normalizeText } from "@/lib/ingestion/translations";
+import {
+  BROKEN_ENTITY,
+  repairBanglaTranslation,
+} from "@/lib/ingestion/sources/providers/quran/repairs";
+import { logger } from "@/lib/utils/logger";
 import type { IngestionDocument } from "@/types";
 
 export interface QuranVerse {
@@ -16,21 +21,26 @@ export function buildVerseDocument(verse: QuranVerse, provider: string): Ingesti
     ? `${surahName} ${verse.surah}:${verse.ayah}`
     : `কুরআন ${verse.surah}:${verse.ayah}`;
 
+  const bangla = repairBanglaTranslation(verse.surah, verse.ayah, verse.bangla);
+  if (BROKEN_ENTITY.test(bangla)) {
+    logger.warn(
+      `Quran ${verse.surah}:${verse.ayah} Bangla translation still carries a broken entity`,
+    );
+  }
+
   return {
     sourceType: "quran",
-    content: buildSourceContent(verse.arabic, verse.bangla, verse.english),
+    content: buildSourceContent(verse.arabic, bangla, verse.english),
     citation: {
       sourceType: "quran",
       reference,
       url: `https://quran.com/${verse.surah}/${verse.ayah}`,
     },
     metadata: {
-      provider,
       surah: verse.surah,
       ayah: verse.ayah,
       surahName: surahName || undefined,
-      hasBangla: normalizeText(verse.bangla).length > 0,
-      hasEnglish: normalizeText(verse.english).length > 0,
     },
+    provenance: provider,
   };
 }

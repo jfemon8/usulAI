@@ -1,6 +1,5 @@
-import { ObjectId } from "mongodb";
 import { QURANENC_CONFIG } from "@/config/site";
-import { getDocumentsCollection } from "@/lib/db/mongoClient";
+import { loadSurahNotes } from "@/lib/retrieval/quranNoteStore";
 import type { RetrievedChunk } from "@/types";
 
 export interface QuranEncEntry {
@@ -30,27 +29,30 @@ export function formatQuranEncNote(entry: QuranEncEntry | undefined): string | u
     : note;
 }
 
+export function ayahPosition(reference: string): { surah: number; ayah: number } | null {
+  const match = reference.match(/(\d+):(\d+)\s*$/);
+  if (!match) return null;
+  return { surah: Number(match[1]), ayah: Number(match[2]) };
+}
+
 export async function attachQuranNotes(context: RetrievedChunk[]): Promise<RetrievedChunk[]> {
-  const ids = context
-    .filter((chunk) => chunk.sourceType === "quran" && ObjectId.isValid(chunk.id))
-    .map((chunk) => new ObjectId(chunk.id));
-
-  if (ids.length === 0) return context;
-
-  const collection = await getDocumentsCollection();
-  const rows = await collection
-    .find({ _id: { $in: ids } }, { projection: { "metadata.quranenc": 1 } })
-    .toArray();
-
-  const notes = new Map(
-    rows.map((row) => [
-      String(row._id),
-      formatQuranEncNote((row.metadata as { quranenc?: QuranEncEntry } | undefined)?.quranenc),
-    ]),
+  const positions = new Map(
+    context.flatMap((chunk) => {
+      if (chunk.sourceType !== "quran") return [];
+      const position = ayahPosition(chunk.citation.reference);
+      return position ? [[chunk.id, position] as const] : [];
+    }),
   );
 
+  if (positions.size === 0) return context;
+
+  const surahs = await loadSurahNotes([...positions.values()].map((position) => position.surah));
+
   return context.map((chunk) => {
-    const note = notes.get(chunk.id);
+    const position = positions.get(chunk.id);
+    const note = position
+      ? formatQuranEncNote(surahs.get(position.surah)?.[position.ayah])
+      : undefined;
     return note ? { ...chunk, note } : chunk;
   });
 }

@@ -1,4 +1,4 @@
-import { buildSourceContent, normalizeText } from "@/lib/ingestion/translations";
+import { buildSourceContent } from "@/lib/ingestion/translations";
 import type { IngestionDocument } from "@/types";
 
 export interface HadithNarration {
@@ -24,14 +24,11 @@ export function buildHadithDocument(
       reference: `${narration.collectionName} ${narration.hadithNumber}`,
     },
     metadata: {
-      provider,
       collection: narration.collection,
       hadithNumber: narration.hadithNumber,
       chapter: narration.chapter,
-      grade: narration.grade,
-      hasBangla: normalizeText(narration.bangla).length > 0,
-      hasEnglish: normalizeText(narration.english).length > 0,
     },
+    provenance: provider,
   };
 }
 

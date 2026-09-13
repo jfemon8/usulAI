@@ -1,6 +1,7 @@
 import { AUXILIARY_CONFIG, RERANK_CONFIG } from "@/config/site";
-import { generateWithChain } from "@/lib/ai/auxiliaryModel";
+import { generateWithChainFrom } from "@/lib/ai/auxiliaryModel";
 import { TRANSLATION_LABELS, sanitizeSourceContent } from "@/lib/ingestion/translations";
+import { expandQueryTerms } from "@/lib/retrieval/synonyms";
 import { logger } from "@/lib/utils/logger";
 import { createLru, normalizeCacheKey } from "@/lib/utils/lru";
 import type { RetrievedChunk, SourceType } from "@/types";
@@ -19,15 +20,98 @@ const TRANSLATION_BLOCK = new RegExp(
   `^(?:${TRANSLATION_LABELS.bangla}|${TRANSLATION_LABELS.english})\\s*:`,
 );
 
-export function buildRerankSnippet(content: string): string {
+const QUESTION_STOPWORDS = new Set([
+  "কী",
+  "কি",
+  "কার",
+  "কারা",
+  "কে",
+  "কেন",
+  "কোন",
+  "কোনো",
+  "কীভাবে",
+  "উপর",
+  "সম্পর্কে",
+  "বিষয়ে",
+  "করা",
+  "করে",
+  "হয়",
+  "হয়েছে",
+  "হবে",
+  "বলে",
+  "আছে",
+  "এবং",
+  "ও",
+  "the",
+  "what",
+  "does",
+  "say",
+  "about",
+  "is",
+  "are",
+  "of",
+  "on",
+  "in",
+  "to",
+  "a",
+  "an",
+  "and",
+  "how",
+  "why",
+  "who",
+]);
+
+export function questionTerms(question: string): string[] {
+  const words = question
+    .toLowerCase()
+    .split(/[\s,.।?!"'()[\]:;।-]+/u)
+    .filter((word) => [...word].length >= 2 && !QUESTION_STOPWORDS.has(word));
+
+  return [...new Set([...words, ...expandQueryTerms(question).map((term) => term.toLowerCase())])];
+}
+
+function focusWindow(text: string, terms: string[], size: number): string {
+  if (text.length <= size || terms.length === 0) return text.slice(0, size);
+
+  const lower = text.toLowerCase();
+  const hits = terms
+    .flatMap((term) =>
+      [...lower.matchAll(new RegExp(escapeRegExp(term), "gu"))].map((m) => m.index),
+    )
+    .sort((a, b) => a - b);
+
+  if (hits.length === 0) return text.slice(0, size);
+
+  const lead = Math.floor(size / 5);
+  let bestStart = 0;
+  let bestCount = -1;
+
+  for (const hit of hits) {
+    const start = Math.max(0, Math.min(hit - lead, text.length - size));
+    const count = hits.filter((other) => other >= start && other < start + size).length;
+    if (count > bestCount) {
+      bestCount = count;
+      bestStart = start;
+    }
+  }
+
+  const window = text.slice(bestStart, bestStart + size);
+  return bestStart > 0 ? `…${window.slice(1)}` : window;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function buildRerankSnippet(content: string, question?: string): string {
   const translations = sanitizeSourceContent(content)
     .split(/\n{2,}/)
     .map((block) => block.trim())
     .filter((block) => TRANSLATION_BLOCK.test(block));
 
-  const source = translations.length > 0 ? translations.join(" ") : content;
+  const source = (translations.length > 0 ? translations.join(" ") : content).replace(/\s+/g, " ");
 
-  return source.replace(/\s+/g, " ").slice(0, RERANK_CONFIG.snippetChars);
+  return focusWindow(source, question ? questionTerms(question) : [], RERANK_CONFIG.snippetChars);
 }
 
 export function parseKeepList(text: string, total: number): number[] | null {
@@ -76,20 +160,36 @@ async function rerankGroup(question: string, group: RetrievedChunk[]): Promise<R
   const listing = group
     .map(
       (chunk, index) =>
-        `${index + 1}. (${chunk.citation.reference}) ${buildRerankSnippet(chunk.content)}`,
+        `${index + 1}. (${chunk.citation.reference}) ${buildRerankSnippet(chunk.content, question)}`,
     )
     .join("\n");
 
+  const request = {
+    system: RERANK_SYSTEM,
+    prompt: `প্রশ্ন: ${question}\n\nউদ্ধৃতিসমূহ:\n${listing}\n\nপ্রাসঙ্গিক নম্বর:`,
+  };
+
   try {
-    const text = await generateWithChain("Re-rank", {
-      system: RERANK_SYSTEM,
-      prompt: `প্রশ্ন: ${question}\n\nউদ্ধৃতিসমূহ:\n${listing}\n\nপ্রাসঙ্গিক নম্বর:`,
-    });
+    const verdict = await generateWithChainFrom("Re-rank", request, 0);
+    if (!verdict) return group;
 
-    if (text === null) return group;
-
-    const keep = parseKeepList(text, group.length);
+    let keep = parseKeepList(verdict.text, group.length);
     if (keep === null) return group;
+
+    if (keep.length === 0) {
+      const second = await generateWithChainFrom(
+        "Re-rank second opinion",
+        request,
+        verdict.attempt + 1,
+      );
+      const overturned = second ? parseKeepList(second.text, group.length) : null;
+      if (overturned && overturned.length > 0) {
+        logger.info(
+          `Re-rank: second opinion kept ${overturned.length} of ${group.length} ${group[0]?.sourceType} chunks the first judge dropped`,
+        );
+        keep = overturned;
+      }
+    }
 
     const kept = keep
       .map((position) => group[position - 1])

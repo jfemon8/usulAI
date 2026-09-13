@@ -1,9 +1,12 @@
 const TERM_GROUPS: readonly (readonly string[])[] = [
   ["নামাজ", "নামায", "সালাত", "সলাত", "সালাহ"],
-  ["রোজা", "রোযা", "সিয়াম", "সাওম", "রোজাদার"],
-  ["রমজান", "রমযান", "রামাদান", "রামাদ্বান"],
+  ["রোজা", "রোযা", "সিয়াম", "সাওম", "সওম", "রোজাদার"],
+  ["রমজান", "রমযান", "রামাদান", "রামাযান", "রামাদ্বান"],
   ["ফরজ", "ফরয", "ফারদ", "অবশ্যকর্তব্য"],
-  ["হজ", "হজ্জ", "হাজ্জ"],
+  ["হজ", "হজ্জ", "হাজ্জ", "হজ্ব", "হজ্জ্ব"],
+  ["উমরা", "উমরাহ", "ওমরা", "ওমরাহ"],
+  ["ইহরাম", "এহরাম"],
+  ["তাওয়াফ", "তওয়াফ"],
   ["জাকাত", "যাকাত", "যাকাহ", "জাকাহ"],
   ["সদকা", "সাদাকা", "সাদাকাহ", "সদকাহ"],
   ["কিবলা", "কিবলাহ", "কেবলা", "কাবা", "কাবাহ"],
@@ -11,7 +14,20 @@ const TERM_GROUPS: readonly (readonly string[])[] = [
   ["হাদিস", "হাদীস", "হাদিছ"],
   ["রাসুল", "রাসূল", "রসুল", "নবি", "নবী"],
   ["ঈমান", "ইমান", "বিশ্বাস"],
-  ["অজু", "ওজু", "ওযু", "উযু", "উজু"],
+  ["অজু", "ওজু", "ওযু", "উযু", "উজু", "অযু"],
+  ["তায়াম্মুম", "তাইয়াম্মুম"],
+  ["আযান", "আজান"],
+  ["জানাযা", "জানাজা"],
+  ["তারাবীহ", "তারাবিহ"],
+  ["ইতিকাফ", "এতেকাফ", "ই'তিকাফ"],
+  ["কাযা", "কাজা"],
+  ["ফিদিয়া", "ফিদইয়া"],
+  ["সুন্নত", "সুন্নাত", "সুন্নাহ"],
+  ["যিকির", "জিকির", "যিকর"],
+  ["জিহাদ", "জেহাদ"],
+  ["শিরক", "শির্ক"],
+  ["তাওহীদ", "তাওহিদ"],
+  ["যিনা", "জিনা", "ব্যভিচার"],
   ["দুআ", "দোয়া", "দুয়া", "প্রার্থনা"],
   ["সুদ", "রিবা", "সুদি"],
   ["মদ", "মাদক", "শরাব", "খামর", "মদ্যপান"],
@@ -35,12 +51,15 @@ const TERM_GROUPS: readonly (readonly string[])[] = [
   ["fasting", "sawm", "siyam", "roza"],
   ["alms", "zakat", "zakah", "charity"],
   ["pilgrimage", "hajj"],
+  ["umrah", "umra"],
   ["qibla", "qiblah", "kaaba", "sacred mosque"],
   ["usury", "riba", "interest"],
   ["obligatory", "prescribed", "ordained", "fard"],
 ];
 
 const BOUNDARY = String.raw`(?:^|[\s,.।?!"'()\[\]/\\:;-])`;
+
+const WORD_SEPARATOR = /[\s,.।?!"'()\[\]/\\:;-]+/u;
 
 const TERM_MATCHERS: readonly { pattern: RegExp; group: readonly string[] }[] = TERM_GROUPS.flatMap(
   (group) =>
@@ -52,12 +71,13 @@ const TERM_MATCHERS: readonly { pattern: RegExp; group: readonly string[] }[] = 
 
 export function expandQueryTerms(query: string): string[] {
   const extras = new Set<string>();
+  const words = new Set(query.toLowerCase().split(WORD_SEPARATOR).filter(Boolean));
 
   for (const { pattern, group } of TERM_MATCHERS) {
     if (!pattern.test(query)) continue;
 
     for (const term of group) {
-      if (!query.toLowerCase().includes(term.toLowerCase())) extras.add(term);
+      if (!words.has(term.toLowerCase())) extras.add(term);
     }
   }
 

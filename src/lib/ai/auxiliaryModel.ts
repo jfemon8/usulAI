@@ -3,14 +3,29 @@ import { AUXILIARY_CONFIG } from "@/config/site";
 import { getModelChain } from "@/lib/ai/providers";
 import { logger } from "@/lib/utils/logger";
 
+interface AuxiliaryPrompt {
+  system: string;
+  prompt: string;
+}
+
 export async function generateWithChain(
   purpose: string,
-  options: { system: string; prompt: string },
+  options: AuxiliaryPrompt,
 ): Promise<string | null> {
+  return (await generateWithChainFrom(purpose, options, 0))?.text ?? null;
+}
+
+export async function generateWithChainFrom(
+  purpose: string,
+  options: AuxiliaryPrompt,
+  from: number,
+): Promise<{ text: string; attempt: number } | null> {
   const chain = getModelChain();
   let lastError: unknown;
 
-  for (const { tier, provider, modelId, model } of chain) {
+  for (const [attempt, { tier, provider, modelId, model }] of chain.entries()) {
+    if (attempt < from) continue;
+
     try {
       const { text } = await generateText({
         model,
@@ -21,7 +36,7 @@ export async function generateWithChain(
         maxRetries: 0,
       });
 
-      if (text.trim().length > 0) return text;
+      if (text.trim().length > 0) return { text, attempt };
       lastError = new Error(`${provider}/${modelId} returned empty text`);
     } catch (error) {
       lastError = error;

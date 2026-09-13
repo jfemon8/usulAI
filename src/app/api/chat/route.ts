@@ -7,7 +7,7 @@ import { rewriteQuery, type ConversationTurn } from "@/lib/ai/queryRewriter";
 import { buildSystemPrompt, buildRagPrompt } from "@/lib/ai/prompt";
 import { findVerifiedAnswer } from "@/lib/analytics/verifiedAnswers";
 import { retrieveAnswerContext } from "@/lib/retrieval/search";
-import { mergeCarriedContext, previousSourceReferences } from "@/lib/retrieval/carryForward";
+import { previousSourceReferences } from "@/lib/retrieval/carryForward";
 import { findChunksByReferences } from "@/lib/retrieval/vectorStore";
 import { attachQuranNotes } from "@/lib/retrieval/quranNotes";
 import { createRepetitionGuard } from "@/lib/ai/repetitionGuard";
@@ -78,10 +78,9 @@ export async function POST(request: Request) {
 
   const { query, rewritten } = await rewriteQuery(question, history);
 
-  const retrieved = await retrieveAnswerContext(query);
   const carried =
     history.length > 0 ? await findChunksByReferences(previousSourceReferences(messages)) : [];
-  const context = await attachQuranNotes(mergeCarriedContext(retrieved, carried));
+  const context = await attachQuranNotes(await retrieveAnswerContext(query, { carried }));
 
   if (context.length === 0) {
     void logQuery({
