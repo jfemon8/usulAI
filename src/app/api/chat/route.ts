@@ -6,7 +6,7 @@ import { getModelChain } from "@/lib/ai/providers";
 import { rewriteQuery, type ConversationTurn } from "@/lib/ai/queryRewriter";
 import { buildSystemPrompt, buildRagPrompt } from "@/lib/ai/prompt";
 import { findVerifiedAnswer } from "@/lib/analytics/verifiedAnswers";
-import { retrieveAnswerContext } from "@/lib/retrieval/search";
+import { retrieveForQuestion } from "@/lib/retrieval/search";
 import { previousSourceReferences } from "@/lib/retrieval/carryForward";
 import { findChunksByReferences } from "@/lib/retrieval/vectorStore";
 import { attachQuranNotes } from "@/lib/retrieval/quranNotes";
@@ -80,7 +80,8 @@ export async function POST(request: Request) {
 
   const carried =
     history.length > 0 ? await findChunksByReferences(previousSourceReferences(messages)) : [];
-  const context = await attachQuranNotes(await retrieveAnswerContext(query, { carried }));
+  const retrieval = await retrieveForQuestion(question, query, { carried });
+  const context = await attachQuranNotes(retrieval.context);
 
   if (context.length === 0) {
     void logQuery({
@@ -88,6 +89,7 @@ export async function POST(request: Request) {
       searchQuery: query,
       rewritten,
       historyTurns: history.length,
+      ...(retrieval.scopedTo ? { scopedTo: retrieval.scopedTo } : {}),
       language,
       ...summariseRetrieval(context),
       answered: false,
@@ -235,6 +237,7 @@ export async function POST(request: Request) {
               searchQuery: query,
               rewritten,
               historyTurns: history.length,
+              ...(retrieval.scopedTo ? { scopedTo: retrieval.scopedTo } : {}),
               language,
               ...summariseRetrieval(context),
               answered: true,
@@ -281,6 +284,7 @@ export async function POST(request: Request) {
         searchQuery: query,
         rewritten,
         historyTurns: history.length,
+        ...(retrieval.scopedTo ? { scopedTo: retrieval.scopedTo } : {}),
         language,
         ...summariseRetrieval(context),
         answered: false,

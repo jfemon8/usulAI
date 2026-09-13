@@ -42,7 +42,7 @@ function toChunk(
 export async function similaritySearch(
   queryEmbedding: number[],
   sourceType: SourceType,
-  limit: number = RETRIEVAL_CONFIG.topKPerSource,
+  limit: number,
 ): Promise<RetrievedChunk[]> {
   const collection = await getDocumentsCollection();
 

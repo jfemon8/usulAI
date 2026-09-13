@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "check:env": "tsx scripts/check-env.ts",
     "evaluate": "tsx scripts/evaluate.ts",
+    "calibrate:similarity": "tsx scripts/calibrate-similarity.ts",
     "gaps": "tsx scripts/gaps.ts",
     "backfill:grades": "tsx scripts/backfill-hadith-grades.ts",
     "import:quranenc": "tsx scripts/import-quranenc.ts",

@@ -1,3 +1,5 @@
+import { composeNukta } from "@/lib/utils/bangla";
+
 const BANGLA_REPAIRS: Readonly<Record<string, readonly (readonly [string, string])[]>> = {
   "3:97": [["সামর্থ?2480;য়েছে", "সামর্থ্য রয়েছে"]],
   "5:64": [["প্রজ্জ?482;িত", "প্রজ্জ্বলিত"]],
@@ -20,23 +22,10 @@ const BANGLA_REPAIRS: Readonly<Record<string, readonly (readonly [string, string
 
 export const BROKEN_ENTITY = /\?\d{3,5};/;
 
-const NUKTA_COMPOSITIONS: readonly (readonly [string, string])[] = [
-  ["\u09AF\u09BC", "\u09DF"],
-  ["\u09A1\u09BC", "\u09DC"],
-  ["\u09A2\u09BC", "\u09DD"],
-];
-
-function precomposeNukta(value: string): string {
-  return NUKTA_COMPOSITIONS.reduce(
-    (current, [pair, single]) => current.split(pair).join(single),
-    value,
-  );
-}
-
 export function repairBanglaTranslation(surah: number, ayah: number, text: string): string {
   const repairs = BANGLA_REPAIRS[`${surah}:${ayah}`] ?? [];
   return repairs.reduce((current, [broken, fixed]) => {
-    for (const form of [(value: string) => value, precomposeNukta]) {
+    for (const form of [(value: string) => value, composeNukta]) {
       if (current.includes(form(broken))) return current.split(form(broken)).join(form(fixed));
     }
     return current;

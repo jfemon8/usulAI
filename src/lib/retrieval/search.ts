@@ -1,4 +1,10 @@
-import { CONTEXT_CONFIG, HYBRID_CONFIG, RERANK_CONFIG, SOURCE_PRIORITY } from "@/config/site";
+import {
+  CONTEXT_CONFIG,
+  HYBRID_CONFIG,
+  RERANK_CONFIG,
+  RETRIEVAL_CONFIG,
+  SOURCE_PRIORITY,
+} from "@/config/site";
 import {
   cachedQueryEmbedding,
   embedText,
@@ -13,12 +19,13 @@ import {
 } from "@/lib/retrieval/vectorStore";
 import { applyRankingSignals } from "@/lib/analytics/rankingSignals";
 import { capPerSource, mergeCarriedContext } from "@/lib/retrieval/carryForward";
+import { fuseRankings } from "@/lib/retrieval/fusion";
+import { detectSourceIntent } from "@/lib/retrieval/sourceIntent";
 import { rerankContext } from "@/lib/retrieval/rerank";
 import { logger } from "@/lib/utils/logger";
 import type { RetrievedChunk, SourceType } from "@/types";
 import type { SearchOptions } from "@/lib/retrieval/types";
 
-const MIN_SIMILARITY = 0.8;
 const embeddingsInFlight = new Set<string>();
 
 async function embedQuestion(question: string): Promise<number[] | null> {
@@ -51,18 +58,16 @@ async function gatherFromSource(
   queryEmbedding: number[] | null,
   minSimilarity: number,
   expandSynonyms: boolean,
+  pool: number,
 ): Promise<RetrievedChunk[]> {
-  const cap = CONTEXT_CONFIG.perSourceCap[sourceType];
-
   const [vectorHits, textHits] = await Promise.all([
-    queryEmbedding ? similaritySearch(queryEmbedding, sourceType, cap) : Promise.resolve([]),
+    queryEmbedding ? similaritySearch(queryEmbedding, sourceType, pool) : Promise.resolve([]),
     textSearch(question, sourceType, HYBRID_CONFIG.textCandidatesPerSource, expandSynonyms),
   ]);
 
   const confidentVector = vectorHits.filter((hit) => hit.similarity >= minSimilarity);
-  const confidentText = textHits.filter((hit) => hit.similarity >= HYBRID_CONFIG.minTextScore);
 
-  return dedupe([...confidentVector, ...confidentText]);
+  return fuseRankings([confidentVector, textHits]);
 }
 
 export async function retrieveAnswerContext(
@@ -71,7 +76,10 @@ export async function retrieveAnswerContext(
 ): Promise<RetrievedChunk[]> {
   const sources = options.sources ?? SOURCE_PRIORITY;
   const maxChunks = options.maxChunks ?? CONTEXT_CONFIG.maxContextChunks;
-  const minSimilarity = options.minSimilarity ?? MIN_SIMILARITY;
+  const minSimilarity = options.minSimilarity ?? RETRIEVAL_CONFIG.minVectorScore;
+  const judging = options.rerank !== false && RERANK_CONFIG.enabled;
+  const poolFor = (sourceType: SourceType) =>
+    CONTEXT_CONFIG.perSourceCap[sourceType] * (judging ? RERANK_CONFIG.poolFactor : 1);
 
   const queryEmbedding = await embedQuestion(question);
 
@@ -83,18 +91,17 @@ export async function retrieveAnswerContext(
         queryEmbedding,
         minSimilarity,
         options.expandSynonyms !== false,
+        poolFor(sourceType),
       ),
     ),
   );
 
-  const judging = options.rerank !== false && RERANK_CONFIG.enabled;
   const candidates: RetrievedChunk[] = [];
   const leftovers: RetrievedChunk[] = [];
 
   sources.forEach((sourceType, index) => {
     const hits = perSource[index] ?? [];
-    const cap = CONTEXT_CONFIG.perSourceCap[sourceType];
-    const pool = judging ? cap * RERANK_CONFIG.poolFactor : cap;
+    const pool = poolFor(sourceType);
     candidates.push(...hits.slice(0, pool));
     leftovers.push(...hits.slice(pool));
   });
@@ -118,6 +125,24 @@ export async function retrieveAnswerContext(
   }
 
   return context;
+}
+
+export async function retrieveForQuestion(
+  question: string,
+  query: string,
+  options: SearchOptions = {},
+): Promise<{ context: RetrievedChunk[]; scopedTo: SourceType[] | null }> {
+  const scopedTo = options.sources ? null : detectSourceIntent(question);
+
+  if (scopedTo) {
+    const scoped = await retrieveAnswerContext(query, { ...options, sources: scopedTo });
+    if (scoped.length > 0) return { context: scoped, scopedTo };
+    logger.info(
+      `No evidence in ${scopedTo.join(", ")} for a scoped question, widening to all sources`,
+    );
+  }
+
+  return { context: await retrieveAnswerContext(query, options), scopedTo: null };
 }
 
 async function backfillEmbeddings(candidates: RetrievedChunk[]): Promise<void> {

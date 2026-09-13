@@ -1,7 +1,7 @@
 import "./loadEnv";
 import { SOURCE_PRIORITY } from "@/config/site";
 import { getMongoClient } from "@/lib/db/mongoClient";
-import { retrieveAnswerContext } from "@/lib/retrieval/search";
+import { retrieveForQuestion } from "@/lib/retrieval/search";
 import { embeddingCoverage } from "@/lib/retrieval/vectorStore";
 import { GOLDEN_SET, type GoldenCase } from "../tests/fixtures/goldenSet";
 import type { RetrievedChunk } from "@/types";
@@ -13,6 +13,8 @@ interface CaseResult {
   sources: string;
   orderOk: boolean;
   missingSources: string[];
+  forbiddenSources: string[];
+  scopedTo: string;
   missingReferences: string[];
   forbiddenReferences: string[];
   references: string[];
@@ -26,11 +28,14 @@ function priorityOrderHolds(context: RetrievedChunk[]): boolean {
 }
 
 async function evaluateCase(testCase: GoldenCase): Promise<CaseResult> {
-  const context = await retrieveAnswerContext(testCase.question, { lazyEmbed: false });
+  const { context, scopedTo } = await retrieveForQuestion(testCase.question, testCase.question, {
+    lazyEmbed: false,
+  });
   const found = new Set(context.map((chunk) => chunk.sourceType));
   const references = context.map((chunk) => chunk.citation.reference);
 
   const missingSources = testCase.expectSources.filter((source) => !found.has(source));
+  const forbiddenSources = (testCase.forbidSources ?? []).filter((source) => found.has(source));
   const missingReferences = (testCase.expectReferences ?? []).filter(
     (reference) => !references.some((actual) => actual.includes(reference)),
   );
@@ -44,6 +49,7 @@ async function evaluateCase(testCase: GoldenCase): Promise<CaseResult> {
     passed:
       context.length > 0 &&
       missingSources.length === 0 &&
+      forbiddenSources.length === 0 &&
       missingReferences.length === 0 &&
       forbiddenReferences.length === 0 &&
       orderOk,
@@ -51,6 +57,8 @@ async function evaluateCase(testCase: GoldenCase): Promise<CaseResult> {
     sources: [...found].join(","),
     orderOk,
     missingSources,
+    forbiddenSources,
+    scopedTo: scopedTo?.join(",") ?? "all",
     missingReferences,
     forbiddenReferences,
     references,
@@ -71,7 +79,14 @@ async function main() {
   for (const result of results) {
     const mark = result.passed ? "PASS" : "FAIL";
     console.log(`${mark}  ${result.question}`);
-    console.log(`      retrieved ${result.retrieved} [${result.sources}] order=${result.orderOk}`);
+    console.log(
+      `      retrieved ${result.retrieved} [${result.sources}] order=${result.orderOk} scope=${result.scopedTo}`,
+    );
+    if (result.forbiddenSources.length > 0) {
+      console.log(
+        `      sources outside the question's scope: ${result.forbiddenSources.join(", ")}`,
+      );
+    }
     if (result.missingSources.length > 0) {
       console.log(`      missing sources: ${result.missingSources.join(", ")}`);
     }

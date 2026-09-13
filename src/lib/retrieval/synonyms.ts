@@ -1,3 +1,5 @@
+import { composeNukta } from "@/lib/utils/bangla";
+
 const TERM_GROUPS: readonly (readonly string[])[] = [
   ["নামাজ", "নামায", "সালাত", "সলাত", "সালাহ"],
   ["রোজা", "রোযা", "সিয়াম", "সাওম", "সওম", "রোজাদার"],
@@ -64,20 +66,24 @@ const WORD_SEPARATOR = /[\s,.।?!"'()\[\]/\\:;-]+/u;
 const TERM_MATCHERS: readonly { pattern: RegExp; group: readonly string[] }[] = TERM_GROUPS.flatMap(
   (group) =>
     group.map((term) => ({
-      pattern: new RegExp(`${BOUNDARY}${term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`, "iu"),
+      pattern: new RegExp(
+        `${BOUNDARY}${composeNukta(term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`,
+        "iu",
+      ),
       group,
     })),
 );
 
 export function expandQueryTerms(query: string): string[] {
   const extras = new Set<string>();
-  const words = new Set(query.toLowerCase().split(WORD_SEPARATOR).filter(Boolean));
+  const normalized = composeNukta(query);
+  const words = new Set(normalized.toLowerCase().split(WORD_SEPARATOR).filter(Boolean));
 
   for (const { pattern, group } of TERM_MATCHERS) {
-    if (!pattern.test(query)) continue;
+    if (!pattern.test(normalized)) continue;
 
     for (const term of group) {
-      if (!words.has(term.toLowerCase())) extras.add(term);
+      if (!words.has(composeNukta(term).toLowerCase())) extras.add(term);
     }
   }
 

@@ -123,7 +123,8 @@ export const HADITH_BOOKS: readonly HadithBook[] = [
 export const RETRIEVAL_CONFIG = {
   chunkSize: 800,
   chunkOverlap: 120,
-  topKPerSource: 5,
+  minChunkFill: 0.6,
+  minVectorScore: 0.8,
   candidateMultiplier: 10,
   embeddingDimensions: 768,
 } as const;
@@ -157,7 +158,7 @@ export const DB_CONFIG = {
 
 export const HYBRID_CONFIG = {
   textCandidatesPerSource: 12,
-  minTextScore: 3.5,
+  minTextScore: 3.0,
   lazyEmbedPerRequest: 12,
   fusionK: 60,
 } as const;

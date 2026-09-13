@@ -14,6 +14,7 @@ export interface QueryLogEntry {
   searchQuery?: string;
   rewritten?: boolean;
   historyTurns?: number;
+  scopedTo?: SourceType[];
   language: QuestionLanguage;
   createdAt: Date;
   sourcesUsed: SourceType[];
