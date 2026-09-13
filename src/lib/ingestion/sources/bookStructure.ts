@@ -4,6 +4,7 @@ export interface BookSection {
   text: string;
   chapter?: string;
   page?: number;
+  volume?: number;
 }
 
 export interface ChapterStart {
@@ -26,6 +27,7 @@ export interface BookMetadata {
 export interface BookLocation {
   title: string;
   chapter?: string;
+  volume?: number;
   page?: number;
   part: number;
   partCount: number;
@@ -37,7 +39,14 @@ export interface PdfPageReport {
 }
 
 const HEADING = /^(#{1,3})\s+(.+?)\s*#*\s*$/;
-const PAGE_MARKER = /^\s*[[(]?\s*(?:পৃষ্ঠা|পৃঃ|পৃ\.|page|p\.)\s*[:-]?\s*([0-9০-৯]+)\s*[\])]?\s*$/i;
+const PAGE_MARKER =
+  /^\s*[[(]?\s*(?:খণ্ড\s*([0-9০-৯]+)\s*[,،]\s*)?(?:পৃষ্ঠা|পৃঃ|পৃ\.|page|p\.)\s*[:-]?\s*([0-9০-৯]+)\s*[\])]?\s*$/i;
+
+function withoutFrontMatter(text: string): string {
+  if (!text.startsWith("---\n")) return text;
+  const end = text.indexOf("\n---", 4);
+  return end < 0 ? text : text.slice(text.indexOf("\n", end + 1) + 1);
+}
 
 export function toAsciiDigits(value: string): string {
   return value.replace(/[০-৯]/g, (digit) => String(digit.charCodeAt(0) - 0x09e6));
@@ -78,15 +87,22 @@ export function sectionsFromPlainText(text: string): BookSection[] {
   const sections: BookSection[] = [];
   let chapter: string | undefined;
   let page: number | undefined;
+  let volume: number | undefined;
   let buffer: string[] = [];
 
   const flush = () => {
     const body = buffer.join("\n").trim();
-    if (body.length > 0) sections.push({ text: body, chapter, page });
+    if (body.length === 0) {
+      buffer = [];
+      return;
+    }
+    sections.push(
+      volume === undefined ? { text: body, chapter, page } : { text: body, chapter, page, volume },
+    );
     buffer = [];
   };
 
-  for (const line of text.replace(/\r\n/g, "\n").split("\n")) {
+  for (const line of withoutFrontMatter(text.replace(/\r\n/g, "\n")).split("\n")) {
     const pieces = line.split("\f");
 
     pieces.forEach((piece, index) => {
@@ -101,9 +117,10 @@ export function sectionsFromPlainText(text: string): BookSection[] {
       if (heading?.[2]) {
         flush();
         chapter = heading[2].trim();
-      } else if (marker?.[1]) {
+      } else if (marker?.[2]) {
         flush();
-        page = Number(toAsciiDigits(marker[1]));
+        page = Number(toAsciiDigits(marker[2]));
+        if (marker[1]) volume = Number(toAsciiDigits(marker[1]));
       } else {
         buffer.push(piece);
       }
@@ -142,7 +159,15 @@ export function sectionsFromHtml(html: string): BookSection[] {
 
 export function formatBookReference(location: BookLocation): string {
   const parts = [location.title];
-  if (location.chapter) parts.push(location.chapter);
+  if (location.chapter) {
+    const chapter = location.chapter.replace(/[\s,،]+$/u, "");
+    parts.push(
+      chapter.length > FILE_INGESTION_CONFIG.maxChapterChars
+        ? `${chapter.slice(0, FILE_INGESTION_CONFIG.maxChapterChars).trimEnd()}…`
+        : chapter,
+    );
+  }
+  if (location.volume !== undefined) parts.push(`খণ্ড ${location.volume}`);
   if (location.page !== undefined) parts.push(`পৃষ্ঠা ${location.page}`);
   if (location.partCount > 1 || (location.page === undefined && !location.chapter)) {
     parts.push(`অংশ ${location.part}`);

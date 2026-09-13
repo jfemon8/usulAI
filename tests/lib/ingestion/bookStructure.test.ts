@@ -84,7 +84,12 @@ describe("sectionsFromHtml", () => {
 describe("sectionsFromPdfPages", () => {
   it("maps printed page numbers and chapter starts, and reports pages with no text layer", () => {
     const report = sectionsFromPdfPages(
-      ["Cover title page with text", "   ", "Body of the first chapter", "More of the first chapter continues here"],
+      [
+        "Cover title page with text",
+        "   ",
+        "Body of the first chapter",
+        "More of the first chapter continues here",
+      ],
       { pageOffset: -2, chapters: [{ title: "প্রথম অধ্যায়", page: 1 }] },
     );
 
@@ -168,5 +173,30 @@ describe("loadFileDocuments", () => {
     expect(markdown?.citation.page).toBe(10);
     expect(markdown?.provenance).toBe("মারাতিবুল ইজমা | ইবনু হাযম | ২য়");
     expect(documents.some((document) => document.metadata?.fileName === "scanned.pdf")).toBe(false);
+  });
+});
+
+describe("multi-volume books and attribution front matter", () => {
+  it("skips the front matter and reads volume and page together", () => {
+    const sections = sectionsFromPlainText(
+      '---\ntitle: "আল-ইকনা"\nlicense: "CC BY-NC-SA 4.0"\n---\n## كتاب الطهارة\n[খণ্ড 2, পৃষ্ঠা 10]\nوأجمعوا على أن الماء طهور',
+    );
+
+    expect(sections).toEqual([
+      { text: "وأجمعوا على أن الماء طهور", chapter: "كتاب الطهارة", page: 10, volume: 2 },
+    ]);
+  });
+
+  it("cites the volume before the page", () => {
+    expect(
+      formatBookReference({
+        title: "আল-ইকনা",
+        chapter: "كتاب الطهارة",
+        volume: 2,
+        page: 10,
+        part: 1,
+        partCount: 1,
+      }),
+    ).toBe("আল-ইকনা, كتاب الطهارة, খণ্ড 2, পৃষ্ঠা 10");
   });
 });

@@ -15,6 +15,8 @@ export interface EnrichmentSource {
   arabic: string;
   bangla?: string;
   english?: string;
+  machineTranslated?: boolean;
+  segments?: { arabic: string; bangla?: string; english?: string }[];
 }
 
 export interface EnricherOptions {
@@ -36,6 +38,7 @@ interface QuoteMatch {
   sources: EnrichmentSource[];
   segment: string;
   primary: EnrichmentSource;
+  segmentsBySource: Map<number, string>;
 }
 
 const LABEL_ROOTS = [
@@ -140,6 +143,7 @@ function locateQuote(run: string, sources: EnrichmentSource[]): QuoteMatch | nul
     sources: matches.map((match) => match.source),
     segment: matches[0]!.segment,
     primary: matches[0]!.source,
+    segmentsBySource: new Map(matches.map((match) => [match.source.index, match.segment])),
   };
 }
 
@@ -159,14 +163,49 @@ function readingFor(match: QuoteMatch): string {
   return quotedChainToo && segmentSkeleton.includes(matnSkeleton) ? matn : match.segment;
 }
 
+function significantSkeletons(text: string): string[] {
+  return text
+    .split(/\s+/)
+    .map(arabicSkeleton)
+    .filter((skeleton) => skeleton.length >= QUOTE_ENRICHMENT_CONFIG.minSegmentWordLetters);
+}
+
+export function meaningFor(
+  source: EnrichmentSource,
+  quoted: readonly string[],
+  field: "bangla" | "english",
+): string | undefined {
+  if (!source.segments || source.segments.length === 0) return source[field];
+
+  const quoteWords = new Set(quoted.flatMap(significantSkeletons));
+  const picked = source.segments.filter((segment) => {
+    const words = significantSkeletons(segment.arabic);
+    if (words.length === 0) return false;
+    const hits = words.filter((word) => quoteWords.has(word)).length;
+    return (
+      hits / words.length >= QUOTE_ENRICHMENT_CONFIG.minSegmentOverlap ||
+      (quoteWords.size > 0 && hits >= quoteWords.size * QUOTE_ENRICHMENT_CONFIG.minSegmentOverlap)
+    );
+  });
+
+  const text = picked
+    .map((segment) => segment[field])
+    .filter(Boolean)
+    .join(" ");
+  return text.length > 0 ? text : undefined;
+}
+
 function meaningLine(
   label: string,
   sources: EnrichmentSource[],
   pick: (source: EnrichmentSource) => string | undefined,
+  machineNote: string,
 ): string | null {
   const parts = sources.flatMap((source) => {
     const text = pick(source)?.replace(/\s+/g, " ").trim();
-    return text ? [`${text} [${source.index}]`] : [];
+    if (!text) return [];
+    const note = source.machineTranslated ? ` *(${machineNote})*` : "";
+    return [`${text} [${source.index}]${note}`];
   });
 
   return parts.length > 0 ? `**${label}** ${parts.join(" ")}` : null;
@@ -184,6 +223,7 @@ function enrichBlock(lines: string[], options: EnricherOptions): EnrichedBlock {
 
   const readings: string[] = [];
   const matched: EnrichmentSource[] = [];
+  const quotedBySource = new Map<number, string[]>();
 
   for (const run of runs) {
     const match = locateQuote(run, options.sources);
@@ -200,8 +240,14 @@ function enrichBlock(lines: string[], options: EnricherOptions): EnrichedBlock {
 
     for (const source of match?.sources ?? []) {
       if (!matched.some((existing) => existing.index === source.index)) matched.push(source);
+      const segment = match?.segmentsBySource.get(source.index);
+      if (segment)
+        quotedBySource.set(source.index, [...(quotedBySource.get(source.index) ?? []), segment]);
     }
   }
+
+  const pick = (source: EnrichmentSource, field: "bangla" | "english") =>
+    meaningFor(source, quotedBySource.get(source.index) ?? [], field);
 
   const pronunciation =
     readings.length > 0
@@ -211,10 +257,23 @@ function enrichBlock(lines: string[], options: EnricherOptions): EnrichedBlock {
   const entries = bangla
     ? [
         pronunciation,
-        meaningLine("বাংলা অর্থঃ", matched, (source) => source.bangla),
-        meaningLine("English Meaning:", matched, (source) => source.english),
+        meaningLine("বাংলা অর্থঃ", matched, (source) => pick(source, "bangla"), "AI অনুবাদ"),
+        meaningLine(
+          "English Meaning:",
+          matched,
+          (source) => pick(source, "english"),
+          "AI translation",
+        ),
       ]
-    : [pronunciation, meaningLine("English Meaning:", matched, (source) => source.english)];
+    : [
+        pronunciation,
+        meaningLine(
+          "English Meaning:",
+          matched,
+          (source) => pick(source, "english"),
+          "AI translation",
+        ),
+      ];
 
   return {
     text: entries.filter((line): line is string => line !== null).join("\n\n"),
@@ -254,7 +313,7 @@ function evidenceAppendix(seen: string, quoted: Set<number>, options: EnricherOp
     .filter((index) => !quoted.has(index))
     .map((index) => options.sources.find((source) => source.index === index))
     .filter((source): source is EnrichmentSource => {
-      if (!source) return false;
+      if (!source || source.machineTranslated || (!source.bangla && !source.english)) return false;
       return arabicWordCount(extractMatn(source.arabic)) >= QUOTE_ENRICHMENT_CONFIG.minQuoteWords;
     })
     .slice(0, QUOTE_ENRICHMENT_CONFIG.maxAppendedEvidence);

@@ -21,6 +21,8 @@
     "gaps": "tsx scripts/gaps.ts",
     "backfill:grades": "tsx scripts/backfill-hadith-grades.ts",
     "import:quranenc": "tsx scripts/import-quranenc.ts",
+    "import:ijma": "tsx scripts/import-openiti.ts",
+    "translate:sources": "tsx scripts/translate-sources.ts",
     "storage:report": "tsx scripts/storage-report.ts",
     "storage:optimize": "tsx scripts/storage-optimize.ts",
     "maintain": "tsx scripts/maintain.ts",

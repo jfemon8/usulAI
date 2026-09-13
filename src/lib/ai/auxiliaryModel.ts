@@ -3,9 +3,11 @@ import { AUXILIARY_CONFIG } from "@/config/site";
 import { getModelChain } from "@/lib/ai/providers";
 import { logger } from "@/lib/utils/logger";
 
-interface AuxiliaryPrompt {
+export interface AuxiliaryPrompt {
   system: string;
   prompt: string;
+  maxOutputTokens?: number;
+  timeoutMs?: number;
 }
 
 export async function generateWithChain(
@@ -13,6 +15,45 @@ export async function generateWithChain(
   options: AuxiliaryPrompt,
 ): Promise<string | null> {
   return (await generateWithChainFrom(purpose, options, 0))?.text ?? null;
+}
+
+export async function generateWithPreferredModels(
+  purpose: string,
+  options: AuxiliaryPrompt,
+  preferred: readonly string[],
+  onlyPreferred = false,
+): Promise<{ text: string; modelId: string } | null> {
+  const chain = getModelChain().filter(
+    (entry) => !onlyPreferred || preferred.includes(entry.modelId),
+  );
+  const rank = (modelId: string) => {
+    const index = preferred.indexOf(modelId);
+    return index < 0 ? preferred.length : index;
+  };
+  const ordered = [...chain].sort((a, b) => rank(a.modelId) - rank(b.modelId));
+
+  for (const { tier, provider, modelId, model } of ordered) {
+    try {
+      const { text } = await generateText({
+        model,
+        system: options.system,
+        prompt: options.prompt,
+        temperature: AUXILIARY_CONFIG.temperature,
+        maxOutputTokens: options.maxOutputTokens ?? AUXILIARY_CONFIG.maxOutputTokens,
+        maxRetries: 0,
+        ...(options.timeoutMs ? { abortSignal: AbortSignal.timeout(options.timeoutMs) } : {}),
+      });
+      if (text.trim().length > 0) return { text, modelId };
+    } catch (error) {
+      logger.warn(`${purpose}: tier "${tier}" failed, trying next`, {
+        provider,
+        modelId,
+        error: String(error).slice(0, 120),
+      });
+    }
+  }
+
+  return null;
 }
 
 export async function generateWithChainFrom(
@@ -32,7 +73,7 @@ export async function generateWithChainFrom(
         system: options.system,
         prompt: options.prompt,
         temperature: AUXILIARY_CONFIG.temperature,
-        maxOutputTokens: AUXILIARY_CONFIG.maxOutputTokens,
+        maxOutputTokens: options.maxOutputTokens ?? AUXILIARY_CONFIG.maxOutputTokens,
         maxRetries: 0,
       });
 

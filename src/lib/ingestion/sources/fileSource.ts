@@ -29,6 +29,7 @@ const metadataSchema = z.object({
   edition: z.string().optional(),
   year: z.union([z.string(), z.number()]).transform(String).optional(),
   license: z.string().optional(),
+  source: z.string().optional(),
   pageOffset: z.number().int().optional(),
   chapters: z.array(z.object({ title: z.string().min(1), page: z.number().int() })).optional(),
 });
@@ -37,6 +38,10 @@ export interface CitationInput extends BookLocation {
   fileName: string;
   physicalPage?: number;
   storageKey: string | null;
+}
+
+export interface LoaderOptions {
+  archive?: boolean;
 }
 
 export interface FileSourceOptions {
@@ -185,6 +190,7 @@ export async function loadFileDocuments({
         const citation = buildCitation({
           title,
           chapter: section.chapter,
+          volume: section.volume,
           page: section.page,
           physicalPage:
             extension === ".pdf" && section.page !== undefined ? section.page - offset : undefined,
@@ -205,6 +211,7 @@ export async function loadFileDocuments({
           metadata: {
             fileName: file,
             ...(section.chapter ? { chapter: section.chapter } : {}),
+            ...(section.volume !== undefined ? { volume: section.volume } : {}),
             ...(section.page !== undefined ? { page: section.page } : {}),
             storageKey,
           },

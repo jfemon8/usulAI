@@ -1,6 +1,7 @@
 import { AUXILIARY_CONFIG, RERANK_CONFIG } from "@/config/site";
 import { generateWithChainFrom } from "@/lib/ai/auxiliaryModel";
 import { TRANSLATION_LABELS, sanitizeSourceContent } from "@/lib/ingestion/translations";
+import { arabicQueryTerms } from "@/lib/retrieval/arabicTerms";
 import { expandQueryTerms } from "@/lib/retrieval/synonyms";
 import { logger } from "@/lib/utils/logger";
 import { createLru, normalizeCacheKey } from "@/lib/utils/lru";
@@ -67,7 +68,13 @@ export function questionTerms(question: string): string[] {
     .split(/[\s,.।?!"'()[\]:;।-]+/u)
     .filter((word) => [...word].length >= 2 && !QUESTION_STOPWORDS.has(word));
 
-  return [...new Set([...words, ...expandQueryTerms(question).map((term) => term.toLowerCase())])];
+  return [
+    ...new Set([
+      ...words,
+      ...expandQueryTerms(question).map((term) => term.toLowerCase()),
+      ...arabicQueryTerms(question),
+    ]),
+  ];
 }
 
 function focusWindow(text: string, terms: string[], size: number): string {

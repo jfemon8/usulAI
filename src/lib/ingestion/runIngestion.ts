@@ -7,6 +7,7 @@ import { loadIjmaDocuments } from "@/lib/ingestion/sources/ijma";
 import { loadQiyasDocuments } from "@/lib/ingestion/sources/qiyas";
 import { loadSiratDocuments } from "@/lib/ingestion/sources/sirat";
 import { countProviders, recordProvenance } from "@/lib/maintenance/provenance";
+import type { LoaderOptions } from "@/lib/ingestion/sources/fileSource";
 import {
   applyIngestionPlan,
   attachEmbeddings,
@@ -46,13 +47,14 @@ async function embedBatchWaitingOutRateLimits(
   }
 }
 
-const SOURCE_LOADERS: Record<SourceType, () => Promise<IngestionDocument[]>> = {
-  quran: fetchQuranCorpus,
-  hadith: fetchHadithCorpus,
-  ijma: loadIjmaDocuments,
-  qiyas: loadQiyasDocuments,
-  sirat: loadSiratDocuments,
-};
+const SOURCE_LOADERS: Record<SourceType, (options: LoaderOptions) => Promise<IngestionDocument[]>> =
+  {
+    quran: fetchQuranCorpus,
+    hadith: fetchHadithCorpus,
+    ijma: loadIjmaDocuments,
+    qiyas: loadQiyasDocuments,
+    sirat: loadSiratDocuments,
+  };
 
 export interface IngestionOptions {
   replace?: boolean;
@@ -131,7 +133,7 @@ async function ingestSource(
     return { sourceType, status: "embedded", count: embedded, embedded };
   }
 
-  const loaded = await SOURCE_LOADERS[sourceType]();
+  const loaded = await SOURCE_LOADERS[sourceType]({ archive: !options.dryRun });
 
   if (loaded.length === 0) {
     logger.warn(`No documents found for ${sourceType}`);

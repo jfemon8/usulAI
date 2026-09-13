@@ -19,6 +19,13 @@ export interface HadithGrade {
   grade: string;
 }
 
+export interface TranslatedSegment {
+  arabic: string;
+  vocalized?: string;
+  bangla: string;
+  english: string;
+}
+
 export interface RetrievedChunk {
   id: string;
   sourceType: SourceType;
@@ -28,6 +35,9 @@ export interface RetrievedChunk {
   retrievedBy: "vector" | "text" | "history";
   grades?: HadithGrade[];
   note?: string;
+  vocalized?: string;
+  machineTranslated?: boolean;
+  segments?: TranslatedSegment[];
 }
 
 export interface IngestionDocument {

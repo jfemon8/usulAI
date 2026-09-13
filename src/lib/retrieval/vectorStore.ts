@@ -1,5 +1,11 @@
 import { Binary, ObjectId } from "mongodb";
-import { DB_CONFIG, HYBRID_CONFIG, RETRIEVAL_CONFIG, SOURCE_PRIORITY } from "@/config/site";
+import {
+  ARABIC_TEXT_SOURCES,
+  DB_CONFIG,
+  HYBRID_CONFIG,
+  RETRIEVAL_CONFIG,
+  SOURCE_PRIORITY,
+} from "@/config/site";
 import { getDocumentsCollection } from "@/lib/db/mongoClient";
 import {
   contentHash,
@@ -7,6 +13,7 @@ import {
   type IngestionPlan,
   type StoredFingerprint,
 } from "@/lib/ingestion/fingerprint";
+import { arabicQueryTerms } from "@/lib/retrieval/arabicTerms";
 import { fuseRankings } from "@/lib/retrieval/fusion";
 import { expandQueryTerms } from "@/lib/retrieval/synonyms";
 import type { HadithGrade, RetrievedChunk, SourceCitation, SourceType } from "@/types";
@@ -114,18 +121,22 @@ export async function textSearch(
   expandSynonyms = true,
 ): Promise<RetrievedChunk[]> {
   const extras = expandSynonyms ? expandQueryTerms(query) : [];
+  const arabic = ARABIC_TEXT_SOURCES.includes(sourceType) ? arabicQueryTerms(query) : [];
 
-  const [plain, expanded] = await Promise.all([
+  const [plain, expanded, arabicHits] = await Promise.all([
     runTextSearch(query, sourceType, limit),
     extras.length > 0
       ? runTextSearch(`${query} ${extras.join(" ")}`, sourceType, limit)
+      : Promise.resolve<RetrievedChunk[]>([]),
+    arabic.length > 0
+      ? runTextSearch(arabic.join(" "), sourceType, limit)
       : Promise.resolve<RetrievedChunk[]>([]),
   ]);
 
   const confident = (hits: RetrievedChunk[]) =>
     hits.filter((hit) => hit.similarity >= HYBRID_CONFIG.minTextScore);
 
-  return fuseRankings([confident(plain), confident(expanded)]);
+  return fuseRankings([confident(plain), confident(expanded), confident(arabicHits)]);
 }
 
 const WRITE_BATCH_SIZE = 500;

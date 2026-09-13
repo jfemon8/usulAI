@@ -273,3 +273,58 @@ describe("pronouncing a hadith quoted with its chain of narrators", () => {
     expect(output).toContain("**বাংলা উচ্চারণঃ** বাইনা ইয়াদায়িস সাআতি আয়্যামুল হারজ");
   });
 });
+
+describe("ijma sources with a machine translation", () => {
+  const firstPlain = "أجمع أهل العلم على أن الصلاة لا تجزئ إلا بطهارة";
+  const firstVocalized =
+    "أَجْمَعَ أَهْلُ الْعِلْمِ عَلَى أَنَّ الصَّلَاةَ لَا تُجْزِئُ إِلَّا بِطَهَارَةٍ";
+  const secondPlain = "وأجمعوا على أن خروج الغائط من الدبر ينقض الطهارة";
+  const ijma: EnrichmentSource = {
+    index: 3,
+    arabic: `${firstVocalized}
+${secondPlain}`,
+    bangla:
+      "আলেমগণ একমত যে পবিত্রতা ছাড়া নামাজ যথেষ্ট হয় না। তাঁরা একমত যে পায়খানা বের হলে পবিত্রতা নষ্ট হয়।",
+    english: "Prayer is not valid without purification. Passing stool breaks purification.",
+    machineTranslated: true,
+    segments: [
+      {
+        arabic: firstPlain,
+        bangla: "আলেমগণ একমত যে পবিত্রতা ছাড়া নামাজ যথেষ্ট হয় না।",
+        english: "The scholars agree that prayer is not valid without purification.",
+      },
+      {
+        arabic: secondPlain,
+        bangla: "তাঁরা একমত যে পায়খানা বের হলে পবিত্রতা নষ্ট হয়।",
+        english: "They agree that passing stool breaks purification.",
+      },
+    ],
+  };
+
+  it("shows pronunciation and only the quoted mas'ala's meaning, marked as AI translation", () => {
+    const enriched = enrichAnswer(
+      `ইবনুল মুনযির লিখেছেন [3]।
+
+${firstPlain}
+
+অর্থাৎ অজু ছাড়া নামাজ হয় না।`,
+      { sources: [ijma], language: "bangla" },
+    );
+
+    expect(enriched).toContain("**বাংলা উচ্চারণঃ**");
+    expect(enriched).toContain(
+      "**বাংলা অর্থঃ** আলেমগণ একমত যে পবিত্রতা ছাড়া নামাজ যথেষ্ট হয় না। [3] *(AI অনুবাদ)*",
+    );
+    expect(enriched).not.toContain("পায়খানা");
+    expect(enriched).toContain("[3] *(AI translation)*");
+  });
+
+  it("never appends a book passage as cited-but-unquoted evidence", () => {
+    const enriched = enrichAnswer("আলেমগণ এ বিষয়ে একমত [3]।", {
+      sources: [ijma],
+      language: "bangla",
+    });
+
+    expect(enriched).not.toContain("দলিল [3]");
+  });
+});

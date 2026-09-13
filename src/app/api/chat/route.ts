@@ -10,6 +10,7 @@ import { retrieveForQuestion } from "@/lib/retrieval/search";
 import { previousSourceReferences } from "@/lib/retrieval/carryForward";
 import { findChunksByReferences } from "@/lib/retrieval/vectorStore";
 import { attachQuranNotes } from "@/lib/retrieval/quranNotes";
+import { attachSourceTranslations } from "@/lib/ai/sourceTranslation";
 import { createRepetitionGuard } from "@/lib/ai/repetitionGuard";
 import { createWordPacer } from "@/lib/ai/wordPacer";
 import { validateAnswer, type GateInput } from "@/lib/ai/answerGate";
@@ -111,7 +112,7 @@ export async function POST(request: Request) {
   const carried =
     history.length > 0 ? await findChunksByReferences(previousSourceReferences(messages)) : [];
   const retrieval = await retrieveForQuestion(question, query, { carried });
-  const context = await attachQuranNotes(retrieval.context);
+  const context = await attachSourceTranslations(await attachQuranNotes(retrieval.context));
 
   if (context.length === 0) {
     void logQuery({
@@ -152,6 +153,9 @@ export async function POST(request: Request) {
       index: index + 1,
       reference: chunk.citation.reference,
       ...splitSourceBlocks(chunk.content),
+      ...(chunk.vocalized ? { arabic: chunk.vocalized } : {}),
+      ...(chunk.machineTranslated ? { machineTranslated: true } : {}),
+      ...(chunk.segments ? { segments: chunk.segments } : {}),
     })),
     language: gateInput.language,
   };

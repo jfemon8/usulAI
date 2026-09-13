@@ -152,10 +152,24 @@ export const DB_CONFIG = {
   corpusSourcesCollection: "corpus_sources",
   maintenanceCollection: "maintenance_state",
   rateLimitCollection: "rate_limits",
+  sourceTranslationCollection: "source_translations",
   vectorIndex: "documents_embedding_idx",
   textIndex: "documents_text_idx",
   embeddingPath: "embedding",
 } as const;
+
+export const SOURCE_TRANSLATION_CONFIG = {
+  maxOutputTokens: 6_000,
+  minBengaliRatio: 0.6,
+  minVocalizedShare: 0.7,
+  minSegmentChars: 60,
+  approvedModels: ["gemini-3.6-flash"] as readonly string[],
+  maxConsecutiveFailures: 5,
+  timeoutMs: 240_000,
+  modelLabel: "AI অনুবাদ",
+} as const;
+
+export const ARABIC_TEXT_SOURCES: readonly string[] = ["ijma", "qiyas", "sirat"];
 
 export const HYBRID_CONFIG = {
   textCandidatesPerSource: 12,
@@ -190,6 +204,8 @@ export const QUOTE_ENRICHMENT_CONFIG = {
   minVocalizationRatio: 0.5,
   labelWindowChars: 48,
   maxAppendedEvidence: 3,
+  minSegmentWordLetters: 3,
+  minSegmentOverlap: 0.5,
 } as const;
 
 export const ANSWER_GATE_CONFIG = {
@@ -284,8 +300,55 @@ export const INGESTION_JOB_CONFIG = {
   defaultEmbedLimit: 900,
 } as const;
 
+export interface OpenItiBook {
+  slug: string;
+  repo: string;
+  version: string;
+  headingsFrom?: string;
+  title: string;
+  author: string;
+}
+
+export const OPENITI_CONFIG = {
+  rawBase: "https://raw.githubusercontent.com/OpenITI",
+  license:
+    "CC BY-NC-SA 4.0. Text from the Open Islamicate Texts Initiative (OpenITI), KITAB project; paratext removed by OpenITI. Non-commercial use with attribution, share alike.",
+  ijma: [
+    {
+      slug: "ibn-al-mundhir-al-ijma",
+      repo: "0325AH",
+      version: "0319IbnMundhirNaysaburi.Ijmac.Sham19Y0151100-ara1",
+      title: "কিতাবুল ইজমা (ইবনুল মুনযির)",
+      author: "আবু বকর মুহাম্মাদ ইবনু ইবরাহীম ইবনুল মুনযির আন-নাইসাবূরী (মৃ. ৩১৯ হি.)",
+    },
+    {
+      slug: "ibn-hazm-maratib-al-ijma",
+      repo: "0475AH",
+      version: "0456IbnHazm.MaratibIjmac.JK000182-ara1",
+      headingsFrom: "0456IbnHazm.MaratibIjmac.Shamela0012446-ara1",
+      title: "মারাতিবুল ইজমা (ইবনু হাযম)",
+      author: "আবু মুহাম্মাদ আলী ইবনু আহমাদ ইবনু হাযম আল-আন্দালুসী (মৃ. ৪৫৬ হি.)",
+    },
+    {
+      slug: "ibn-al-qattan-al-iqna",
+      repo: "0650AH",
+      version: "0628IbnQattanFasi.Iqnac.Sham19Y0013624-ara1",
+      title: "আল-ইকনা ফী মাসাইলিল ইজমা (ইবনুল কাত্তান)",
+      author: "আবুল হাসান আলী ইবনু মুহাম্মাদ ইবনুল কাত্তান আল-ফাসী (মৃ. ৬২৮ হি.)",
+    },
+    {
+      slug: "ibn-taymiyya-naqd-maratib-al-ijma",
+      repo: "0750AH",
+      version: "0728IbnTaymiyya.NaqdMaratibIjmac.Shamela0008630-ara1",
+      title: "নাকদু মারাতিবিল ইজমা (ইবনু তাইমিয়া)",
+      author: "তাকিউদ্দীন আহমাদ ইবনু আবদিল হালীম ইবনু তাইমিয়া (মৃ. ৭২৮ হি.)",
+    },
+  ] satisfies OpenItiBook[],
+} as const;
+
 export const FILE_INGESTION_CONFIG = {
   minCharsPerPage: 20,
+  maxChapterChars: 60,
 } as const;
 
 export const RATE_LIMIT_CONFIG = {

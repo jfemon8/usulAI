@@ -64,4 +64,14 @@ export const GOLDEN_SET: GoldenCase[] = [
     expectSources: ["quran", "hadith"],
     expectReferences: ["Al-Baqara 2:144"],
   },
+  {
+    question: "অজু ছাড়া নামাজ হবে কি? এ বিষয়ে ইজমা কী?",
+    expectSources: ["ijma"],
+    forbidSources: ["quran", "hadith"],
+  },
+  {
+    question: "মদ পান সম্পর্কে আলেমদের ইজমা কী?",
+    expectSources: ["ijma"],
+    forbidSources: ["quran", "hadith"],
+  },
 ];
