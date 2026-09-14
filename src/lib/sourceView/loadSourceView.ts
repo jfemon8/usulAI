@@ -11,7 +11,7 @@ import { describeGrades } from "@/lib/ai/hadithGrade";
 import { loadTranslations, translationKey } from "@/lib/ai/sourceTranslation";
 import { getDocumentsCollection } from "@/lib/db/mongoClient";
 import { splitSourceBlocks, TRANSLATION_LABELS } from "@/lib/ingestion/translations";
-import { mergeChunks, pageBlocks, type ViewBlock } from "@/lib/sourceView/pageText";
+import { isArabicText, mergeChunks, pageBlocks, type ViewBlock } from "@/lib/sourceView/pageText";
 import type { HadithGrade, SourceCitation, SourceType } from "@/types";
 
 export interface SourceView {
@@ -111,12 +111,28 @@ async function pageRows(row: DocumentRow): Promise<DocumentRow[]> {
 
 async function bookView(row: DocumentRow): Promise<SourceView> {
   const rows = await pageRows(row);
-  const merged = mergeChunks(
-    rows.map((candidate) => candidate.content),
-    SOURCE_VIEW_CONFIG.maxChunkOverlapChars,
-  );
-  const position = rows.findIndex((candidate) => candidate._id.equals(row._id));
-  const span = merged.spans[position] ?? { start: 0, end: merged.text.length };
+  const sections = rows.reduce<DocumentRow[][]>((groups, candidate) => {
+    const last = groups[groups.length - 1];
+    if (last && last[0]?.metadata?.chapter === candidate.metadata?.chapter) last.push(candidate);
+    else groups.push([candidate]);
+    return groups;
+  }, []);
+
+  const pageContent = sections.flatMap((section, index): ViewBlock[] => {
+    const merged = mergeChunks(
+      section.map((candidate) => candidate.content),
+      SOURCE_VIEW_CONFIG.maxChunkOverlapChars,
+      SOURCE_VIEW_CONFIG.minChunkOverlapChars,
+    );
+    const position = section.findIndex((candidate) => candidate._id.equals(row._id));
+    const span = position >= 0 ? (merged.spans[position] ?? null) : null;
+    const title = section[0]?.metadata?.chapter;
+    const heading: ViewBlock[] =
+      title && (index > 0 || title !== row.metadata?.chapter)
+        ? [{ kind: isArabicText(title) ? "arabic" : "text", text: title, heading: true }]
+        : [];
+    return [...heading, ...pageBlocks(merged.text, span)];
+  });
   const book = openItiBook(row.metadata?.fileName);
   const translation = (await loadTranslations([translationKey(row.content)])).get(
     translationKey(row.content),
@@ -155,7 +171,7 @@ async function bookView(row: DocumentRow): Promise<SourceView> {
     reference: row.citation.reference,
     title: book?.title ?? row.citation.reference.split(",")[0] ?? row.citation.reference,
     details,
-    blocks: [...pageBlocks(merged.text, span), ...translated],
+    blocks: [...pageContent, ...translated],
     ...(book ? { attribution: `OpenITI (KITAB), CC BY-NC-SA 4.0 · ${book.version}` } : {}),
   };
 }

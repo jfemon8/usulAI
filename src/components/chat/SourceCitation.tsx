@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { SourceViewer } from "@/components/chat/SourceViewer";
+import { FileTextIcon } from "@/components/ui/Icons";
+import { prefetchRenderedSource } from "@/lib/sourceView/clientPdf";
 import type { AnswerSource, SourceType } from "@/types";
 
 const SOURCE_LABELS: Record<SourceType, string> = {
@@ -29,6 +31,13 @@ function chipBody(source: AnswerSource) {
 
 export function SourceCitationList({ sources }: { sources: AnswerSource[] }) {
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
+  const prefetchTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  const schedulePrefetch = (reference: string) => {
+    clearTimeout(prefetchTimer.current);
+    prefetchTimer.current = setTimeout(() => prefetchRenderedSource(reference), 200);
+  };
+  const cancelPrefetch = () => clearTimeout(prefetchTimer.current);
 
   if (sources.length === 0) {
     return (
@@ -50,15 +59,21 @@ export function SourceCitationList({ sources }: { sources: AnswerSource[] }) {
               key={source.index}
               type="button"
               title={`${title} · মূল পাতা দেখুন`}
-              onClick={() =>
-                setViewerIndex(sources.findIndex((item) => item.index === source.index))
-              }
+              aria-haspopup="dialog"
+              onPointerEnter={(event) => {
+                if (event.pointerType === "mouse") schedulePrefetch(source.reference);
+              }}
+              onPointerLeave={cancelPrefetch}
+              onFocus={() => schedulePrefetch(source.reference)}
+              onBlur={cancelPrefetch}
+              onClick={() => {
+                cancelPrefetch();
+                setViewerIndex(sources.findIndex((item) => item.index === source.index));
+              }}
               className={`${CHIP_CLASS} active:scale-[0.97]`}
             >
               {chipBody(source)}
-              <span aria-hidden="true" className="text-(--text-3)">
-                ⤢
-              </span>
+              <FileTextIcon className="h-3.5 w-3.5 shrink-0 text-(--text-3)" />
             </button>
           );
         })}

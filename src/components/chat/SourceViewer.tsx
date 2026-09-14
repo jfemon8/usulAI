@@ -1,13 +1,32 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
-  TransformWrapper,
   TransformComponent,
+  TransformWrapper,
+  useTransformComponent,
   type ReactZoomPanPinchRef,
 } from "react-zoom-pan-pinch";
 import { clsx } from "clsx";
-import { loadRenderedSource, type RenderedSource } from "@/lib/sourceView/clientPdf";
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  ExternalLinkIcon,
+  FileTextIcon,
+  FitPageIcon,
+  HighlighterIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+} from "@/components/ui/Icons";
+import { SOURCE_VIEW_CONFIG } from "@/config/site";
+import {
+  holdRenderedSource,
+  loadRenderedSource,
+  peekRenderedSource,
+  prefetchRenderedSource,
+  type RenderedSource,
+} from "@/lib/sourceView/clientPdf";
 import type { AnswerSource } from "@/types";
 
 interface SourceViewerProps {
@@ -16,13 +35,11 @@ interface SourceViewerProps {
   onClose: () => void;
 }
 
-type ViewState =
-  | { status: "loading" }
-  | { status: "error"; message: string }
-  | { status: "ready"; rendered: RenderedSource };
-
-const BUTTON_CLASS =
-  "flex h-9 w-9 items-center justify-center rounded-full border border-(--border) bg-(--surface-2) text-(--text-1) transition duration-200 hover:bg-(--surface-3) active:scale-95 disabled:pointer-events-none disabled:opacity-40";
+interface LoadResult {
+  key: string;
+  rendered?: RenderedSource;
+  error?: string;
+}
 
 const SOURCE_LABELS: Record<AnswerSource["sourceType"], string> = {
   quran: "কুরআন",
@@ -32,289 +49,521 @@ const SOURCE_LABELS: Record<AnswerSource["sourceType"], string> = {
   sirat: "সীরাত",
 };
 
-function Icon({ path }: { path: string }) {
+const ICON_BUTTON =
+  "inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-(--text-2) transition hover:bg-(--surface-3) hover:text-(--text-1) active:scale-95 disabled:pointer-events-none disabled:opacity-35 [&_svg]:h-[18px] [&_svg]:w-[18px]";
+
+const FOCUSABLE = 'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
+
+function ToolButton({
+  label,
+  onClick,
+  disabled,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <svg
-      viewBox="0 0 24 24"
-      className="h-4 w-4"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={ICON_BUTTON}
+      aria-label={label}
+      title={label}
     >
-      <path d={path} />
-    </svg>
+      {children}
+    </button>
   );
+}
+
+function ZoomLevel({ onReset }: { onReset: () => void }) {
+  const percent = useTransformComponent(({ state }) => Math.round(state.scale * 100));
+  return (
+    <button
+      type="button"
+      onClick={onReset}
+      className="hidden h-9 min-w-14 items-center justify-center rounded-lg px-2 text-xs font-medium text-(--text-2) tabular-nums transition hover:bg-(--surface-3) hover:text-(--text-1) sm:inline-flex"
+      aria-label={`জুম ${percent}%, ১০০% এ ফিরুন`}
+      title="১০০% এ ফিরুন"
+    >
+      {percent}%
+    </button>
+  );
+}
+
+function clampAxis(position: number, viewport: number, size: number): number {
+  if (size <= viewport) return (viewport - size) / 2;
+  return Math.min(0, Math.max(viewport - size, position));
 }
 
 export function SourceViewer({ sources, startIndex, onClose }: SourceViewerProps) {
   const [position, setPosition] = useState(startIndex);
   const [attempt, setAttempt] = useState(0);
-  const [view, setView] = useState<ViewState>({ status: "loading" });
+  const [result, setResult] = useState<LoadResult | null>(null);
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const markerRef = useRef<HTMLDivElement>(null);
-  const closeRef = useRef<HTMLButtonElement>(null);
+  const pressedOverlay = useRef(false);
   const source = sources[position];
+  const reference = source?.reference ?? "";
+  const loadKey = `${reference}#${attempt}`;
+  const cached = reference ? peekRenderedSource(reference) : undefined;
+  const rendered = cached ?? (result?.key === loadKey ? result.rendered : undefined);
+  const error = !rendered && result?.key === loadKey ? result.error : undefined;
 
   const go = useCallback(
     (delta: number) => {
-      setPosition((current) => {
-        const next = current + delta;
-        return next < 0 || next >= sources.length ? current : next;
-      });
+      setPosition((current) => Math.min(sources.length - 1, Math.max(0, current + delta)));
     },
     [sources.length],
   );
 
-  useEffect(() => {
-    closeRef.current?.focus();
+  const panBy = useCallback((deltaX: number, deltaY: number) => {
+    const transform = transformRef.current;
+    const wrapper = transform?.instance.wrapperComponent;
+    const content = transform?.instance.contentComponent;
+    if (!transform || !wrapper || !content) return;
+    const { scale, positionX, positionY } = transform.state;
+    transform.setTransform(
+      clampAxis(positionX - deltaX, wrapper.clientWidth, content.offsetWidth * scale),
+      clampAxis(positionY - deltaY, wrapper.clientHeight, content.offsetHeight * scale),
+      scale,
+      0,
+    );
+  }, []);
+
+  const fitPage = useCallback(() => {
+    const transform = transformRef.current;
+    const wrapper = transform?.instance.wrapperComponent;
+    const content = transform?.instance.contentComponent;
+    if (!transform || !wrapper || !content) return;
+    const { scale, positionY } = transform.state;
+    const centre = (wrapper.clientHeight / 2 - positionY) / scale;
+    transform.setTransform(
+      clampAxis(0, wrapper.clientWidth, content.offsetWidth),
+      clampAxis(wrapper.clientHeight / 2 - centre, wrapper.clientHeight, content.offsetHeight),
+      1,
+      220,
+    );
+  }, []);
+
+  const focusHighlight = useCallback((animate: boolean) => {
+    const transform = transformRef.current;
+    const marker = markerRef.current;
+    const wrapper = transform?.instance.wrapperComponent;
+    const content = transform?.instance.contentComponent;
+    if (!transform || !wrapper || !content) return;
+    const scale = transform.state.scale;
+    const offset = marker
+      ? (marker.getBoundingClientRect().top - content.getBoundingClientRect().top) / scale
+      : 0;
+    const target = offset < wrapper.clientHeight * 0.55 ? 0 : offset - 16;
+    transform.setTransform(
+      clampAxis(0, wrapper.clientWidth, content.offsetWidth),
+      clampAxis(-target, wrapper.clientHeight, content.offsetHeight),
+      1,
+      animate ? 220 : 0,
+    );
   }, []);
 
   useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") onClose();
-      if (event.key === "ArrowRight") go(1);
-      if (event.key === "ArrowLeft") go(-1);
-    }
-
-    document.addEventListener("keydown", onKey);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = previousOverflow;
-    };
-  }, [go, onClose]);
+    if (!reference) return;
+    return holdRenderedSource(reference);
+  }, [reference]);
 
   useEffect(() => {
-    if (!source) return;
+    if (!reference || peekRenderedSource(reference)) return;
     let active = true;
-    const timer = setTimeout(() => {
-      if (active) setView({ status: "loading" });
-    }, 0);
-
-    loadRenderedSource(source.reference)
-      .then((rendered) => {
-        if (active) setView({ status: "ready", rendered });
+    loadRenderedSource(reference)
+      .then((value) => {
+        if (active) setResult({ key: loadKey, rendered: value });
       })
-      .catch((error: unknown) => {
+      .catch((reason: unknown) => {
         if (active) {
-          setView({
-            status: "error",
-            message: error instanceof Error ? error.message : "সূত্রটি এখন দেখানো যাচ্ছে না।",
+          setResult({
+            key: loadKey,
+            error: reason instanceof Error ? reason.message : "সূত্রটি এখন দেখানো যাচ্ছে না।",
           });
         }
       });
-
     return () => {
       active = false;
-      clearTimeout(timer);
     };
-  }, [source, attempt]);
+  }, [reference, loadKey]);
 
-  const focusHighlight = useCallback(() => {
-    const transform = transformRef.current;
-    const marker = markerRef.current;
-    const content = transform?.instance.contentComponent;
-    if (!transform || !marker || !content) return;
-    const scale = transform.state.scale || 1;
-    const offset =
-      (marker.getBoundingClientRect().top - content.getBoundingClientRect().top) / scale;
-    const visibleHeight = transform.instance.wrapperComponent?.clientHeight ?? 0;
-    const target = offset < visibleHeight * 0.55 ? 0 : offset - 24;
-    void transform.setTransform(0, -target, 1, 250);
+  useEffect(() => {
+    if (!rendered) return;
+    const neighbours = [sources[position + 1], sources[position - 1]].filter(
+      (item): item is AnswerSource => Boolean(item),
+    );
+    const timer = setTimeout(() => {
+      neighbours.forEach((item) => prefetchRenderedSource(item.reference));
+    }, 150);
+    return () => clearTimeout(timer);
+  }, [rendered, position, sources]);
+
+  useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.focus();
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      previous?.focus();
+    };
   }, []);
+
+  const zoomAt = useCallback((clientX: number, clientY: number, factor: number) => {
+    const transform = transformRef.current;
+    const wrapper = transform?.instance.wrapperComponent;
+    const content = transform?.instance.contentComponent;
+    if (!transform || !wrapper || !content) return;
+    const { scale, positionX, positionY } = transform.state;
+    const next = Math.min(
+      SOURCE_VIEW_CONFIG.maxScale,
+      Math.max(SOURCE_VIEW_CONFIG.minScale, scale * factor),
+    );
+    if (next === scale) return;
+    const bounds = wrapper.getBoundingClientRect();
+    const pointX = clientX - bounds.left;
+    const pointY = clientY - bounds.top;
+    const ratio = next / scale;
+    transform.setTransform(
+      clampAxis(
+        pointX - (pointX - positionX) * ratio,
+        wrapper.clientWidth,
+        content.offsetWidth * next,
+      ),
+      clampAxis(
+        pointY - (pointY - positionY) * ratio,
+        wrapper.clientHeight,
+        content.offsetHeight * next,
+      ),
+      next,
+      0,
+    );
+  }, []);
+
+  const zoomCentre = useCallback(
+    (factor: number) => {
+      const wrapper = transformRef.current?.instance.wrapperComponent;
+      if (!wrapper) return;
+      const bounds = wrapper.getBoundingClientRect();
+      zoomAt(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2, factor);
+    },
+    [zoomAt],
+  );
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const onWheel = (event: WheelEvent) => {
+      const viewport = viewportRef.current;
+      if (!viewport || !(event.target instanceof Node) || !viewport.contains(event.target)) return;
+      event.preventDefault();
+      const unit =
+        event.deltaMode === 1
+          ? SOURCE_VIEW_CONFIG.wheelLineHeight
+          : event.deltaMode === 2
+            ? viewport.clientHeight
+            : 1;
+
+      if (event.ctrlKey || event.metaKey) {
+        zoomAt(
+          event.clientX,
+          event.clientY,
+          Math.exp(-event.deltaY * unit * SOURCE_VIEW_CONFIG.wheelZoomRate),
+        );
+        return;
+      }
+
+      const horizontal = event.shiftKey && event.deltaX === 0;
+      panBy(
+        (horizontal ? event.deltaY : event.deltaX) * unit,
+        (horizontal ? 0 : event.deltaY) * unit,
+      );
+    };
+
+    dialog.addEventListener("wheel", onWheel, { passive: false });
+    return () => dialog.removeEventListener("wheel", onWheel);
+  }, [panBy, zoomAt]);
+
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      const dialog = dialogRef.current;
+      if (!dialog || event.defaultPrevented) return;
+
+      if (event.key === "Tab") {
+        const focusable = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+          (element) => element.offsetParent !== null,
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!first || !last) return;
+        const inside = dialog.contains(document.activeElement);
+        if (event.shiftKey && (!inside || document.activeElement === first)) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && (!inside || document.activeElement === last)) {
+          event.preventDefault();
+          first.focus();
+        }
+        return;
+      }
+
+      if (event.altKey || event.ctrlKey || event.metaKey) return;
+      const onControl =
+        event.target instanceof HTMLElement && Boolean(event.target.closest("button, a"));
+      const page = (viewportRef.current?.clientHeight ?? 400) * 0.85;
+      const step = SOURCE_VIEW_CONFIG.keyboardPanStep;
+      const zoomFactor = 1 + SOURCE_VIEW_CONFIG.zoomStep;
+      const actions: Record<string, () => void> = {
+        Escape: onClose,
+        ArrowRight: () => go(1),
+        ArrowLeft: () => go(-1),
+        ArrowDown: () => panBy(0, step),
+        ArrowUp: () => panBy(0, -step),
+        PageDown: () => panBy(0, page),
+        PageUp: () => panBy(0, -page),
+        Home: () => panBy(0, -Number.MAX_SAFE_INTEGER),
+        End: () => panBy(0, Number.MAX_SAFE_INTEGER),
+        "+": () => zoomCentre(zoomFactor),
+        "=": () => zoomCentre(zoomFactor),
+        "-": () => zoomCentre(1 / zoomFactor),
+        "0": fitPage,
+        ...(onControl ? {} : { " ": () => panBy(0, event.shiftKey ? -page : page) }),
+      };
+      const action = actions[event.key];
+      if (!action) return;
+      event.preventDefault();
+      action();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [fitPage, go, onClose, panBy, zoomCentre]);
+
+  useEffect(() => {
+    const active = document.activeElement;
+    if (
+      !active ||
+      active === document.body ||
+      (active instanceof HTMLButtonElement && active.disabled)
+    ) {
+      dialogRef.current?.focus();
+    }
+  }, [position]);
 
   if (!source) return null;
 
-  const rendered = view.status === "ready" ? view.rendered : undefined;
+  const highlightLabel = rendered?.highlight ? "হলুদ অংশটি উত্তরে ব্যবহৃত হয়েছে" : undefined;
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={source.reference}
-      className="fixed inset-0 z-50 flex flex-col bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-[2px] sm:p-8 lg:p-10"
+      onPointerDown={(event) => {
+        pressedOverlay.current = event.target === event.currentTarget;
+      }}
       onClick={(event) => {
-        if (event.target === event.currentTarget) onClose();
+        if (pressedOverlay.current && event.target === event.currentTarget) onClose();
+        pressedOverlay.current = false;
       }}
     >
-      <header className="flex shrink-0 items-center gap-2 border-b border-(--border) bg-(--bg) px-3 py-2.5 sm:px-4">
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-(--text-1)">
-            [{source.index}] {source.reference}
-          </p>
-          <p className="truncate text-xs text-(--text-3)">
-            {SOURCE_LABELS[source.sourceType]} · {position + 1} / {sources.length}
-            {rendered?.highlight ? " · হাইলাইট করা অংশটিই উত্তরে ব্যবহৃত হয়েছে" : ""}
-          </p>
-        </div>
-        <button
-          ref={closeRef}
-          type="button"
-          onClick={onClose}
-          className={BUTTON_CLASS}
-          aria-label="বন্ধ করুন"
-        >
-          <Icon path="M6 6l12 12M18 6L6 18" />
-        </button>
-      </header>
-
-      <TransformWrapper
-        key={`${source.reference}-${view.status}`}
-        ref={transformRef}
-        initialScale={1}
-        minScale={0.6}
-        maxScale={6}
-        limitToBounds
-        centerZoomedOut
-        doubleClick={{ mode: "toggle", step: 1.2 }}
-        pinch={{ step: 6 }}
-        wheel={{ step: 0.12, activationKeys: ["Control", "Meta"] }}
-        trackPadPanning={{ velocityDisabled: true, lockAxisX: true }}
-        panning={{ velocityDisabled: true }}
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="source-viewer-title"
+        aria-describedby="source-viewer-description"
+        tabIndex={-1}
+        className="flex h-full max-h-224 w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-(--border) bg-(--bg) shadow-2xl outline-none"
       >
-        {({ zoomIn, zoomOut, resetTransform }: ReactZoomPanPinchRef) => (
-          <>
-            <div
-              className="relative min-h-0 flex-1 overflow-hidden"
-              aria-live="polite"
-              aria-busy={view.status === "loading"}
+        <header className="flex shrink-0 items-start gap-3 border-b border-(--border) px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <h2
+              id="source-viewer-title"
+              className="truncate text-sm font-semibold text-(--text-1)"
+              title={source.reference}
             >
-              {view.status === "loading" ? (
-                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-white/85">
-                  <span className="h-6 w-6 animate-spin rounded-full border-2 border-white/30 border-t-white" />
-                  সূত্রের পাতা তৈরি হচ্ছে…
-                </div>
-              ) : null}
+              <span className="text-(--accent) tabular-nums">[{source.index}]</span>{" "}
+              {source.reference}
+            </h2>
+            <p id="source-viewer-description" className="mt-0.5 truncate text-xs text-(--text-3)">
+              {SOURCE_LABELS[source.sourceType]}
+              {source.grade ? ` · ${source.grade}` : ""}
+              {highlightLabel ? ` · ${highlightLabel}` : ""}
+            </p>
+          </div>
+          <ToolButton label="বন্ধ করুন" onClick={onClose}>
+            <CloseIcon />
+          </ToolButton>
+        </header>
 
-              {view.status === "error" ? (
-                <div
-                  role="alert"
-                  className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-sm text-white/90"
-                >
-                  <p>{view.message}</p>
-                  <button
-                    type="button"
-                    onClick={() => setAttempt((value) => value + 1)}
-                    className="rounded-full bg-white/15 px-4 py-2 text-white transition hover:bg-white/25"
+        <TransformWrapper
+          key={`${reference}-${rendered ? "ready" : "waiting"}`}
+          ref={transformRef}
+          initialScale={1}
+          minScale={SOURCE_VIEW_CONFIG.minScale}
+          maxScale={SOURCE_VIEW_CONFIG.maxScale}
+          limitToBounds
+          centerZoomedOut
+          doubleClick={{ mode: "toggle", step: 0.8 }}
+          wheel={{ disabled: true }}
+          trackPadPanning={{ disabled: true }}
+          panning={{ velocityDisabled: true, excluded: ["source-viewer-ignore"] }}
+          pinch={{ step: 5 }}
+        >
+          {() => (
+            <>
+              <div
+                ref={viewportRef}
+                className="relative min-h-0 flex-1 cursor-grab overflow-hidden bg-(--surface-2) active:cursor-grabbing"
+                aria-busy={!rendered && !error}
+              >
+                {!rendered && !error ? (
+                  <div
+                    role="status"
+                    className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-sm text-(--text-2)"
                   >
-                    আবার চেষ্টা করুন
-                  </button>
-                </div>
-              ) : null}
+                    <span className="h-6 w-6 animate-spin rounded-full border-2 border-(--border) border-t-(--accent)" />
+                    সূত্রের পাতা তৈরি হচ্ছে…
+                  </div>
+                ) : null}
 
-              {rendered ? (
-                <TransformComponent
-                  wrapperClass="!h-full !w-full"
-                  contentClass="!w-full flex flex-col items-center gap-3 py-3"
-                >
-                  {rendered.pages.map((page, index) => {
-                    const highlighted = rendered.highlight?.page === index + 1;
-                    return (
-                      <div
-                        key={page.src}
-                        className="relative w-[min(100%-1.5rem,46rem)] overflow-hidden rounded-lg bg-white shadow-2xl"
-                        style={{ aspectRatio: `${page.width} / ${page.height}` }}
-                      >
-                        <img
-                          src={page.src}
-                          alt={`${source.reference}, পাতা ${index + 1}`}
-                          draggable={false}
-                          className="h-full w-full select-none"
-                          onLoad={highlighted ? focusHighlight : undefined}
-                        />
-                        {highlighted ? (
-                          <div
-                            ref={markerRef}
-                            aria-hidden="true"
-                            className="pointer-events-none absolute left-0 h-px w-full"
-                            style={{ top: `${(rendered.highlight?.top ?? 0) * 100}%` }}
+                {error ? (
+                  <div
+                    role="alert"
+                    className="absolute inset-0 flex cursor-default flex-col items-center justify-center gap-3 px-6 text-center text-sm text-(--text-2)"
+                  >
+                    <p>{error}</p>
+                    <button
+                      type="button"
+                      onClick={() => setAttempt((value) => value + 1)}
+                      className="rounded-lg border border-(--border) bg-(--bg) px-4 py-2 text-(--text-1) transition hover:bg-(--surface-3)"
+                    >
+                      আবার চেষ্টা করুন
+                    </button>
+                  </div>
+                ) : null}
+
+                {rendered ? (
+                  <TransformComponent
+                    wrapperClass="!h-full !w-full"
+                    contentClass="!w-full flex flex-col items-center gap-4 py-4"
+                  >
+                    {rendered.pages.map((page, index) => {
+                      const highlighted = rendered.highlight?.page === index + 1;
+                      return (
+                        <div
+                          key={page.src}
+                          className="relative w-[min(100%-2rem,42rem)] overflow-hidden rounded-md bg-white shadow-[0_1px_3px_rgba(0,0,0,0.12),0_8px_24px_rgba(0,0,0,0.08)]"
+                          style={{ aspectRatio: `${page.width} / ${page.height}` }}
+                        >
+                          <img
+                            src={page.src}
+                            alt={`${source.reference}, পাতা ${index + 1} / ${rendered.pages.length}`}
+                            draggable={false}
+                            decoding="async"
+                            className="block h-full w-full select-none"
+                            onLoad={highlighted ? () => focusHighlight(false) : undefined}
                           />
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </TransformComponent>
-              ) : null}
-            </div>
+                          {highlighted ? (
+                            <div
+                              ref={markerRef}
+                              aria-hidden="true"
+                              className="pointer-events-none absolute left-0 h-px w-full"
+                              style={{ top: `${(rendered.highlight?.top ?? 0) * 100}%` }}
+                            />
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </TransformComponent>
+                ) : null}
+              </div>
 
-            <footer className="flex shrink-0 items-center justify-center gap-2 border-t border-(--border) bg-(--bg) px-3 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-              <button
-                type="button"
-                onClick={() => go(-1)}
-                disabled={position === 0}
-                className={BUTTON_CLASS}
-                aria-label="আগের সূত্র"
-              >
-                <Icon path="M15 18l-6-6 6-6" />
-              </button>
-              <button
-                type="button"
-                onClick={() => zoomOut()}
-                className={BUTTON_CLASS}
-                aria-label="ছোট করুন"
-                disabled={!rendered}
-              >
-                <Icon path="M5 12h14" />
-              </button>
-              <button
-                type="button"
-                onClick={() => zoomIn()}
-                className={BUTTON_CLASS}
-                aria-label="বড় করুন"
-                disabled={!rendered}
-              >
-                <Icon path="M12 5v14M5 12h14" />
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  resetTransform(0);
-                  focusHighlight();
-                }}
-                className={BUTTON_CLASS}
-                aria-label="হাইলাইট করা অংশে যান"
-                disabled={!rendered}
-              >
-                <Icon path="M12 8a4 4 0 100 8 4 4 0 000-8zM12 2v3M12 19v3M2 12h3M19 12h3" />
-              </button>
-              <a
-                href={rendered?.pdfUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={clsx(BUTTON_CLASS, !rendered && "pointer-events-none opacity-40")}
-                aria-label="PDF নতুন ট্যাবে খুলুন"
-              >
-                <Icon path="M14 3H7a2 2 0 00-2 2v14a2 2 0 002 2h10a2 2 0 002-2V8zM14 3v5h5M9 13h6M9 17h6" />
-              </a>
-              {rendered?.externalUrl ? (
-                <a
-                  href={rendered.externalUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className={BUTTON_CLASS}
-                  aria-label="মূল উৎসে খুলুন"
-                >
-                  <Icon path="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3" />
-                </a>
-              ) : null}
-              <button
-                type="button"
-                onClick={() => go(1)}
-                disabled={position === sources.length - 1}
-                className={BUTTON_CLASS}
-                aria-label="পরের সূত্র"
-              >
-                <Icon path="M9 18l6-6-6-6" />
-              </button>
-            </footer>
-          </>
-        )}
-      </TransformWrapper>
+              <footer className="flex shrink-0 items-center justify-between gap-1 border-t border-(--border) px-2 py-2 sm:px-3">
+                <div className="flex items-center gap-0.5">
+                  <ToolButton label="আগের সূত্র" onClick={() => go(-1)} disabled={position === 0}>
+                    <ChevronLeftIcon />
+                  </ToolButton>
+                  <span className="min-w-10 text-center text-xs text-(--text-3) tabular-nums">
+                    {position + 1}/{sources.length}
+                  </span>
+                  <ToolButton
+                    label="পরের সূত্র"
+                    onClick={() => go(1)}
+                    disabled={position === sources.length - 1}
+                  >
+                    <ChevronRightIcon />
+                  </ToolButton>
+                </div>
+
+                <div className="flex items-center gap-0.5">
+                  <ToolButton
+                    label="ছোট করুন"
+                    onClick={() => zoomCentre(1 / (1 + SOURCE_VIEW_CONFIG.zoomStep))}
+                    disabled={!rendered}
+                  >
+                    <ZoomOutIcon />
+                  </ToolButton>
+                  {rendered ? <ZoomLevel onReset={fitPage} /> : null}
+                  <ToolButton
+                    label="বড় করুন"
+                    onClick={() => zoomCentre(1 + SOURCE_VIEW_CONFIG.zoomStep)}
+                    disabled={!rendered}
+                  >
+                    <ZoomInIcon />
+                  </ToolButton>
+                  <ToolButton label="পাতার মাপে ফিরুন" onClick={fitPage} disabled={!rendered}>
+                    <FitPageIcon />
+                  </ToolButton>
+                  <ToolButton
+                    label="হাইলাইট করা অংশে যান"
+                    onClick={() => focusHighlight(true)}
+                    disabled={!rendered?.highlight}
+                  >
+                    <HighlighterIcon />
+                  </ToolButton>
+                </div>
+
+                <div className="flex items-center gap-0.5">
+                  <a
+                    href={rendered?.pdfUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-disabled={!rendered}
+                    tabIndex={rendered ? undefined : -1}
+                    className={clsx(ICON_BUTTON, !rendered && "pointer-events-none opacity-35")}
+                    aria-label="PDF নতুন ট্যাবে খুলুন"
+                    title="PDF নতুন ট্যাবে খুলুন"
+                  >
+                    <FileTextIcon />
+                  </a>
+                  {rendered?.externalUrl ? (
+                    <a
+                      href={rendered.externalUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={ICON_BUTTON}
+                      aria-label="মূল উৎসে খুলুন"
+                      title="মূল উৎসে খুলুন"
+                    >
+                      <ExternalLinkIcon />
+                    </a>
+                  ) : null}
+                </div>
+              </footer>
+            </>
+          )}
+        </TransformWrapper>
+      </div>
     </div>
   );
 }

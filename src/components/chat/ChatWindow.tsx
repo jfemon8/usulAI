@@ -310,7 +310,7 @@ export function ChatWindow({
     void regenerate();
   }
 
-  const column = compact ? "max-w-none px-3" : "max-w-3xl px-4 sm:px-6";
+  const column = compact ? "max-w-none px-3" : "max-w-5xl px-4 sm:px-6";
 
   const composer = (
     <Composer
@@ -363,7 +363,7 @@ export function ChatWindow({
           aria-live="polite"
           aria-relevant="additions"
           aria-busy={isLoading}
-          className={clsx("mx-auto flex w-full flex-col gap-8 pt-6 pb-10", column)}
+          className={clsx("mx-auto flex w-full flex-col gap-8 pt-4 pb-8", column)}
         >
           {messages.map((message, index) => {
             const isLast = index === messages.length - 1;

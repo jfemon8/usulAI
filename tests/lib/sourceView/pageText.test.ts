@@ -20,6 +20,11 @@ describe("mergeChunks", () => {
   it("joins chunks that do not overlap with a line break", () => {
     expect(mergeChunks([first, third], 400).text).toBe(`${first}\n${third}`);
   });
+
+  it("does not mistake a short shared ending for an overlap", () => {
+    const merged = mergeChunks(["فقال: قال:", "قال: وأجمعوا على ذلك"], 400, 20);
+    expect(merged.text).toBe("فقال: قال:\nقال: وأجمعوا على ذلك");
+  });
 });
 
 describe("pageBlocks", () => {
@@ -44,6 +49,12 @@ describe("right-to-left layout helpers", () => {
     expect(splitRightToLeftToken("(رحمه")).toEqual({ leading: "(", core: "رحمه", trailing: "" });
     expect(splitRightToLeftToken("الحرز:")).toEqual({ leading: "", core: "الحرز", trailing: ":" });
     expect(mirror("(")).toBe(")");
+  });
+
+  it("breaks a single word wider than the line instead of overflowing the page", () => {
+    const lines = wrapWords("abcdefghij", 4, (value) => value.length);
+    expect(lines.every((line) => line.join(" ").length <= 4)).toBe(true);
+    expect(lines.flat().join("")).toBe("abcdefghij");
   });
 
   it("wraps words by measured width and keeps detached punctuation with its word", () => {

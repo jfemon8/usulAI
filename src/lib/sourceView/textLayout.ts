@@ -31,6 +31,27 @@ export function splitRightToLeftToken(word: string): RightToLeftToken {
   return core.length > 0 ? { leading, core, trailing } : { leading: "", core: word, trailing: "" };
 }
 
+const GRAPHEMES = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+
+function splitWideWord(
+  word: string,
+  maxWidth: number,
+  measure: (value: string) => number,
+): string[] {
+  const pieces: string[] = [];
+  let current = "";
+  for (const { segment } of GRAPHEMES.segment(word)) {
+    if (current.length > 0 && measure(current + segment) > maxWidth) {
+      pieces.push(current);
+      current = segment;
+    } else {
+      current += segment;
+    }
+  }
+  if (current.length > 0) pieces.push(current);
+  return pieces;
+}
+
 export function wrapWords(
   text: string,
   maxWidth: number,
@@ -49,7 +70,11 @@ export function wrapWords(
     return result;
   }, []);
 
-  for (const word of words) {
+  const fitted = words.flatMap((word) =>
+    measure(word) <= maxWidth ? [word] : splitWideWord(word, maxWidth, measure),
+  );
+
+  for (const word of fitted) {
     const wordWidth = measure(word);
     const next = current.length === 0 ? wordWidth : width + space + wordWidth;
     if (current.length > 0 && next > maxWidth) {

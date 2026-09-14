@@ -465,6 +465,7 @@ export const OPENITI_CONFIG = {
 export const SOURCE_VIEW_CONFIG = {
   maxReferenceChars: 300,
   maxChunkOverlapChars: 400,
+  minChunkOverlapChars: 20,
   cacheSeconds: 86_400,
   page: { width: 420, height: 595, margin: 36 },
   fontSize: { title: 14, detail: 9.5, label: 9.5, text: 11, arabic: 16, footer: 7.5 },
@@ -482,6 +483,14 @@ export const SOURCE_VIEW_CONFIG = {
     arabic: "Amiri-Regular.ttf",
   },
   renderScale: 2.5,
+  clientCacheMs: 30 * 60_000,
+  clientCacheEntries: 16,
+  wheelLineHeight: 16,
+  keyboardPanStep: 80,
+  zoomStep: 0.25,
+  wheelZoomRate: 0.0025,
+  minScale: 0.5,
+  maxScale: 5,
 } as const;
 
 export const FILE_INGESTION_CONFIG = {

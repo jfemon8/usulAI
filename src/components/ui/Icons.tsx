@@ -102,6 +102,60 @@ export const TrashIcon = (props: IconProps) => (
   </Base>
 );
 
+export const ChevronLeftIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M15 18l-6-6 6-6" />
+  </Base>
+);
+
+export const ChevronRightIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M9 18l6-6-6-6" />
+  </Base>
+);
+
+export const ZoomInIcon = (props: IconProps) => (
+  <Base {...props}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20.5 20.5l-4.55-4.55M11 8v6M8 11h6" />
+  </Base>
+);
+
+export const ZoomOutIcon = (props: IconProps) => (
+  <Base {...props}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20.5 20.5l-4.55-4.55M8 11h6" />
+  </Base>
+);
+
+export const FitPageIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3" />
+    <rect x="8" y="8" width="8" height="8" rx="1" />
+  </Base>
+);
+
+export const HighlighterIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M9 11l-6 6v3h9l3-3" />
+    <path d="M22 12l-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" />
+  </Base>
+);
+
+export const FileTextIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+    <path d="M14 3v5h5M9 13h6M9 17h4" />
+  </Base>
+);
+
+export const ExternalLinkIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M15 3h6v6M10 14L21 3" />
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+  </Base>
+);
+
 export const ArrowDownIcon = (props: IconProps) => (
   <Base {...props}>
     <path d="M12 5v14M5 12l7 7 7-7" />

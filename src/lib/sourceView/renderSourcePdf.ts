@@ -141,16 +141,24 @@ export async function renderSourcePdf(view: SourceView): Promise<RenderedSourceP
   doc.moveTo(left, y).lineTo(right, y).lineWidth(0.6).strokeColor(colors.rule).stroke();
   y += 12;
 
-  const blockStyle = (block: ViewBlock): LineStyle =>
-    block.kind === "arabic"
-      ? { font: "arabic", size: fontSize.arabic, color: colors.text, rightToLeft: true, lineGap: 3 }
+  const blockStyle = (block: ViewBlock): LineStyle => {
+    const color = block.heading ? colors.accent : colors.text;
+    return block.kind === "arabic"
+      ? {
+          font: "arabic",
+          size: fontSize.arabic + (block.heading ? 1 : 0),
+          color,
+          rightToLeft: true,
+          lineGap: 3,
+        }
       : {
-          font: "bangla",
+          font: block.heading ? "banglaBold" : "bangla",
           size: fontSize.text,
-          color: colors.text,
+          color,
           rightToLeft: false,
           lineGap: 2.5,
         };
+  };
 
   view.blocks.forEach((block, index) => {
     const style = blockStyle(block);
@@ -164,7 +172,8 @@ export async function renderSourcePdf(view: SourceView): Promise<RenderedSourceP
       lineGap: 1,
     };
 
-    if (y + lineHeight(labelStyle) + lineHeight(style) > bottom) nextPage();
+    const keepLines = block.heading ? 3 : 1;
+    if (y + lineHeight(labelStyle) + lineHeight(style) * keepLines > bottom) nextPage();
     if (block.label) paragraph(block.label, labelStyle, { highlighted: block.highlight });
     paragraph(block.text, style, {
       highlighted: block.highlight,

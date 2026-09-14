@@ -10,6 +10,7 @@ export interface ViewBlock {
   text: string;
   label?: string;
   highlight?: boolean;
+  heading?: boolean;
 }
 
 const ARABIC_LETTER = /\p{Script=Arabic}/gu;
@@ -26,20 +27,25 @@ export function isArabicText(text: string): boolean {
   return arabic > 0 && arabic >= other;
 }
 
-function overlapLength(previous: string, next: string, maxOverlap: number): number {
+function overlapLength(
+  previous: string,
+  next: string,
+  maxOverlap: number,
+  minOverlap: number,
+): number {
   const limit = Math.min(maxOverlap, previous.length, next.length);
-  for (let length = limit; length > 0; length -= 1) {
+  for (let length = limit; length >= minOverlap; length -= 1) {
     if (previous.endsWith(next.slice(0, length))) return length;
   }
   return 0;
 }
 
-export function mergeChunks(chunks: string[], maxOverlap: number): MergedPage {
+export function mergeChunks(chunks: string[], maxOverlap: number, minOverlap = 1): MergedPage {
   let text = "";
   const spans: MergedPage["spans"] = [];
 
   for (const chunk of chunks) {
-    const overlap = overlapLength(text, chunk, maxOverlap);
+    const overlap = overlapLength(text, chunk, maxOverlap, Math.max(1, minOverlap));
     const joiner = overlap === 0 && text.length > 0 ? "\n" : "";
     const start = overlap > 0 ? text.length - overlap : text.length + joiner.length;
     text = `${text}${joiner}${chunk.slice(overlap)}`;
@@ -49,7 +55,10 @@ export function mergeChunks(chunks: string[], maxOverlap: number): MergedPage {
   return { text, spans };
 }
 
-export function pageBlocks(text: string, highlight: { start: number; end: number }): ViewBlock[] {
+export function pageBlocks(
+  text: string,
+  highlight: { start: number; end: number } | null,
+): ViewBlock[] {
   const blocks: ViewBlock[] = [];
 
   const pushRange = (from: number, to: number, highlighted: boolean) => {
@@ -64,6 +73,11 @@ export function pageBlocks(text: string, highlight: { start: number; end: number
       });
     }
   };
+
+  if (!highlight) {
+    pushRange(0, text.length, false);
+    return blocks;
+  }
 
   let start = Math.max(0, Math.min(highlight.start, text.length));
   let end = Math.max(start, Math.min(highlight.end, text.length));
