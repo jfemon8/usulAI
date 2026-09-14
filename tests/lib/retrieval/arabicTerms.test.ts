@@ -39,4 +39,13 @@ describe("arabicQueryTerms", () => {
   it("does not fire inside an unrelated word", () => {
     expect(arabicQueryTerms("মাসুদের গল্প")).toEqual([]);
   });
+
+  it("maps biography names only as whole words with Bangla case endings", () => {
+    expect(arabicQueryTerms("হযরত উমরের জীবনী")).toContain("عمر بن الخطاب");
+    expect(arabicQueryTerms("উমরা করার নিয়ম")).not.toContain("عمر بن الخطاب");
+    expect(arabicQueryTerms("আম্মাজান আয়েশা (রা.)-এর জীবনী")).toEqual(
+      expect.arrayContaining(["عائشة", "أمهات المؤمنين"]),
+    );
+    expect(arabicQueryTerms("ইমাম আবু হানিফার জীবনী")).toContain("أبو حنيفة");
+  });
 });

@@ -1,10 +1,10 @@
 export const SITE_NAME = "Usul AI";
 
-export const SOURCE_PRIORITY = ["quran", "hadith", "ijma", "qiyas", "sirat"] as const;
+export const SOURCE_PRIORITY = ["quran", "hadith", "ijma", "qiyas", "sirat", "fiqh"] as const;
 
 type SourceName = (typeof SOURCE_PRIORITY)[number];
 
-export const FILE_SOURCES = ["ijma", "qiyas", "sirat"] as const;
+export const FILE_SOURCES = ["ijma", "qiyas", "sirat", "fiqh"] as const;
 
 export const MODEL_CONFIG = {
   primary: {
@@ -172,7 +172,7 @@ export const SOURCE_TRANSLATION_CONFIG = {
   modelLabel: "AI অনুবাদ",
 } as const;
 
-export const ARABIC_TEXT_SOURCES: readonly string[] = ["ijma", "qiyas", "sirat"];
+export const ARABIC_TEXT_SOURCES: readonly string[] = ["ijma", "qiyas", "sirat", "fiqh"];
 
 export const HYBRID_CONFIG = {
   textCandidatesPerSource: 12,
@@ -277,18 +277,21 @@ export const RERANK_CONFIG = {
 } as const;
 
 export const CONTEXT_CONFIG = {
-  maxContextChunks: 12,
+  maxContextChunks: 16,
   carriedSources: 4,
+  scopedMinCap: 4,
   perSourceCap: {
     quran: 4,
     hadith: 4,
     ijma: 2,
     qiyas: 2,
     sirat: 2,
+    fiqh: 2,
   },
 } as const satisfies {
   maxContextChunks: number;
   carriedSources: number;
+  scopedMinCap: number;
   perSourceCap: Record<SourceName, number>;
 };
 
@@ -322,7 +325,7 @@ export interface OpenItiBook {
   inlineHeadings?: boolean;
 }
 
-export type OpenItiSource = "ijma" | "qiyas" | "sirat";
+export type OpenItiSource = "ijma" | "qiyas" | "sirat" | "fiqh";
 
 export const OPENITI_CONFIG = {
   rawBase: "https://raw.githubusercontent.com/OpenITI",
@@ -509,14 +512,188 @@ export const OPENITI_CONFIG = {
       author: "ইমাদুদ্দীন আবুল ফিদা ইসমাঈল ইবনু উমার ইবনু কাসীর (মৃ. ৭৭৪ হি.)",
       inlineHeadings: true,
     },
+    {
+      slug: "ibn-kathir-qisas-al-anbiya",
+      repo: "0775AH",
+      version: "0774IbnKathir.QisasAnbiya.Shamela0000932-ara1",
+      title: "কাসাসুল আম্বিয়া (ইবনু কাসীর)",
+      author: "ইমাদুদ্দীন আবুল ফিদা ইসমাঈল ইবনু উমার ইবনু কাসীর (মৃ. ৭৭৪ হি.)",
+      part: "নবী ও রাসূলগণের জীবনী",
+    },
+    {
+      slug: "suyuti-tarikh-al-khulafa",
+      repo: "0925AH",
+      version: "0911Suyuti.TarikhKhulafa.Shamela0011997-ara1",
+      fileSuffix: ".completed",
+      title: "তারীখুল খুলাফা (ইমাম সুয়ূতী)",
+      author: "জালালুদ্দীন আবদুর রহমান ইবনু আবী বকর আস-সুয়ূতী (মৃ. ৯১১ হি.)",
+      part: "খলিফাগণের জীবনী",
+    },
+    {
+      slug: "muhibb-tabari-al-simt-al-thamin",
+      repo: "0700AH",
+      version: "0694MuhibbDinTabari.SimtThamin.AOCP2023090622-ara1",
+      title: "আস-সিমতুস সামীন ফী মানাকিবি উম্মাহাতিল মুমিনীন (মুহিব্বুদ্দীন তাবারী)",
+      author: "মুহিব্বুদ্দীন আহমাদ ইবনু আবদিল্লাহ আত-তাবারী (মৃ. ৬৯৪ হি.)",
+      part: "উম্মাহাতুল মুমিনীনের জীবনী",
+    },
+    {
+      slug: "dimyati-nisa-al-rasul",
+      repo: "0725AH",
+      version: "0705SharafDinDimyati.NisaRasul.ShamAY0034435-ara1",
+      title: "নিসাউর রাসূল ওয়া আওলাদুহু (শারফুদ্দীন দিময়াতী)",
+      author: "শারফুদ্দীন আবদুল মুমিন ইবনু খালাফ আদ-দিময়াতী (মৃ. ৭০৫ হি.)",
+      part: "নবীপত্নী ও নবীসন্তানদের জীবনী",
+    },
+    {
+      slug: "ibn-abd-al-barr-al-istiab",
+      repo: "0475AH",
+      version: "0463IbnCabdBarr.IsticabFiMacrifatAshab.JK000778-ara1",
+      fileSuffix: ".mARkdown",
+      title: "আল-ইসতীআব ফী মারিফাতিল আসহাব (ইবনু আবদিল বার)",
+      author: "আবু উমার ইউসুফ ইবনু আবদিল্লাহ ইবনু আবদিল বার আল-কুরতুবী (মৃ. ৪৬৩ হি.)",
+      part: "সাহাবী ও সাহাবিয়াগণের জীবনী",
+      inlineHeadings: true,
+    },
+    {
+      slug: "ibn-al-jawzi-sifat-al-safwa",
+      repo: "0600AH",
+      version: "0597IbnJawzi.SifatSafwa.Shamela0012031-ara1",
+      fileSuffix: ".mARkdown",
+      title: "সিফাতুস সাফওয়া (ইবনুল জাওযী)",
+      author: "জামালুদ্দীন আবুল ফারাজ আবদুর রহমান ইবনুল জাওযী (মৃ. ৫৯৭ হি.)",
+      part: "সাহাবী, মহীয়সী নারী ও নেককার আলেমদের জীবনী",
+    },
+    {
+      slug: "dhahabi-tadhkirat-al-huffaz",
+      repo: "0750AH",
+      version: "0748Dhahabi.TadhkiratHuffaz.JK000532-ara1",
+      fileSuffix: ".mARkdown",
+      title: "তাযকিরাতুল হুফফায (ইমাম যাহাবী)",
+      author: "শামসুদ্দীন আবু আবদিল্লাহ মুহাম্মাদ ইবনু আহমাদ আয-যাহাবী (মৃ. ৭৪৮ হি.)",
+      part: "হাদিসের ইমাম ও আলেমদের জীবনী",
+      inlineHeadings: true,
+    },
+    {
+      slug: "dhahabi-manaqib-abi-hanifa",
+      repo: "0750AH",
+      version: "0748Dhahabi.ManaqibAbiHanifa.Shamela0010461BK1-ara1",
+      fileSuffix: ".mARkdown",
+      title: "মানাকিবুল ইমাম আবী হানীফা (ইমাম যাহাবী)",
+      author: "শামসুদ্দীন মুহাম্মাদ ইবনু আহমাদ আয-যাহাবী (মৃ. ৭৪৮ হি.)",
+      part: "ইমাম আবু হানীফার জীবনী",
+    },
+    {
+      slug: "suyuti-tazyin-al-mamalik",
+      repo: "0925AH",
+      version: "0911Suyuti.TazyinMamalik.ShamAY0034223-ara1",
+      title: "তাযয়ীনুল মামালিক বিমানাকিবিল ইমাম মালিক (ইমাম সুয়ূতী)",
+      author: "জালালুদ্দীন আবদুর রহমান আস-সুয়ূতী (মৃ. ৯১১ হি.)",
+      part: "ইমাম মালিকের জীবনী",
+    },
+    {
+      slug: "ibn-abi-hatim-adab-al-shafii",
+      repo: "0350AH",
+      version: "0327IbnAbiHatimRazi.AdabShafici.Shamela0001485-ara1",
+      title: "আদাবুশ শাফিঈ ওয়া মানাকিবুহু (ইবনু আবী হাতিম)",
+      author: "আবু মুহাম্মাদ আবদুর রহমান ইবনু আবী হাতিম আর-রাযী (মৃ. ৩২৭ হি.)",
+      part: "ইমাম শাফিঈর জীবনী",
+    },
+    {
+      slug: "ibn-al-jawzi-manaqib-al-imam-ahmad",
+      repo: "0600AH",
+      version: "0597IbnJawzi.ManaqibImamAhmad.Sham19Y0013250-ara1",
+      title: "মানাকিবুল ইমাম আহমাদ (ইবনুল জাওযী)",
+      author: "আবুল ফারাজ আবদুর রহমান ইবনুল জাওযী (মৃ. ৫৯৭ হি.)",
+      part: "ইমাম আহমাদ ইবনু হাম্বলের জীবনী",
+    },
+  ] satisfies OpenItiBook[],
+  fiqh: [
+    {
+      slug: "quduri-al-mukhtasar",
+      repo: "0450AH",
+      version: "0428AbuHusaynQuduri.Mukhtasar.Sham19Y0124336-ara1",
+      title: "মুখতাসারুল কুদূরী (ইমাম কুদূরী)",
+      author: "আবুল হুসাইন আহমাদ ইবনু মুহাম্মাদ আল-কুদূরী (মৃ. ৪২৮ হি.)",
+      part: "হানাফি ফিকহ",
+    },
+    {
+      slug: "ibn-abi-zayd-al-risala",
+      repo: "0400AH",
+      version: "0386IbnAbiZaydQayrawani.Risala.JK000171-ara1",
+      title: "আর-রিসালা (ইবনু আবী যাইদ আল-কাইরাওয়ানী)",
+      author: "আবু মুহাম্মাদ আবদুল্লাহ ইবনু আবী যাইদ আল-কাইরাওয়ানী (মৃ. ৩৮৬ হি.)",
+      part: "মালিকি ফিকহ",
+      inlineHeadings: true,
+    },
+    {
+      slug: "abu-shuja-matn-al-ghaya-wa-al-taqrib",
+      repo: "0600AH",
+      version: "0593IbnHusaynShihabDinIsbahani.GhayaWaTaqrib.Shamela0011370-ara1",
+      title: "মাতনুল গায়াতি ওয়াত তাকরীব (আবু শুজা)",
+      author: "আবু শুজা আহমাদ ইবনুল হুসাইন আল-আসফাহানী (মৃ. ৫৯৩ হি.)",
+      part: "শাফিঈ ফিকহ",
+    },
+    {
+      slug: "nawawi-minhaj-al-talibin",
+      repo: "0700AH",
+      version: "0676Nawawi.MinhajTalibin.JK001168-ara1",
+      title: "মিনহাজুত তালিবীন (ইমাম নববী)",
+      author: "মুহিউদ্দীন আবু যাকারিয়া ইয়াহইয়া ইবনু শারাফ আন-নববী (মৃ. ৬৭৬ হি.)",
+      part: "শাফিঈ ফিকহ",
+      inlineHeadings: true,
+    },
+    {
+      slug: "ibn-qudama-umdat-al-fiqh",
+      repo: "0625AH",
+      version: "0620IbnQudamaMaqdisi.CumdatFiqh.JK000287-ara1",
+      title: "উমদাতুল ফিকহ (ইবনু কুদামা)",
+      author: "মুওয়াফফাকুদ্দীন আবদুল্লাহ ইবনু আহমাদ ইবনু কুদামা আল-মাকদিসী (মৃ. ৬২০ হি.)",
+      part: "হাম্বলি ফিকহ",
+      inlineHeadings: true,
+    },
+    {
+      slug: "ibn-rushd-bidayat-al-mujtahid",
+      repo: "0600AH",
+      version: "0595IbnRushdHafid.BidayatMujtahid.JK000222-ara1",
+      title: "বিদায়াতুল মুজতাহিদ (ইবনু রুশদ)",
+      author: "আবুল ওয়ালীদ মুহাম্মাদ ইবনু আহমাদ ইবনু রুশদ আল-হাফীদ (মৃ. ৫৯৫ হি.)",
+      part: "চার মাযহাবের তুলনামূলক ফিকহ",
+      inlineHeadings: true,
+    },
+    {
+      slug: "ibn-al-salah-fatawa",
+      repo: "0650AH",
+      version: "0643IbnSalahShahrazuri.Fatawa.JK006986-ara1",
+      title: "ফাতাওয়া ইবনিস সালাহ",
+      author: "তাকিউদ্দীন আবু আমর উসমান ইবনু আবদির রহমান ইবনুস সালাহ আশ-শাহরাযূরী (মৃ. ৬৪৩ হি.)",
+      part: "ফতোয়া সংকলন (শাফিঈ)",
+      inlineHeadings: true,
+    },
   ] satisfies OpenItiBook[],
 } as const;
 
-export type PublicDomainFormat = "gutenberg" | "wikisource";
+export type PublicDomainFormat = "gutenberg" | "wikisource" | "archive";
+
+export interface ArchiveVolumeSource {
+  item: string;
+  file: string;
+  kind: "searchtext" | "djvuxml";
+  fromLeaf: number;
+  toLeaf: number;
+  volume?: number;
+}
+
+export interface ArchiveBookSource {
+  volumes: readonly ArchiveVolumeSource[];
+  runningHead: string;
+  footnote?: string;
+  ignoreCaseHead?: boolean;
+}
 
 export interface PublicDomainBook {
   slug: string;
-  sourceType: "sirat";
+  sourceType: "sirat" | "fiqh";
   format: PublicDomainFormat;
   url: string;
   title: string;
@@ -524,7 +701,11 @@ export interface PublicDomainBook {
   license: string;
   note: string;
   gutenberg?: { startLine: string; endLine: string };
+  archive?: ArchiveBookSource;
 }
+
+const ARCHIVE_OCR_NOTE =
+  "স্ক্যান করা বইয়ের OCR লেখা, তাই কিছু নাম ও শব্দের বানানে ভুল থাকতে পারে। অনুবাদকের পাদটীকা বাদ দেওয়া হয়েছে।";
 
 export const PUBLIC_DOMAIN_BOOKS: readonly PublicDomainBook[] = [
   {
@@ -548,6 +729,204 @@ export const PUBLIC_DOMAIN_BOOKS: readonly PublicDomainBook[] = [
     author: "Muhammad Marmaduke Pickthall (d. 1936)",
     license: "Public domain (published 1930, author died 1936; Wikisource PD-US)",
     note: "আধুনিক যুগের ইংরেজি সীরাত-সারাংশ, সহায়ক উৎস। নবীজীবনের সংক্ষিপ্ত বিবরণ, প্রচলিত দুর্বল কাহিনি ছাড়া।",
+  },
+  {
+    slug: "suyuti-history-of-the-caliphs-jarrett",
+    sourceType: "sirat",
+    format: "archive",
+    url: "https://archive.org/details/cu31924023164654",
+    title: "History of the Caliphs (তারীখুল খুলাফা, ইমাম সুয়ূতী; অনুবাদ: জ্যারেট, ১৮৮১, ইংরেজি)",
+    author: "Jalal al-Din al-Suyuti (d. 911 AH), translated by H. S. Jarrett (d. 1919)",
+    license:
+      "Public domain (Calcutta 1881, translator died 1919; Cornell University Library scan on the Internet Archive)",
+    note: `খলিফাগণের জীবনী, তারীখুল খুলাফার ইংরেজি অনুবাদ, সহায়ক উৎস। মূল আরবি কিতাবও এই সংকলনে আছে। ${ARCHIVE_OCR_NOTE}`,
+    archive: {
+      volumes: [
+        {
+          item: "cu31924023164654",
+          file: "cu31924023164654",
+          kind: "searchtext",
+          fromLeaf: 30,
+          toLeaf: 579,
+        },
+      ],
+      runningHead: String.raw`^\W{0,3}[\dlI]{1,3}\s*\W{0,3}$`,
+      footnote: String.raw`^(?:[*§¶†‡•«%+^]|\*\*|II|[tfXJUH])\s+\p{Lu}`,
+    },
+  },
+  {
+    slug: "ibn-khallikan-biographical-dictionary-de-slane",
+    sourceType: "sirat",
+    format: "archive",
+    url: "https://archive.org/details/32882019293961-ibnkhallikansbi",
+    title:
+      "Ibn Khallikan's Biographical Dictionary (ওয়াফায়াতুল আ'ইয়ান, ইবনু খাল্লিকান; অনুবাদ: দ্য স্লেন, ১৮৪২-১৮৭১, ইংরেজি)",
+    author: "Ibn Khallikan (d. 681 AH), translated by William MacGuckin de Slane (d. 1878)",
+    license:
+      "Public domain (Paris 1842 to 1871, translator died 1878; scans on the Internet Archive)",
+    note: `ইমাম, ফকীহ, মুহাদ্দিস, খলিফা, উযীর ও কবিদের জীবনী, ওয়াফায়াতুল আ'ইয়ানের ইংরেজি অনুবাদ, সহায়ক উৎস। সাহাবীদের জীবনী এতে প্রায় নেই। ${ARCHIVE_OCR_NOTE}`,
+    archive: {
+      volumes: [
+        {
+          item: "de-slane.-w.-m.-trans.-ibn-khallikans-biographical-dictionary-vol.-i-1843",
+          file: "de Slane,. W.M. (Trans.), Ibn Khallikan's Biographical Dictionary, Vol. I, 1843",
+          kind: "searchtext",
+          fromLeaf: 50,
+          toLeaf: 709,
+          volume: 1,
+        },
+        {
+          item: "de-slane.-w.-m.-trans.-ibn-khallikans-biographical-dictionary-vol.-ii-1843",
+          file: "de Slane,. W.M. (Trans.), Ibn Khallikan's Biographical Dictionary, Vol. II, 1843",
+          kind: "searchtext",
+          fromLeaf: 23,
+          toLeaf: 700,
+          volume: 2,
+        },
+        {
+          item: "32882019293961-ibnkhallikansbi",
+          file: "HighRes_32882019293961",
+          kind: "searchtext",
+          fromLeaf: 8,
+          toLeaf: 685,
+          volume: 3,
+        },
+        {
+          item: "32882019293979-ibnkhallikansbi",
+          file: "HighRes_32882019293979",
+          kind: "djvuxml",
+          fromLeaf: 24,
+          toLeaf: 625,
+          volume: 4,
+        },
+      ],
+      runningHead: String.raw`^\W{0,3}(?:[\dt]{1,3}\s*\W?\s*)?(?:I\w{1,2}\s+\w{2,4}LL\w{1,3}AN.S|BIOGRAPHI\w{1,2}AL\s+DICTIONARY\.?)(?:\s*\W?\s*\d{1,3})?(?:\s+BIOGRAPHICAL\s+DICTIONARY\.?)?\W{0,3}$`,
+      footnote: String.raw`^\(\d{1,2}\)\s`,
+      ignoreCaseHead: true,
+    },
+  },
+  {
+    slug: "nawawi-minhaj-et-talibin-howard",
+    sourceType: "fiqh",
+    format: "archive",
+    url: "https://archive.org/details/cu31924023205390",
+    title: "Minhaj et Talibin (মিনহাজুত তালিবীন, ইমাম নববী; অনুবাদ: হাওয়ার্ড, ১৯১৪, ইংরেজি)",
+    author:
+      "Imam al-Nawawi (d. 676 AH), translated by E. C. Howard from the French of L. W. C. van den Berg",
+    license:
+      "Public domain in the United States (London 1914; Cornell University Library scan on the Internet Archive)",
+    note: `শাফিঈ মাযহাবের মূল মতন মিনহাজের ইংরেজি অনুবাদ (ফরাসি অনুবাদ থেকে), সহায়ক উৎস। মূল আরবি মিনহাজও এই সংকলনে আছে। ${ARCHIVE_OCR_NOTE}`,
+    archive: {
+      volumes: [
+        {
+          item: "cu31924023205390",
+          file: "cu31924023205390",
+          kind: "searchtext",
+          fromLeaf: 20,
+          toLeaf: 577,
+        },
+      ],
+      runningHead: String.raw`^(?:\d{1,3}\s+MINHAJ ET TALIBIN\b.*|[A-Z][A-Z ,.'’()—-]+\s+\d{1,3})$`,
+    },
+  },
+  {
+    slug: "khalil-maliki-law-ruxton",
+    sourceType: "fiqh",
+    format: "archive",
+    url: "https://archive.org/details/ruxton1916maliki-law-khalil",
+    title: "Maliki Law (মুখতাসারু খলীল-এর সারসংক্ষেপ; রাক্সটন, ১৯১৬, ইংরেজি)",
+    author:
+      "Khalil ibn Ishaq al-Jundi (d. 776 AH), summarised by F. H. Ruxton from the French of Perron",
+    license: "Public domain in the United States (London 1916; scan on the Internet Archive)",
+    note: `মালিকী মাযহাবের মূল মতন মুখতাসারু খলীল-এর ইংরেজি সারসংক্ষেপ, পূর্ণ অনুবাদ নয়, সহায়ক উৎস। ${ARCHIVE_OCR_NOTE}`,
+    archive: {
+      volumes: [
+        {
+          item: "ruxton1916maliki-law-khalil",
+          file: "Ruxton,F.H.[Trans.](1916)Maliki Law-Khalil",
+          kind: "searchtext",
+          fromLeaf: 29,
+          toLeaf: 411,
+        },
+      ],
+      runningHead: String.raw`^(?:\d{1,3}\s+[A-Z(][A-Z ,.'’‘()—-]+|[A-Z(‘][A-Z ,.'’‘()—-]+\s+[\dIl]{1,3})$`,
+      footnote: String.raw`^(?:\d{1,2}[a-z]?|[*¢+†‡§]|\(\*\))\s+(?!\d)`,
+    },
+  },
+  {
+    slug: "ibn-abi-zayd-first-steps-in-muslim-jurisprudence",
+    sourceType: "fiqh",
+    format: "archive",
+    url: "https://archive.org/details/firststepsinmus00suhrgoog",
+    title:
+      "First Steps in Muslim Jurisprudence (আর-রিসালা থেকে নির্বাচিত, ইবনু আবী যায়দ; অনুবাদ: রাসেল ও সোহরাওয়ার্দী, ১৯০৬, ইংরেজি)",
+    author:
+      "Ibn Abi Zayd al-Qayrawani (d. 386 AH), translated by Alexander David Russell (d. 1934) and Abdullah al-Mamun Suhrawardy (d. 1935)",
+    license:
+      "Public domain (London 1906, both translators died more than 70 years ago; Google scan on the Internet Archive)",
+    note: `মালিকী মাযহাবের আর-রিসালা থেকে বিবাহ, তালাক, উত্তরাধিকার ইত্যাদি বিধানের ইংরেজি অনুবাদ ও ব্যাখ্যা, সহায়ক উৎস। মূল আরবি রিসালাও এই সংকলনে আছে। ${ARCHIVE_OCR_NOTE}`,
+    archive: {
+      volumes: [
+        {
+          item: "firststepsinmus00suhrgoog",
+          file: "firststepsinmus00suhrgoog",
+          kind: "djvuxml",
+          fromLeaf: 28,
+          toLeaf: 123,
+        },
+      ],
+      runningHead: String.raw`^(?:\d{1,3}\s+[A-Z][A-Z ,.'’()—-]+|[A-Z][A-Z ,.'’()—-]+\s+\d{1,3})$`,
+    },
+  },
+  {
+    slug: "baillie-digest-of-moohummudan-law-hanafi",
+    sourceType: "fiqh",
+    format: "archive",
+    url: "https://archive.org/details/digestmoohummud00bailgoog",
+    title:
+      "A Digest of Moohummudan Law, Part I (ফাতাওয়া আলমগীরী থেকে সংকলিত; বেইলি, ১৮৭৫, ইংরেজি)",
+    author:
+      "Compiled from the Fatawa Alamgiri and other Hanafi works by Neil B. E. Baillie (d. 1883)",
+    license: "Public domain (London 1875, author died 1883; Google scan on the Internet Archive)",
+    note: `হানাফী মাযহাবের ফাতাওয়া আলমগীরী (ফাতাওয়া হিন্দিয়া) থেকে বিবাহ, তালাক, ক্রয়-বিক্রয়, ওয়াকফ ইত্যাদি বিধানের ইংরেজি সংকলন, সহায়ক উৎস। ${ARCHIVE_OCR_NOTE}`,
+    archive: {
+      volumes: [
+        {
+          item: "digestmoohummud00bailgoog",
+          file: "digestmoohummud00bailgoog",
+          kind: "searchtext",
+          fromLeaf: 58,
+          toLeaf: 867,
+        },
+      ],
+      runningHead: String.raw`^(?:\d{1,3}\s+[A-Z][A-Z ,.'’()—-]+|[A-Z"][A-Z ,.'’()—-]+\s+\d{1,3})$`,
+      footnote: String.raw`^\d{1,2}\s+(?=\p{Lu})`,
+    },
+  },
+  {
+    slug: "sajawandi-al-sirajiyyah-jones-rumsey",
+    sourceType: "fiqh",
+    format: "archive",
+    url: "https://archive.org/details/alsirajiyyahorm00rumsgoog",
+    title: "Al Sirajiyyah (আস-সিরাজিয়্যা, মিরাস; অনুবাদ: উইলিয়াম জোন্স, ১৮৬৯, ইংরেজি)",
+    author:
+      "Siraj al-Din al-Sajawandi (d. c. 600 AH), translated by Sir William Jones (d. 1794), edited by Almaric Rumsey",
+    license:
+      "Public domain (London 1869, translator died 1794; Google scan on the Internet Archive)",
+    note: `হানাফী মাযহাবে মিরাস (উত্তরাধিকার) বণ্টনের প্রসিদ্ধ মতন আস-সিরাজিয়্যার ইংরেজি অনুবাদ, সহায়ক উৎস। ${ARCHIVE_OCR_NOTE}`,
+    archive: {
+      volumes: [
+        {
+          item: "alsirajiyyahorm00rumsgoog",
+          file: "alsirajiyyahorm00rumsgoog",
+          kind: "djvuxml",
+          fromLeaf: 21,
+          toLeaf: 77,
+        },
+      ],
+      runningHead: String.raw`^(?:\d{1,3}\s+[A-Z][A-Z ,.'’()—-]+|[A-Z][A-Z ,.'’()—-]+\s+\d{1,3})$`,
+      footnote: String.raw`^[*†‡§tf]\s+`,
+    },
   },
 ];
 

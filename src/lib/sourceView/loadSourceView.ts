@@ -45,13 +45,15 @@ const SOURCE_TITLES: Record<SourceType, string> = {
   hadith: "হাদিস",
   ijma: "ইজমা",
   qiyas: "কিয়াস",
-  sirat: "সীরাত",
+  sirat: "সীরাত ও জীবনী",
+  fiqh: "ফিকহ ও ফতোয়া",
 };
 
 const OPENITI_BOOKS: readonly OpenItiBook[] = [
   ...OPENITI_CONFIG.ijma,
   ...OPENITI_CONFIG.qiyas,
   ...OPENITI_CONFIG.sirat,
+  ...OPENITI_CONFIG.fiqh,
 ];
 
 function openItiBook(fileName: string | undefined): OpenItiBook | undefined {

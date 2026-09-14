@@ -8,9 +8,12 @@ function flag(name: string): string | undefined {
   return process.argv.find((arg) => arg.startsWith(`--${name}=`))?.split("=")[1];
 }
 
-const BOOK_ORDER = [...OPENITI_CONFIG.ijma, ...OPENITI_CONFIG.qiyas, ...OPENITI_CONFIG.sirat].map(
-  (book) => `${book.slug}.md`,
-);
+const BOOK_ORDER = [
+  ...OPENITI_CONFIG.ijma,
+  ...OPENITI_CONFIG.qiyas,
+  ...OPENITI_CONFIG.sirat,
+  ...OPENITI_CONFIG.fiqh,
+].map((book) => `${book.slug}.md`);
 
 async function main() {
   const limit = Number(flag("limit") ?? "25");

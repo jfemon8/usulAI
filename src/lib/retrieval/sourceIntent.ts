@@ -23,7 +23,8 @@ const SOURCE_MARKERS: Record<SourceType, readonly string[]> = {
   hadith: ["হাদিস", "হাদীস", "হাদিছ", "hadith", "hadis", "hadees"],
   ijma: ["ইজমা", "ijma"],
   qiyas: ["কিয়াস", "qiyas"],
-  sirat: ["সীরাত", "সিরাত", "sirah", "seerah", "sirat"],
+  sirat: ["সীরাত", "সিরাত", "sirah", "seerah", "sirat", "জীবনী", "biography"],
+  fiqh: ["ফিকহ", "ফিকাহ", "fiqh", "ফতোয়া", "ফতওয়া", "fatwa", "মাযহাব", "মাজহাব", "madhhab"],
 };
 
 const BOUNDARY = String.raw`(?:^|[\s,.।?!"'()\[\]/:;-])`;

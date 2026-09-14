@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { SOURCE_PRIORITY } from "@/config/site";
 import { listReviewQueue, recordFeedback, resolveReview } from "@/lib/analytics/feedback";
 import { consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
 import { getAppEnv } from "@/lib/utils/env";
@@ -16,7 +17,7 @@ const submitSchema = z.object({
     .array(
       z.object({
         index: z.number(),
-        sourceType: z.enum(["quran", "hadith", "ijma", "qiyas", "sirat"]),
+        sourceType: z.enum(SOURCE_PRIORITY),
         reference: z.string(),
       }),
     )

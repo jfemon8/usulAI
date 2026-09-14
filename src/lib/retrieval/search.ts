@@ -18,7 +18,7 @@ import {
   textSearch,
 } from "@/lib/retrieval/vectorStore";
 import { applyRankingSignals } from "@/lib/analytics/rankingSignals";
-import { capPerSource, mergeCarriedContext } from "@/lib/retrieval/carryForward";
+import { capPerSource, mergeCarriedContext, sourceCap } from "@/lib/retrieval/carryForward";
 import { fuseRankings } from "@/lib/retrieval/fusion";
 import { detectSourceIntent } from "@/lib/retrieval/sourceIntent";
 import { rerankContext } from "@/lib/retrieval/rerank";
@@ -79,7 +79,7 @@ export async function retrieveAnswerContext(
   const minSimilarity = options.minSimilarity ?? RETRIEVAL_CONFIG.minVectorScore;
   const judging = options.rerank !== false && RERANK_CONFIG.enabled;
   const poolFor = (sourceType: SourceType) =>
-    CONTEXT_CONFIG.perSourceCap[sourceType] * (judging ? RERANK_CONFIG.poolFactor : 1);
+    sourceCap(sourceType, sources) * (judging ? RERANK_CONFIG.poolFactor : 1);
 
   const queryEmbedding = await embedQuestion(question);
 

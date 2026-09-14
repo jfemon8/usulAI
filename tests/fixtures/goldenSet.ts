@@ -57,7 +57,7 @@ export const GOLDEN_SET: GoldenCase[] = [
   {
     question: "what does the Quran say about patience",
     expectSources: ["quran"],
-    forbidSources: ["hadith", "ijma", "qiyas", "sirat"],
+    forbidSources: ["hadith", "ijma", "qiyas", "sirat", "fiqh"],
   },
   {
     question: "prayer facing the qibla",
@@ -103,5 +103,40 @@ export const GOLDEN_SET: GoldenCase[] = [
     question: "what is qiyas and who rejected it",
     expectSources: ["qiyas"],
     forbidSources: ["quran", "hadith", "ijma"],
+  },
+  {
+    question: "হযরত উমর (রা.)-এর জীবনী",
+    expectSources: ["sirat"],
+    forbidSources: ["quran", "hadith", "ijma", "qiyas", "fiqh"],
+    expectReferences: ["عمر بن الخطاب"],
+  },
+  {
+    question: "ফাতিমা (রা.)-এর জীবনী",
+    expectSources: ["sirat"],
+    forbidSources: ["quran", "hadith", "ijma", "qiyas", "fiqh"],
+    expectReferences: ["فاطمة بنت رسول الله"],
+  },
+  {
+    question: "নবী ইউসুফ (আ.)-এর জীবনী",
+    expectSources: ["sirat"],
+    forbidSources: ["quran", "hadith", "ijma", "qiyas", "fiqh"],
+    expectReferences: ["কাসাসুল আম্বিয়া"],
+  },
+  {
+    question: "ইমাম আবু হানিফার জীবনী",
+    expectSources: ["sirat"],
+    forbidSources: ["quran", "hadith", "ijma", "qiyas", "fiqh"],
+    expectReferences: ["মানাকিবুল ইমাম আবী হানীফা"],
+  },
+  {
+    question: "ফিকহ অনুযায়ী জুমার নামাজের শর্ত কী?",
+    expectSources: ["fiqh"],
+    forbidSources: ["quran", "hadith", "ijma", "qiyas", "sirat"],
+    expectReferences: ["صلاة الجمعة"],
+  },
+  {
+    question: "হানাফী মাযহাবে অজু ভঙ্গের কারণ কী?",
+    expectSources: ["fiqh"],
+    forbidSources: ["quran", "hadith", "ijma", "qiyas", "sirat"],
   },
 ];

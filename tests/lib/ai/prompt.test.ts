@@ -51,7 +51,7 @@ describe("buildSystemPrompt", () => {
     for (const marker of listed) {
       expect(prompt).toContain(marker);
     }
-    expect(prompt).toContain("পাঁচটা");
+    expect(prompt).toContain("ছয়টা");
   });
 });
 

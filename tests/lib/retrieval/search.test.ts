@@ -3,7 +3,7 @@ import { FILE_SOURCES, SOURCE_PRIORITY } from "@/config/site";
 
 describe("SOURCE_PRIORITY", () => {
   it("enforces Quran -> Hadith -> Ijma -> Qiyas -> Sirat order", () => {
-    expect(SOURCE_PRIORITY).toEqual(["quran", "hadith", "ijma", "qiyas", "sirat"]);
+    expect(SOURCE_PRIORITY).toEqual(["quran", "hadith", "ijma", "qiyas", "sirat", "fiqh"]);
   });
 
   it("keeps Quran and Hadith ahead of every file-backed source", () => {

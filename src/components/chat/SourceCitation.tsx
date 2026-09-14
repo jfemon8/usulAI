@@ -11,7 +11,8 @@ const SOURCE_LABELS: Record<SourceType, string> = {
   hadith: "হাদিস",
   ijma: "ইজমা",
   qiyas: "কিয়াস",
-  sirat: "সীরাত",
+  sirat: "সীরাত ও জীবনী",
+  fiqh: "ফিকহ ও ফতোয়া",
 };
 
 const CHIP_CLASS =

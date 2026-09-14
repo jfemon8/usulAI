@@ -42,6 +42,11 @@ export function mergeCarriedContext(
     .map(({ chunk }) => chunk);
 }
 
+export function sourceCap(sourceType: SourceType, sources: readonly SourceType[]): number {
+  const cap = CONTEXT_CONFIG.perSourceCap[sourceType];
+  return sources.length < SOURCE_PRIORITY.length ? Math.max(cap, CONTEXT_CONFIG.scopedMinCap) : cap;
+}
+
 export function capPerSource(
   chunks: RetrievedChunk[],
   carriedIds: ReadonlySet<string>,
@@ -51,6 +56,6 @@ export function capPerSource(
     const group = chunks.filter((chunk) => chunk.sourceType === sourceType);
     const pinned = group.filter((chunk) => carriedIds.has(chunk.id));
     const rest = group.filter((chunk) => !carriedIds.has(chunk.id));
-    return [...pinned, ...rest].slice(0, CONTEXT_CONFIG.perSourceCap[sourceType]);
+    return [...pinned, ...rest].slice(0, sourceCap(sourceType, sources));
   });
 }

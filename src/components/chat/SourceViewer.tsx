@@ -55,7 +55,8 @@ const SOURCE_LABELS: Record<AnswerSource["sourceType"], string> = {
   hadith: "হাদিস",
   ijma: "ইজমা",
   qiyas: "কিয়াস",
-  sirat: "সীরাত",
+  sirat: "সীরাত ও জীবনী",
+  fiqh: "ফিকহ ও ফতোয়া",
 };
 
 const ICON_BUTTON =

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       sources:
-        description: "Space-separated sources (quran hadith ijma qiyas sirat). Empty means all."
+        description: "Space-separated sources (quran hadith ijma qiyas sirat fiqh). Empty means all."
         required: false
         default: ""
       mode:
@@ -64,8 +64,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Rebuild ijma, qiyas and sirat books from OpenITI
-        run: npm run import:ijma && npm run import:qiyas && npm run import:sirat
+      - name: Rebuild ijma, qiyas, sirat and fiqh books
+        run: npm run import:ijma && npm run import:qiyas && npm run import:sirat && npm run import:fiqh
 
       - name: Run ingestion
         shell: bash

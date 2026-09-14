@@ -42,9 +42,11 @@ coverage/
 data/ijma/*
 data/qiyas/*
 data/sirat/*
+data/fiqh/*
 !data/ijma/.gitkeep
 !data/qiyas/.gitkeep
 !data/sirat/.gitkeep
+!data/fiqh/.gitkeep
 
 # generated widget bundle
 public/widget.js

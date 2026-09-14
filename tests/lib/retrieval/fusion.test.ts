@@ -49,6 +49,13 @@ describe("capPerSource", () => {
     expect(capped.map((item) => item.id)).toEqual(["q0", "q1", "q2", "q3", "h0", "h1", "h2", "h3"]);
   });
 
+  it("gives a source the question asked for by name room for more than its usual share", () => {
+    const chunks = Array.from({ length: 6 }, (_, index) => chunk(`s${index}`, 5, "sirat"));
+
+    expect(capPerSource(chunks, new Set())).toHaveLength(2);
+    expect(capPerSource(chunks, new Set(), ["sirat"])).toHaveLength(4);
+  });
+
   it("never lets new results push out the evidence a follow-up carried", () => {
     const chunks = [
       chunk("q0", 9),

@@ -24,6 +24,33 @@ const GENERIC_HEADING = /^(?:فصل|فصول|مسألة|مسائل|فرع|فائ
 const MAX_INLINE_HEADING_CHARS = 90;
 const MARKED_HEADING = /^&\s*(.+?)\s*&$/;
 const TRAILING_MARKED_HEADING = /[ \t]*&[ \t]*([^&\n]{1,60}?)[ \t]*&[ \t]*$/gm;
+const BIOGRAPHY_HEADING = /^#{1,3}\s*(?:\$[A-Z_]+\$|\$+)\s*(.+)$/;
+const MAX_HEADING_CHARS = 100;
+const SHORT_TITLE_CHARS = 58;
+
+export function splitLongHeading(text: string, alwaysKeepText = false): string[] {
+  if (text.length <= MAX_HEADING_CHARS && !alwaysKeepText) return [`## ${text}`];
+  if (text.length <= SHORT_TITLE_CHARS) return [`## ${text}`, text];
+
+  const closing = text.indexOf("]");
+  const bracketed =
+    closing > 0 && closing <= SHORT_TITLE_CHARS + 2
+      ? text
+          .slice(0, closing)
+          .replace(/^\[\s*/, "")
+          .trim()
+      : "";
+  if (bracketed.length > 0) return [`## ${bracketed}`, text];
+
+  const cut = text.slice(0, SHORT_TITLE_CHARS + 1);
+  const boundary = cut.lastIndexOf(" ");
+  const title = (
+    boundary > SHORT_TITLE_CHARS / 2 ? cut.slice(0, boundary) : cut.slice(0, SHORT_TITLE_CHARS)
+  )
+    .replace(/[\s,،:.\-–]+$/u, "")
+    .trim();
+  return [`## ${title}…`, text];
+}
 
 export interface OpenItiOptions {
   ranges?: readonly OpenItiPageRange[];
@@ -59,7 +86,12 @@ function inlineHeadingTitle(line: string, tidy: boolean): string | undefined {
     .match(INLINE_HEADING)?.[1]
     ?.replace(/^[-*\s]+/, "")
     .trim();
-  if (!title || title.length > MAX_INLINE_HEADING_CHARS || GENERIC_HEADING.test(title)) {
+  if (
+    !title ||
+    title.length > MAX_INLINE_HEADING_CHARS ||
+    GENERIC_HEADING.test(title) ||
+    title.includes("%")
+  ) {
     return undefined;
   }
   return headingTitle(title, tidy);
@@ -173,12 +205,14 @@ export function convertOpenIti(
         const heading = line.match(HEADING);
         if (heading) {
           const title = headingTitle(heading[1], tidyHeadings);
-          return title ? [`## ${title}`] : [];
+          return title ? splitLongHeading(title) : [];
         }
+        const biography = line.match(BIOGRAPHY_HEADING)?.[1]?.trim();
+        if (biography) return splitLongHeading(biography, true);
         const marked = markedHeadings
           ? line.replace(/^#\s*/, "").match(MARKED_HEADING)?.[1]
           : undefined;
-        if (marked) return GENERIC_HEADING.test(marked) ? [] : [`## ${marked}`];
+        if (marked) return GENERIC_HEADING.test(marked) ? [] : splitLongHeading(marked);
         const inline = inlineHeadings ? inlineHeadingTitle(line, tidyHeadings) : undefined;
         if (inline) return [`## ${inline}`];
         const paragraph = line.replace(inlineHeadings ? /^#\s*\|?\s*/ : /^#\s*/, "").trim();

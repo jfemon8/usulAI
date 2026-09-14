@@ -1,31 +1,67 @@
 import "./loadEnv";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
-import { PUBLIC_DOMAIN_BOOKS, type PublicDomainBook } from "@/config/site";
+import { gunzipSync } from "zlib";
+import { PUBLIC_DOMAIN_BOOKS, type ArchiveBookSource, type PublicDomainBook } from "@/config/site";
 import {
+  convertArchiveOcr,
   convertGutenbergSira,
   convertWikisourceSira,
+  pagesFromDjvuXml,
+  pagesFromSearchText,
+  type ArchiveOcrVolume,
   type PublicDomainConversion,
+  type PublicDomainFrontMatter,
 } from "@/lib/ingestion/sources/publicDomain";
 import { logger } from "@/lib/utils/logger";
 
-async function download(url: string): Promise<string> {
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
+async function download(url: string): Promise<Buffer> {
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
     const response = await fetch(url, { headers: { "user-agent": "UsulAI-importer/1.0" } });
-    if (response.ok) return response.text();
-    await new Promise((resolve) => setTimeout(resolve, attempt * 1500));
+    if (response.ok) return Buffer.from(await response.arrayBuffer());
+    await new Promise((resolve) => setTimeout(resolve, attempt * 2000));
   }
   throw new Error(`Download failed: ${url}`);
 }
 
-function convert(book: PublicDomainBook, raw: string): PublicDomainConversion {
-  const meta = {
+async function archiveVolumes(source: ArchiveBookSource): Promise<ArchiveOcrVolume[]> {
+  const volumes: ArchiveOcrVolume[] = [];
+
+  for (const { item, file, kind, fromLeaf, toLeaf, volume } of source.volumes) {
+    const base = `https://archive.org/download/${item}/${encodeURIComponent(file)}`;
+    const pages =
+      kind === "searchtext"
+        ? pagesFromSearchText(
+            gunzipSync(await download(`${base}_hocr_searchtext.txt.gz`)).toString("utf8"),
+            JSON.parse(
+              gunzipSync(await download(`${base}_hocr_pageindex.json.gz`)).toString("utf8"),
+            ) as number[][],
+          )
+        : pagesFromDjvuXml((await download(`${base}_djvu.xml`)).toString("utf8"));
+    volumes.push({ pages, fromLeaf, toLeaf, volume });
+  }
+
+  return volumes;
+}
+
+async function convert(book: PublicDomainBook): Promise<PublicDomainConversion> {
+  const meta: PublicDomainFrontMatter = {
     title: book.title,
     author: book.author,
     license: book.license,
     source: book.url,
     note: book.note,
   };
+
+  if (book.format === "archive") {
+    if (!book.archive) throw new Error(`${book.slug} needs its Internet Archive volumes`);
+    return convertArchiveOcr(await archiveVolumes(book.archive), meta, {
+      runningHead: new RegExp(book.archive.runningHead, book.archive.ignoreCaseHead ? "iu" : "u"),
+      footnote: book.archive.footnote ? new RegExp(book.archive.footnote, "u") : undefined,
+    });
+  }
+
+  const raw = (await download(book.url)).toString("utf8");
 
   if (book.format === "gutenberg") {
     if (!book.gutenberg) throw new Error(`${book.slug} needs Gutenberg start and end lines`);
@@ -36,11 +72,16 @@ function convert(book: PublicDomainBook, raw: string): PublicDomainConversion {
 }
 
 async function main() {
-  for (const book of PUBLIC_DOMAIN_BOOKS) {
+  const sources = process.argv.slice(2);
+  const books = PUBLIC_DOMAIN_BOOKS.filter(
+    (book) => sources.length === 0 || sources.includes(book.sourceType),
+  );
+
+  for (const book of books) {
     const directory = path.join(process.cwd(), "data", book.sourceType);
     await mkdir(directory, { recursive: true });
 
-    const { markdown, chapters, pages } = convert(book, await download(book.url));
+    const { markdown, chapters, pages } = await convert(book);
 
     await writeFile(path.join(directory, `${book.slug}.md`), markdown, "utf8");
     await writeFile(

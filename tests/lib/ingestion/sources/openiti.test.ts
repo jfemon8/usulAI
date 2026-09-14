@@ -3,6 +3,7 @@ import {
   convertOpenIti,
   pageRangeIndex,
   repairedPageNumbers,
+  splitLongHeading,
 } from "@/lib/ingestion/sources/openiti";
 
 const meta = {
@@ -117,6 +118,48 @@ describe("repairing page markers", () => {
 
     expect(markdown).toContain("## القسم الثاني");
     expect(markdown).not.toContain("&");
+  });
+});
+
+describe("long headings and biography entries", () => {
+  const entry =
+    "بلال بن رباح المؤذن يكنى أبا عبدالله وقيل أبا عبدالكريم وقيل أبا عبدالرحمن وهو مولى أبي بكر الصديق شهد بدرا وأحدا";
+
+  it("keeps a biography entry's text in the body under a short title", () => {
+    const raw = ["#META#Header#End#", `### $ ${entry}`, "# أخبرنا عبدالوارث PageV01P178"].join(
+      "\n",
+    );
+    const { markdown } = convertOpenIti(raw, meta);
+
+    expect(markdown).toContain("## بلال بن رباح المؤذن يكنى أبا عبدالله وقيل أبا عبدالكريم…");
+    expect(markdown).toContain(`\n${entry}\n`);
+    expect(markdown).not.toContain("$");
+  });
+
+  it("keeps a verse marked as an inline line in the body instead of making it a heading", () => {
+    const raw = [
+      "#META#Header#End#",
+      "# | % حقا أقول لعبد الله آمره % إن لم تقاتل لدى عثمان فانطلق %",
+      "# وقال غيره PageV01P010",
+    ].join("\n");
+    const { markdown } = convertOpenIti(raw, meta, new Map(), { inlineHeadings: true });
+
+    expect(markdown).not.toContain("## %");
+    expect(markdown).toContain("% حقا أقول لعبد الله آمره % إن لم تقاتل لدى عثمان فانطلق %");
+  });
+
+  it("keeps a short biography name in the body too", () => {
+    expect(splitLongHeading("126- فاطمة بنت رسول الله", true)).toEqual([
+      "## 126- فاطمة بنت رسول الله",
+      "126- فاطمة بنت رسول الله",
+    ]);
+  });
+
+  it("uses a leading bracketed title and never drops the text of a long heading", () => {
+    const text = `[ذكر رعايته لهن ] ${entry}`;
+
+    expect(splitLongHeading(text)).toEqual(["## ذكر رعايته لهن", text]);
+    expect(splitLongHeading("باب صلاة الجمعة")).toEqual(["## باب صلاة الجمعة"]);
   });
 });
 

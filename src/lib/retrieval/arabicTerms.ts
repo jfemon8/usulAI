@@ -3,6 +3,7 @@ import { composeNukta } from "@/lib/utils/bangla";
 interface ArabicEquivalent {
   match: readonly string[];
   arabic: readonly string[];
+  wholeWord?: boolean;
 }
 
 const EQUIVALENTS: readonly ArabicEquivalent[] = [
@@ -106,14 +107,167 @@ const EQUIVALENTS: readonly ArabicEquivalent[] = [
   { match: ["আবু তালিব"], arabic: ["أبي طالب", "أبو طالب"] },
   { match: ["শামাইল", "শামায়েল", "দৈহিক গঠন"], arabic: ["الشمائل", "صفة"] },
   { match: ["গাযওয়া", "গাজওয়া", "সারিয়্যা"], arabic: ["غزوة", "سرية"] },
+  {
+    match: ["সাহাবী", "সাহাবা", "সাহাবি", "companions", "sahabah"],
+    arabic: ["الصحابة", "الصحابي"],
+  },
+  {
+    match: ["উম্মাহাতুল মুমিনীন", "উম্মুল মুমিনীন", "আম্মাজান", "নবীপত্নী", "নবীজির স্ত্রী"],
+    arabic: ["أمهات المؤمنين", "أزواج النبي"],
+  },
+  { match: ["তাবেয়ী", "তাবেঈ", "তাবিয়ী", "tabi'in"], arabic: ["التابعين"] },
+  { match: ["আদম", "adam"], arabic: ["آدم عليه السلام", "خلق آدم"], wholeWord: true },
+  { match: ["নূহ", "নুহ", "noah", "nuh"], arabic: ["نوح"], wholeWord: true },
+  { match: ["ইদরীস", "ইদরিস"], arabic: ["إدريس عليه السلام"], wholeWord: true },
+  { match: ["হূদ", "হুদ"], arabic: ["هود عليه السلام", "عاد"], wholeWord: true },
+  { match: ["সালেহ", "সালিহ"], arabic: ["صالح عليه السلام", "ثمود", "الناقة"], wholeWord: true },
+  {
+    match: ["ইবরাহীম", "ইব্রাহিম", "ইবরাহিম", "ইব্রাহীম", "abraham", "ibrahim"],
+    arabic: ["إبراهيم الخليل", "إبراهيم عليه السلام", "الخليل"],
+    wholeWord: true,
+  },
+  { match: ["লূত", "লুত"], arabic: ["لوط"], wholeWord: true },
+  {
+    match: ["ইসমাঈল", "ইসমাইল", "ismail"],
+    arabic: ["إسماعيل عليه السلام", "الذبيح"],
+    wholeWord: true,
+  },
+  { match: ["ইসহাক"], arabic: ["إسحاق عليه السلام"], wholeWord: true },
+  {
+    match: ["ইয়াকুব", "ইয়াকূব", "yaqub"],
+    arabic: ["يعقوب عليه السلام", "إسرائيل"],
+    wholeWord: true,
+  },
+  {
+    match: ["ইউসুফ", "ইউসূফ", "joseph", "yusuf"],
+    arabic: ["يوسف عليه السلام", "قصة يوسف"],
+    wholeWord: true,
+  },
+  { match: ["আইয়ুব", "আইয়ূব", "আইউব", "ayyub"], arabic: ["أيوب عليه السلام"], wholeWord: true },
+  { match: ["শুআইব", "শোয়াইব", "শুয়াইব"], arabic: ["شعيب عليه السلام", "مدين"], wholeWord: true },
+  {
+    match: ["মূসা", "মুসা", "moses", "musa"],
+    arabic: ["موسى عليه السلام", "فرعون"],
+    wholeWord: true,
+  },
+  { match: ["হারুন", "হারূন"], arabic: ["هارون عليه السلام"], wholeWord: true },
+  { match: ["দাউদ", "দাঊদ", "david", "dawud"], arabic: ["داود عليه السلام"], wholeWord: true },
+  {
+    match: ["সুলাইমান", "সোলায়মান", "সুলায়মান", "solomon"],
+    arabic: ["سليمان بن داود", "سليمان عليه السلام"],
+    wholeWord: true,
+  },
+  {
+    match: ["ইউনুস", "ইউনূস", "jonah", "yunus"],
+    arabic: ["يونس بن متى", "يونس عليه السلام", "ذا النون"],
+    wholeWord: true,
+  },
+  { match: ["যাকারিয়া", "জাকারিয়া", "zakariya"], arabic: ["زكريا عليه السلام"], wholeWord: true },
+  {
+    match: ["ইয়াহইয়া", "ইয়াহিয়া", "yahya"],
+    arabic: ["يحيى بن زكريا", "يحيى عليه السلام"],
+    wholeWord: true,
+  },
+  {
+    match: ["ঈসা", "ইসা", "jesus", "isa"],
+    arabic: ["عيسى ابن مريم", "عيسى عليه السلام", "المسيح"],
+    wholeWord: true,
+  },
+  {
+    match: ["মারইয়াম", "মরিয়ম", "মারিয়াম", "mary", "maryam"],
+    arabic: ["مريم"],
+    wholeWord: true,
+  },
+  {
+    match: ["আবু বকর", "আবু বাকর", "abu bakr"],
+    arabic: ["أبو بكر الصديق", "أبي بكر الصديق", "أبا بكر الصديق"],
+    wholeWord: true,
+  },
+  { match: ["উমর", "ওমর", "umar"], arabic: ["عمر بن الخطاب", "الفاروق"], wholeWord: true },
+  { match: ["উসমান", "ওসমান", "uthman"], arabic: ["عثمان بن عفان", "ذو النورين"], wholeWord: true },
+  { match: ["আলী", "আলি", "ali"], arabic: ["علي بن أبي طالب"], wholeWord: true },
+  {
+    match: ["মুআবিয়া", "মুয়াবিয়া", "muawiya"],
+    arabic: ["معاوية بن أبي سفيان"],
+    wholeWord: true,
+  },
+  { match: ["আয়েশা", "আয়িশা", "আয়শা", "aisha"], arabic: ["عائشة"], wholeWord: true },
+  { match: ["হাফসা"], arabic: ["حفصة"], wholeWord: true },
+  { match: ["সাওদা", "সওদা"], arabic: ["سودة"], wholeWord: true },
+  { match: ["উম্মে সালামা", "উম্মু সালামা"], arabic: ["أم سلمة"], wholeWord: true },
+  {
+    match: ["যয়নব", "যাইনাব", "জয়নব"],
+    arabic: ["زينب بنت جحش", "زينب بنت خزيمة", "زينب بنت رسول الله"],
+    wholeWord: true,
+  },
+  { match: ["জুওয়াইরিয়া", "জুয়াইরিয়া"], arabic: ["جويرية"], wholeWord: true },
+  {
+    match: ["সাফিয়্যা", "সাফিয়া"],
+    arabic: ["صفية بنت حيي", "صفية بنت عبد المطلب"],
+    wholeWord: true,
+  },
+  { match: ["মাইমুনা", "মায়মুনা"], arabic: ["ميمونة"], wholeWord: true },
+  { match: ["উম্মে হাবিবা", "উম্মু হাবিবা"], arabic: ["أم حبيبة"], wholeWord: true },
+  {
+    match: ["ফাতিমা", "ফাতেমা", "fatima"],
+    arabic: ["فاطمة بنت رسول الله", "فاطمة الزهراء", "فاطمة بنت محمد"],
+    wholeWord: true,
+  },
+  { match: ["আসিয়া", "আছিয়া"], arabic: ["آسية"], wholeWord: true },
+  { match: ["সুমাইয়া", "সুমাইয়্যা"], arabic: ["سمية"], wholeWord: true },
+  {
+    match: ["রাবেয়া বসরী", "রাবেয়া বসরি", "রাবিয়া"],
+    arabic: ["رابعة العدوية"],
+    wholeWord: true,
+  },
+  { match: ["হামযা", "হামজা"], arabic: ["حمزة بن عبد المطلب", "سيد الشهداء"], wholeWord: true },
+  { match: ["বিলাল", "বেলাল"], arabic: ["بلال بن رباح", "بلال"], wholeWord: true },
+  { match: ["আবু হুরায়রা", "আবু হুরাইরা"], arabic: ["هريرة"], wholeWord: true },
+  { match: ["খালিদ", "খালেদ"], arabic: ["خالد بن الوليد"], wholeWord: true },
+  { match: ["সালমান ফারসি", "সালমান ফারসী"], arabic: ["سلمان الفارسي"], wholeWord: true },
+  {
+    match: ["ইবনে আব্বাস", "ইবনু আব্বাস", "ইবন আব্বাস"],
+    arabic: ["ابن عباس", "عبد الله بن عباس"],
+    wholeWord: true,
+  },
+  {
+    match: ["ইবনে মাসউদ", "ইবনু মাসউদ"],
+    arabic: ["ابن مسعود", "عبد الله بن مسعود"],
+    wholeWord: true,
+  },
+  {
+    match: ["আবু হানিফা", "আবু হানীফা", "হানাফী", "হানাফি", "abu hanifa", "hanafi"],
+    arabic: ["أبو حنيفة", "أبي حنيفة", "الحنفية"],
+    wholeWord: true,
+  },
+  {
+    match: ["ইমাম মালিক", "ইমাম মালেক", "মালিকী", "মালেকী", "maliki"],
+    arabic: ["مالك بن أنس", "الإمام مالك", "المالكية"],
+    wholeWord: true,
+  },
+  {
+    match: ["শাফেয়ী", "শাফিঈ", "শাফেঈ", "শাফেয়ি", "shafi'i", "shafii"],
+    arabic: ["الشافعي", "الشافعية"],
+    wholeWord: true,
+  },
+  {
+    match: ["আহমদ ইবনে হাম্বল", "আহমাদ ইবনু হাম্বল", "হাম্বলী", "হাম্বলি", "hanbali"],
+    arabic: ["أحمد بن حنبل", "الحنابلة"],
+    wholeWord: true,
+  },
+  { match: ["ইমাম বুখারী", "ইমাম বুখারি"], arabic: ["البخاري"], wholeWord: true },
+  { match: ["হাসান বসরী", "হাসান বাসরী"], arabic: ["الحسن البصري"], wholeWord: true },
+  { match: ["মাযহাব", "মাজহাব", "madhhab"], arabic: ["مذهب", "المذهب"] },
+  { match: ["ফতোয়া", "ফতওয়া", "fatwa"], arabic: ["الفتوى", "فتوى"] },
 ];
 
 const BOUNDARY = String.raw`(?:^|[\s,.।?!"'()\[\]/:;-])`;
+const WORD_END = String.raw`(?:ের|এর|য়ের|র|কে|ও)?(?=$|[\s,.।?!"'()\[\]/:;-])`;
 
 const MATCHERS = EQUIVALENTS.map((entry) => ({
   arabic: entry.arabic,
   pattern: new RegExp(
-    `${BOUNDARY}(?:${entry.match.map((term) => composeNukta(term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`,
+    `${BOUNDARY}(?:${entry.match.map((term) => composeNukta(term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})${entry.wholeWord ? WORD_END : ""}`,
     "iu",
   ),
 }));

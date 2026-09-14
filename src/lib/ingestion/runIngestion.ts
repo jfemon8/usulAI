@@ -5,6 +5,7 @@ import { fetchQuranCorpus } from "@/lib/ingestion/sources/quran";
 import { fetchHadithCorpus } from "@/lib/ingestion/sources/hadith";
 import { loadIjmaDocuments } from "@/lib/ingestion/sources/ijma";
 import { loadQiyasDocuments } from "@/lib/ingestion/sources/qiyas";
+import { loadFiqhDocuments } from "@/lib/ingestion/sources/fiqh";
 import { loadSiratDocuments } from "@/lib/ingestion/sources/sirat";
 import { countProviders, recordProvenance } from "@/lib/maintenance/provenance";
 import type { LoaderOptions } from "@/lib/ingestion/sources/fileSource";
@@ -54,6 +55,7 @@ const SOURCE_LOADERS: Record<SourceType, (options: LoaderOptions) => Promise<Ing
     ijma: loadIjmaDocuments,
     qiyas: loadQiyasDocuments,
     sirat: loadSiratDocuments,
+    fiqh: loadFiqhDocuments,
   };
 
 export interface IngestionOptions {

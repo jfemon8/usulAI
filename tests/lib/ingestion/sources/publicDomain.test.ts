@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { sectionsFromPlainText } from "@/lib/ingestion/sources/bookStructure";
-import { convertGutenbergSira, convertWikisourceSira } from "@/lib/ingestion/sources/publicDomain";
+import {
+  convertArchiveOcr,
+  convertGutenbergSira,
+  convertWikisourceSira,
+  pagesFromDjvuXml,
+  pagesFromSearchText,
+} from "@/lib/ingestion/sources/publicDomain";
 
 const meta = {
   title: "Test Sira",
@@ -75,6 +81,71 @@ describe("convertWikisourceSira", () => {
       { text: "He was born at Mecca.", chapter: "Part I, At Mecca", page: 1 },
       { text: "His father died.", chapter: "Part I, At Mecca, The Prophet's birth", page: 1 },
       { text: "He married Khadîjah.", chapter: "Part I, At Mecca, The Prophet's birth", page: 2 },
+    ]);
+  });
+});
+
+describe("convertArchiveOcr", () => {
+  const pageTexts = [
+    [
+      "12 MINHAJ ET TALIBIN",
+      "BOOK 2.—PRAYER",
+      "Prayer is obligatory for every adult Moslem of sound mind, and the ablu- tion must precede it.*",
+      "* The translator notes a variant reading here.",
+    ].join("\n"),
+    [
+      "PRAYER 13",
+      "ajLmo JLw q^j bu lAXJve *j&i ^l &te",
+      "The time of the noon prayer begins when the sun has passed the meridian.",
+      "Digitized by Google",
+    ].join("\n"),
+    [
+      "14 MINHAJ ET TALIBIN",
+      "The afternoon prayer begins when the shadow of a thing equals its length.",
+    ].join("\n"),
+  ];
+  const text = pageTexts.join("\n");
+  const index = pageTexts.reduce<number[][]>((spans, page) => {
+    const start = spans.length === 0 ? 0 : (spans.at(-1)?.[1] ?? 0) + 1;
+    return [...spans, [start, start + page.length]];
+  }, []);
+
+  it("drops running heads, footnotes and OCR junk, and cites the printed page", () => {
+    const pages = [
+      { leaf: 0, paragraphs: ["Title page"] },
+      ...pagesFromSearchText(text, index),
+    ].map((page, leaf) => ({ ...page, leaf }));
+    const { markdown } = convertArchiveOcr([{ pages, fromLeaf: 1, toLeaf: 3 }], meta, {
+      runningHead: /^(?:\d{1,3}\s+MINHAJ ET TALIBIN|[A-Z ]+\s+\d{1,3})$/u,
+      footnote: /^[*]\s+/u,
+    });
+
+    expect(sectionsFromPlainText(markdown)).toEqual([
+      {
+        text: "Prayer is obligatory for every adult Moslem of sound mind, and the ablution must precede it.",
+        chapter: "Book 2.—Prayer",
+        page: 12,
+      },
+      {
+        text: "The time of the noon prayer begins when the sun has passed the meridian.",
+        chapter: "Book 2.—Prayer",
+        page: 13,
+      },
+      {
+        text: "The afternoon prayer begins when the shadow of a thing equals its length.",
+        chapter: "Book 2.—Prayer",
+        page: 14,
+      },
+    ]);
+  });
+
+  it("reads paragraphs and hyphenated lines from DjVu XML", () => {
+    const xml =
+      "<DjVuXML><OBJECT><HIDDENTEXT><PARAGRAPH><LINE><WORD>A</WORD><WORD>wo-</WORD></LINE><LINE><WORD>man</WORD><WORD>&amp;</WORD><WORD>her</WORD></LINE></PARAGRAPH></HIDDENTEXT></OBJECT><OBJECT></OBJECT></DjVuXML>";
+
+    expect(pagesFromDjvuXml(xml)).toEqual([
+      { leaf: 0, paragraphs: ["A wo-\nman & her"] },
+      { leaf: 1, paragraphs: [] },
     ]);
   });
 });

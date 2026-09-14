@@ -80,8 +80,18 @@ export async function similaritySearch(
   return rows.map((row) => toChunk(row, sourceType, "vector"));
 }
 
+export function arabicTermsClause(terms: readonly string[]): Record<string, unknown> {
+  const words = terms.filter((term) => !term.includes(" "));
+  const phrases = terms.filter((term) => term.includes(" "));
+  const should = [
+    ...(words.length > 0 ? [{ text: { query: words.join(" "), path: "content" } }] : []),
+    ...(phrases.length > 0 ? [{ phrase: { query: phrases, path: "content" } }] : []),
+  ];
+  return { compound: { should, minimumShouldMatch: 1 } };
+}
+
 async function runTextSearch(
-  query: string,
+  query: string | Record<string, unknown>,
   sourceType: SourceType,
   limit: number,
 ): Promise<RetrievedChunk[]> {
@@ -93,7 +103,7 @@ async function runTextSearch(
         $search: {
           index: DB_CONFIG.textIndex,
           compound: {
-            must: [{ text: { query, path: "content" } }],
+            must: [typeof query === "string" ? { text: { query, path: "content" } } : query],
             filter: [{ equals: { path: "sourceType", value: sourceType } }],
           },
         },
@@ -129,7 +139,7 @@ export async function textSearch(
       ? runTextSearch(`${query} ${extras.join(" ")}`, sourceType, limit)
       : Promise.resolve<RetrievedChunk[]>([]),
     arabic.length > 0
-      ? runTextSearch(arabic.join(" "), sourceType, limit)
+      ? runTextSearch(arabicTermsClause(arabic), sourceType, limit)
       : Promise.resolve<RetrievedChunk[]>([]),
   ]);
 

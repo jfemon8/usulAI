@@ -20,7 +20,7 @@ async function download(url: string): Promise<string> {
   throw new Error(`Download failed: ${url}`);
 }
 
-const SOURCES: readonly OpenItiSource[] = ["ijma", "qiyas", "sirat"];
+const SOURCES: readonly OpenItiSource[] = ["ijma", "qiyas", "sirat", "fiqh"];
 
 async function importSource(sourceType: OpenItiSource) {
   const directory = path.join(process.cwd(), "data", sourceType);
@@ -49,8 +49,8 @@ async function importSource(sourceType: OpenItiSource) {
         ranges: book.pages,
         inlineHeadings: book.inlineHeadings,
         tidyHeadings: sourceType !== "ijma",
-        repairPageTypos: sourceType === "sirat",
-        markedHeadings: sourceType === "sirat",
+        repairPageTypos: sourceType === "sirat" || sourceType === "fiqh",
+        markedHeadings: sourceType === "sirat" || sourceType === "fiqh",
       },
     );
 
