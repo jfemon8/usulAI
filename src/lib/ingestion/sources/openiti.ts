@@ -22,16 +22,35 @@ const PRINTED_PAGE_HEADING = /^\[?ص:\s*\d+\]?$/;
 const INLINE_HEADING = /^#\s*\|\s*(.+)$/;
 const GENERIC_HEADING = /^(?:فصل|فصول|مسألة|مسائل|فرع|فائدة|تنبيه|تتمة|باب)[\s:.]*$/;
 const MAX_INLINE_HEADING_CHARS = 90;
+const MARKED_HEADING = /^&\s*(.+?)\s*&$/;
+const TRAILING_MARKED_HEADING = /[ \t]*&[ \t]*([^&\n]{1,60}?)[ \t]*&[ \t]*$/gm;
 
 export interface OpenItiOptions {
   ranges?: readonly OpenItiPageRange[];
   inlineHeadings?: boolean;
   tidyHeadings?: boolean;
+  repairPageTypos?: boolean;
+  markedHeadings?: boolean;
+}
+
+export function repairedPageNumbers(markers: readonly (readonly [number, number])[]): number[] {
+  return markers.map(([volume, page], index) => {
+    const previous = markers[index - 1];
+    const next = markers[index + 1];
+    if (!previous || !next || previous[0] !== volume || next[0] !== volume) return page;
+    const expected = previous[1] + 1;
+    return page !== expected && next[1] === expected + 1 ? expected : page;
+  });
 }
 
 function headingTitle(raw: string | undefined, tidy = false): string | undefined {
   const trimmed = raw?.replace(/^-\[|\]-$/g, "").trim();
-  const title = tidy ? trimmed?.replace(/^\[([^\]]+)\][\s:.]*$/, "$1").trim() : trimmed;
+  const title = tidy
+    ? trimmed
+        ?.replace(/^[[(]([^\])[(]+)[\])][\s:.]*$/, "$1")
+        .replace(/\s*:\s*$/, "")
+        .trim()
+    : trimmed;
   return title && !PRINTED_PAGE_HEADING.test(title) ? title : undefined;
 }
 
@@ -119,13 +138,25 @@ export function convertOpenIti(
   raw: string,
   meta: OpenItiFrontMatter,
   injectedHeadings: Map<string, string[]> = new Map(),
-  { ranges = [], inlineHeadings = false, tidyHeadings = false }: OpenItiOptions = {},
+  {
+    ranges = [],
+    inlineHeadings = false,
+    tidyHeadings = false,
+    repairPageTypos = false,
+    markedHeadings = false,
+  }: OpenItiOptions = {},
 ): OpenItiConversion {
   const body = cleanOpenItiText(openItiBody(raw));
   const volumes = new Set(
     [...body.matchAll(PAGE)].map((match) => Number(match[1])).filter(Boolean),
   );
   const multiVolume = volumes.size > 1;
+  const markerPages = repairPageTypos
+    ? repairedPageNumbers(
+        [...body.matchAll(PAGE)].map((match) => [Number(match[1]), Number(match[2])] as const),
+      )
+    : [];
+  let markerIndex = -1;
 
   const output: string[] = [frontMatter(meta)];
   let buffered = "";
@@ -135,7 +166,7 @@ export function convertOpenIti(
   let currentRange = -1;
 
   const renderLines = (text: string): string[] =>
-    text
+    (markedHeadings ? text.replace(TRAILING_MARKED_HEADING, "\n& $1 &") : text)
       .split("\n")
       .map((line) => line.trim())
       .flatMap((line) => {
@@ -144,6 +175,10 @@ export function convertOpenIti(
           const title = headingTitle(heading[1], tidyHeadings);
           return title ? [`## ${title}`] : [];
         }
+        const marked = markedHeadings
+          ? line.replace(/^#\s*/, "").match(MARKED_HEADING)?.[1]
+          : undefined;
+        if (marked) return GENERIC_HEADING.test(marked) ? [] : [`## ${marked}`];
         const inline = inlineHeadings ? inlineHeadingTitle(line, tidyHeadings) : undefined;
         if (inline) return [`## ${inline}`];
         const paragraph = line.replace(inlineHeadings ? /^#\s*\|?\s*/ : /^#\s*/, "").trim();
@@ -160,8 +195,9 @@ export function convertOpenIti(
       continue;
     }
 
+    markerIndex += 1;
     const volume = Number(marker[1]);
-    const page = Number(marker[2]);
+    const page = markerPages[markerIndex] ?? Number(marker[2]);
 
     if (volume === 0) continue;
 

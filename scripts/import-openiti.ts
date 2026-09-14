@@ -5,10 +5,10 @@ import { OPENITI_CONFIG, type OpenItiBook, type OpenItiSource } from "@/config/s
 import { convertOpenIti, headingsByPage } from "@/lib/ingestion/sources/openiti";
 import { logger } from "@/lib/utils/logger";
 
-function versionUrl(book: OpenItiBook, version: string): string {
+function versionUrl(book: OpenItiBook, version: string, suffix = ""): string {
   const [authorWork] = version.split(/\.(?=[^.]+-\w+$)/);
   const author = authorWork?.split(".")[0] ?? "";
-  return `${OPENITI_CONFIG.rawBase}/${book.repo}/master/data/${author}/${authorWork}/${version}`;
+  return `${OPENITI_CONFIG.rawBase}/${book.repo}/master/data/${author}/${authorWork}/${version}${suffix}`;
 }
 
 async function download(url: string): Promise<string> {
@@ -20,7 +20,7 @@ async function download(url: string): Promise<string> {
   throw new Error(`Download failed: ${url}`);
 }
 
-const SOURCES: readonly OpenItiSource[] = ["ijma", "qiyas"];
+const SOURCES: readonly OpenItiSource[] = ["ijma", "qiyas", "sirat"];
 
 async function importSource(sourceType: OpenItiSource) {
   const directory = path.join(process.cwd(), "data", sourceType);
@@ -28,7 +28,7 @@ async function importSource(sourceType: OpenItiSource) {
   const books: readonly OpenItiBook[] = OPENITI_CONFIG[sourceType];
 
   for (const book of books) {
-    const source = versionUrl(book, book.version);
+    const source = versionUrl(book, book.version, book.fileSuffix);
     const raw = await download(source);
     const injected = book.headingsFrom
       ? headingsByPage(await download(versionUrl(book, book.headingsFrom)))
@@ -49,6 +49,8 @@ async function importSource(sourceType: OpenItiSource) {
         ranges: book.pages,
         inlineHeadings: book.inlineHeadings,
         tidyHeadings: sourceType !== "ijma",
+        repairPageTypos: sourceType === "sirat",
+        markedHeadings: sourceType === "sirat",
       },
     );
 

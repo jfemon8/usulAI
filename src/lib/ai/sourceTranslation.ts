@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { ARABIC_TEXT_SOURCES, DB_CONFIG, SOURCE_TRANSLATION_CONFIG } from "@/config/site";
 import { arabicSkeleton, normalizeArabic } from "@/lib/ai/arabicText";
+import { isArabicDominant } from "@/lib/ai/answerText";
 import { generateWithPreferredModels } from "@/lib/ai/auxiliaryModel";
 import { getDb } from "@/lib/db/mongoClient";
 import { TRANSLATION_LABELS } from "@/lib/ingestion/translations";
@@ -67,7 +68,11 @@ export function translationKey(arabic: string): string {
 }
 
 export function needsTranslation(chunk: RetrievedChunk): boolean {
-  return ARABIC_TEXT_SOURCES.includes(chunk.sourceType) && !LABEL_BLOCK.test(chunk.content);
+  return (
+    ARABIC_TEXT_SOURCES.includes(chunk.sourceType) &&
+    !LABEL_BLOCK.test(chunk.content) &&
+    isArabicDominant(chunk.content)
+  );
 }
 
 const ALIEN_LETTER =

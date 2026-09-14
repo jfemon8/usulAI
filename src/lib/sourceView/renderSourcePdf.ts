@@ -4,7 +4,7 @@ import PDFDocument from "pdfkit";
 import { SITE_NAME, SOURCE_VIEW_CONFIG } from "@/config/site";
 import type { SourceView } from "@/lib/sourceView/loadSourceView";
 import { isArabicText, type ViewBlock } from "@/lib/sourceView/pageText";
-import { mirror, splitRightToLeftToken, wrapWords } from "@/lib/sourceView/textLayout";
+import { splitRightToLeftToken, visualPunctuation, wrapWords } from "@/lib/sourceView/textLayout";
 
 export interface RenderedSourcePdf {
   pdf: Buffer;
@@ -89,7 +89,9 @@ export async function renderSourcePdf(view: SourceView): Promise<RenderedSourceP
     let x = right;
     for (const word of words) {
       const { leading, core, trailing } = splitRightToLeftToken(word);
-      const pieces = [mirror(leading), core, mirror(trailing)].filter(Boolean);
+      const pieces = [visualPunctuation(leading), core, visualPunctuation(trailing)].filter(
+        Boolean,
+      );
       const total = pieces.reduce((sum, piece) => sum + doc.widthOfString(piece), 0);
       let cursor = x - total;
       for (const piece of [...pieces].reverse()) cursor += drawToken(piece, cursor);

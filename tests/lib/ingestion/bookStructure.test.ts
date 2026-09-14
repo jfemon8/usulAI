@@ -176,6 +176,55 @@ describe("loadFileDocuments", () => {
   });
 });
 
+describe("restricted books", () => {
+  let directory: string;
+
+  beforeAll(async () => {
+    directory = await mkdtemp(path.join(tmpdir(), "usul-restricted-"));
+    await writeFile(
+      path.join(directory, "rahiq.md"),
+      "# হিজরত\n[পৃষ্ঠা 150]\nরাসূলুল্লাহ সাল্লাল্লাহু আলাইহি ওয়াসাল্লাম মদীনার পথে রওনা হলেন।",
+    );
+    await writeFile(
+      path.join(directory, "rahiq.json"),
+      JSON.stringify({ title: "আর-রাহিকুল মাখতুম", restricted: true }),
+    );
+    await writeFile(
+      path.join(directory, "bijoy.md"),
+      "# ভূমিকা\n[পৃষ্ঠা 1]\nivm~jyjvn mvjøvjøvû AvjvBwn Iqvmvjøvg gw`bvi c‡_ iIbv n‡jb|",
+    );
+    await writeFile(path.join(directory, "bijoy.json"), JSON.stringify({ title: "সহজ সীরাত" }));
+  });
+
+  afterAll(async () => {
+    await rm(directory, { recursive: true, force: true });
+  });
+
+  it("keeps a restricted book private and publishes no link to its file", async () => {
+    const storage = await import("@/lib/storage");
+    vi.mocked(storage.uploadRawDocument).mockResolvedValue("raw-sources/sirat/rahiq.md");
+
+    const documents = await loadFileDocuments({ sourceType: "sirat", directory });
+
+    expect(storage.uploadRawDocument).toHaveBeenCalledWith("sirat/rahiq.md", expect.any(Buffer), {
+      restricted: true,
+    });
+    expect(documents).toHaveLength(1);
+    expect(documents[0]?.citation.url).toBeUndefined();
+    expect(documents[0]?.metadata?.restricted).toBe(true);
+  });
+
+  it("skips a Bangla book whose text came out in a legacy ANSI font", async () => {
+    const documents = await loadFileDocuments({
+      sourceType: "sirat",
+      directory,
+      archiveRawFile: false,
+    });
+
+    expect(documents.some((document) => document.metadata?.fileName === "bijoy.md")).toBe(false);
+  });
+});
+
 describe("multi-volume books and attribution front matter", () => {
   it("skips the front matter and reads volume and page together", () => {
     const sections = sectionsFromPlainText(

@@ -141,6 +141,13 @@ describe("attaching a translation", () => {
   it("only translates book sources that have no translation yet", () => {
     expect(needsTranslation(chunk)).toBe(true);
     expect(needsTranslation({ ...chunk, sourceType: "hadith" })).toBe(false);
+    expect(
+      needsTranslation({
+        ...chunk,
+        sourceType: "sirat",
+        content: "রাসূলুল্লাহ সাল্লাল্লাহু আলাইহি ওয়াসাল্লাম মদীনার পথে রওনা হলেন।",
+      }),
+    ).toBe(false);
     expect(needsTranslation(withTranslation(chunk, translation))).toBe(false);
   });
 

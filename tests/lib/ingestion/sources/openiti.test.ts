@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { convertOpenIti, pageRangeIndex } from "@/lib/ingestion/sources/openiti";
+import {
+  convertOpenIti,
+  pageRangeIndex,
+  repairedPageNumbers,
+} from "@/lib/ingestion/sources/openiti";
 
 const meta = {
   title: "روضة الناظر",
@@ -70,6 +74,49 @@ describe("convertOpenIti", () => {
     expect(markdown).not.toContain("## باب القياس");
     expect(markdown).toContain("[পৃষ্ঠা 10]");
     expect(markdown).toContain("[পৃষ্ঠা 14]");
+  });
+});
+
+describe("repairing page markers", () => {
+  it("fixes a single mistyped page number between two consecutive neighbours", () => {
+    expect(
+      repairedPageNumbers([
+        [1, 94],
+        [1, 95],
+        [1, 69],
+        [1, 97],
+        [1, 100],
+        [1, 102],
+        [1, 102],
+        [1, 103],
+      ]),
+    ).toEqual([94, 95, 96, 97, 100, 101, 102, 103]);
+  });
+
+  it("keeps genuine gaps and volume changes", () => {
+    expect(
+      repairedPageNumbers([
+        [1, 10],
+        [1, 14],
+        [1, 15],
+        [2, 1],
+        [2, 2],
+      ]),
+    ).toEqual([10, 14, 15, 1, 2]);
+  });
+
+  it("turns ampersand markers into headings and drops bare section words", () => {
+    const marked = [
+      "#META#Header#End#",
+      "# & فصل &",
+      "# & القسم الثاني &",
+      "# نص الصفحة. & فصل &",
+      "# نص آخر. PageV01P005",
+    ].join("\n");
+    const { markdown } = convertOpenIti(marked, meta, new Map(), { markedHeadings: true });
+
+    expect(markdown).toContain("## القسم الثاني");
+    expect(markdown).not.toContain("&");
   });
 });
 

@@ -313,6 +313,7 @@ export interface OpenItiBook {
   slug: string;
   repo: string;
   version: string;
+  fileSuffix?: ".completed" | ".mARkdown";
   headingsFrom?: string;
   title: string;
   author: string;
@@ -321,7 +322,7 @@ export interface OpenItiBook {
   inlineHeadings?: boolean;
 }
 
-export type OpenItiSource = "ijma" | "qiyas";
+export type OpenItiSource = "ijma" | "qiyas" | "sirat";
 
 export const OPENITI_CONFIG = {
   rawBase: "https://raw.githubusercontent.com/OpenITI",
@@ -460,7 +461,95 @@ export const OPENITI_CONFIG = {
       pages: [{ from: [7, 368], to: [8, 586] }],
     },
   ] satisfies OpenItiBook[],
+  sirat: [
+    {
+      slug: "ibn-hisham-al-sira-al-nabawiyya",
+      repo: "0225AH",
+      version: "0213IbnHisham.SiraNabawiyya.Shamela0023833-ara1",
+      fileSuffix: ".completed",
+      title: "আস-সীরাতুন নাবাবিয়্যা (ইবনু হিশাম)",
+      author: "আবু মুহাম্মাদ আবদুল মালিক ইবনু হিশাম (মৃ. ২১৮ হি.), ইবনু ইসহাকের সীরাত অবলম্বনে",
+    },
+    {
+      slug: "tirmidhi-al-shamail-al-muhammadiyya",
+      repo: "0300AH",
+      version: "0279Tirmidhi.ShamailMuhammadiyya.JK000139-ara1",
+      title: "আশ-শামাইলুল মুহাম্মাদিয়্যা (ইমাম তিরমিযী)",
+      author: "আবু ঈসা মুহাম্মাদ ইবনু ঈসা আত-তিরমিযী (মৃ. ২৭৯ হি.)",
+      inlineHeadings: true,
+    },
+    {
+      slug: "ibn-hazm-jawami-al-sira",
+      repo: "0475AH",
+      version: "0456IbnHazm.JawamicSira.Shamela0009728-ara1",
+      fileSuffix: ".completed",
+      title: "জাওয়ামিউস সীরাহ (ইবনু হাযম)",
+      author: "আবু মুহাম্মাদ আলী ইবনু আহমাদ ইবনু হাযম আল-আন্দালুসী (মৃ. ৪৫৬ হি.)",
+    },
+    {
+      slug: "ibn-abd-al-barr-al-durar",
+      repo: "0475AH",
+      version: "0463IbnCabdBarr.Durar.Shamela0010695-ara1",
+      fileSuffix: ".completed",
+      title: "আদ-দুরার ফী ইখতিসারিল মাগাযী ওয়াস সিয়ার (ইবনু আবদিল বার)",
+      author: "আবু উমার ইউসুফ ইবনু আবদিল্লাহ ইবনু আবদিল বার আল-কুরতুবী (মৃ. ৪৬৩ হি.)",
+    },
+    {
+      slug: "ibn-sayyid-al-nas-uyun-al-athar",
+      repo: "0750AH",
+      version: "0734IbnSayyidNas.CuyunAthar.Shamela0023653-ara1",
+      title: "উয়ূনুল আসার (ইবনু সায়্যিদিন নাস)",
+      author: "আবুল ফাতহ মুহাম্মাদ ইবনু মুহাম্মাদ ইবনু সায়্যিদিন নাস (মৃ. ৭৩৪ হি.)",
+    },
+    {
+      slug: "ibn-kathir-al-fusul-fi-sirat-al-rasul",
+      repo: "0775AH",
+      version: "0774IbnKathir.FusulMinSira.JK000796-ara1",
+      title: "আল-ফুসূল ফী সীরাতির রাসূল (ইবনু কাসীর)",
+      author: "ইমাদুদ্দীন আবুল ফিদা ইসমাঈল ইবনু উমার ইবনু কাসীর (মৃ. ৭৭৪ হি.)",
+      inlineHeadings: true,
+    },
+  ] satisfies OpenItiBook[],
 } as const;
+
+export type PublicDomainFormat = "gutenberg" | "wikisource";
+
+export interface PublicDomainBook {
+  slug: string;
+  sourceType: "sirat";
+  format: PublicDomainFormat;
+  url: string;
+  title: string;
+  author: string;
+  license: string;
+  note: string;
+  gutenberg?: { startLine: string; endLine: string };
+}
+
+export const PUBLIC_DOMAIN_BOOKS: readonly PublicDomainBook[] = [
+  {
+    slug: "dinet-life-of-mohammad",
+    sourceType: "sirat",
+    format: "gutenberg",
+    url: "https://www.gutenberg.org/cache/epub/39523/pg39523.txt",
+    title: "The Life of Mohammad (দিনে ও সুলাইমান ইবনু ইবরাহীম, ১৯১৮, ইংরেজি)",
+    author: "Étienne (Nasreddine) Dinet (d. 1929) and Sliman ben Ibrahim (d. 1953)",
+    license:
+      "Public domain (Project Gutenberg eBook #39523; both authors died more than 70 years ago)",
+    note: "আধুনিক যুগের ইংরেজি সীরাত, সহায়ক উৎস। ইবনু হিশাম, ইবনু সা'দ ও বুখারী অবলম্বনে লেখা, তবে সীরাতে হালাবিয়্যা থেকে কিছু দুর্বল কাহিনিও আছে।",
+    gutenberg: { startLine: "CHAPTER THE FIRST", endLine: "BIBLIOGRAPHY" },
+  },
+  {
+    slug: "pickthall-introduction-life-of-the-prophet",
+    sourceType: "sirat",
+    format: "wikisource",
+    url: "https://en.wikisource.org/w/index.php?title=The_Meaning_of_the_Glorious_Koran_(1930)/Introduction&action=render",
+    title: "The Meaning of the Glorious Koran, Introduction (মারমাডিউক পিকথল, ১৯৩০, ইংরেজি)",
+    author: "Muhammad Marmaduke Pickthall (d. 1936)",
+    license: "Public domain (published 1930, author died 1936; Wikisource PD-US)",
+    note: "আধুনিক যুগের ইংরেজি সীরাত-সারাংশ, সহায়ক উৎস। নবীজীবনের সংক্ষিপ্ত বিবরণ, প্রচলিত দুর্বল কাহিনি ছাড়া।",
+  },
+];
 
 export const SOURCE_VIEW_CONFIG = {
   maxReferenceChars: 300,
@@ -498,6 +587,8 @@ export const SOURCE_VIEW_CONFIG = {
 export const FILE_INGESTION_CONFIG = {
   minCharsPerPage: 20,
   maxChapterChars: 60,
+  minBanglaLetterShare: 0.3,
+  minAnsiSignatureShare: 0.01,
 } as const;
 
 export const RATE_LIMIT_CONFIG = {

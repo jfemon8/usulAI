@@ -2,6 +2,7 @@ import type { ObjectId } from "mongodb";
 import {
   ARABIC_TEXT_SOURCES,
   OPENITI_CONFIG,
+  PUBLIC_DOMAIN_BOOKS,
   SOURCE_PRIORITY,
   SOURCE_TRANSLATION_CONFIG,
   SOURCE_VIEW_CONFIG,
@@ -35,6 +36,7 @@ interface DocumentRow {
     page?: number;
     volume?: number;
     grades?: HadithGrade[];
+    restricted?: boolean;
   };
 }
 
@@ -46,7 +48,11 @@ const SOURCE_TITLES: Record<SourceType, string> = {
   sirat: "সীরাত",
 };
 
-const OPENITI_BOOKS: readonly OpenItiBook[] = [...OPENITI_CONFIG.ijma, ...OPENITI_CONFIG.qiyas];
+const OPENITI_BOOKS: readonly OpenItiBook[] = [
+  ...OPENITI_CONFIG.ijma,
+  ...OPENITI_CONFIG.qiyas,
+  ...OPENITI_CONFIG.sirat,
+];
 
 function openItiBook(fileName: string | undefined): OpenItiBook | undefined {
   return OPENITI_BOOKS.find((book) => `${book.slug}.md` === fileName);
@@ -89,8 +95,8 @@ function scriptureView(row: DocumentRow): SourceView {
 }
 
 async function pageRows(row: DocumentRow): Promise<DocumentRow[]> {
-  const { fileName, page, volume } = row.metadata ?? {};
-  if (!fileName || page === undefined) return [row];
+  const { fileName, page, volume, restricted } = row.metadata ?? {};
+  if (restricted || !fileName || page === undefined) return [row];
 
   const collection = await getDocumentsCollection();
   const rows = (await collection
@@ -134,6 +140,9 @@ async function bookView(row: DocumentRow): Promise<SourceView> {
     return [...heading, ...pageBlocks(merged.text, span)];
   });
   const book = openItiBook(row.metadata?.fileName);
+  const publicBook = PUBLIC_DOMAIN_BOOKS.find(
+    (candidate) => `${candidate.slug}.md` === row.metadata?.fileName,
+  );
   const translation = (await loadTranslations([translationKey(row.content)])).get(
     translationKey(row.content),
   );
@@ -141,6 +150,7 @@ async function bookView(row: DocumentRow): Promise<SourceView> {
 
   const details = [
     ...(book ? [book.author] : []),
+    ...(publicBook ? [publicBook.author, publicBook.note] : []),
     ...(book?.part ? [book.part] : []),
     ...(chapter ? [chapter] : []),
     [
@@ -169,10 +179,20 @@ async function bookView(row: DocumentRow): Promise<SourceView> {
   return {
     sourceType: row.sourceType,
     reference: row.citation.reference,
-    title: book?.title ?? row.citation.reference.split(",")[0] ?? row.citation.reference,
+    title:
+      book?.title ??
+      publicBook?.title ??
+      row.citation.reference.split(",")[0] ??
+      row.citation.reference,
     details,
     blocks: [...pageContent, ...translated],
-    ...(book ? { attribution: `OpenITI (KITAB), CC BY-NC-SA 4.0 · ${book.version}` } : {}),
+    ...(book
+      ? { attribution: `OpenITI (KITAB), CC BY-NC-SA 4.0 · ${book.version}` }
+      : publicBook
+        ? { attribution: publicBook.license }
+        : row.metadata?.restricted
+          ? { attribution: "উত্তরে ব্যবহৃত সংক্ষিপ্ত উদ্ধৃতি, স্বত্ব প্রকাশক ও লেখকের" }
+          : {}),
   };
 }
 

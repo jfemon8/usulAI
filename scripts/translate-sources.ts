@@ -8,7 +8,7 @@ function flag(name: string): string | undefined {
   return process.argv.find((arg) => arg.startsWith(`--${name}=`))?.split("=")[1];
 }
 
-const BOOK_ORDER = [...OPENITI_CONFIG.ijma, ...OPENITI_CONFIG.qiyas].map(
+const BOOK_ORDER = [...OPENITI_CONFIG.ijma, ...OPENITI_CONFIG.qiyas, ...OPENITI_CONFIG.sirat].map(
   (book) => `${book.slug}.md`,
 );
 

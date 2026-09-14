@@ -99,8 +99,15 @@ export function planIngestion(
     }
   }
 
+  const loadedFiles = new Set(
+    incoming.map((document) => document.metadata?.fileName).filter(Boolean),
+  );
+
   for (const [reference, record] of survivors) {
-    if (!seen.has(reference)) plan.stale.push(record.id);
+    if (seen.has(reference)) continue;
+    const privateFileMissing =
+      record.metadata.restricted === true && !loadedFiles.has(record.metadata.fileName);
+    if (!privateFileMissing) plan.stale.push(record.id);
   }
 
   return plan;

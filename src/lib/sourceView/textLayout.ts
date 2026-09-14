@@ -23,6 +23,10 @@ export function mirror(text: string): string {
   return [...text].map((character) => MIRRORED[character] ?? character).join("");
 }
 
+export function visualPunctuation(logical: string): string {
+  return [...mirror(logical)].reverse().join("");
+}
+
 export function splitRightToLeftToken(word: string): RightToLeftToken {
   const leading = word.match(LEADING_PUNCTUATION)?.[0] ?? "";
   const rest = word.slice(leading.length);

@@ -22,13 +22,23 @@ function publicId(path: string): string {
   return `${STORAGE_CONFIG.rawSourcesPrefix}/${path.replace(/^\/+/, "")}`;
 }
 
-export async function uploadRawDocument(path: string, file: Buffer): Promise<string> {
+export async function uploadRawDocument(
+  path: string,
+  file: Buffer,
+  { restricted = false }: { restricted?: boolean } = {},
+): Promise<string> {
   const client = getClient();
   const id = publicId(path);
 
   const result = await new Promise<{ public_id: string }>((resolve, reject) => {
     const stream = client.uploader.upload_stream(
-      { resource_type: "raw", public_id: id, overwrite: true, invalidate: true },
+      {
+        resource_type: "raw",
+        type: restricted ? "authenticated" : "upload",
+        public_id: id,
+        overwrite: true,
+        invalidate: true,
+      },
       (error, uploaded) => {
         if (error || !uploaded) reject(error ?? new Error("Cloudinary upload returned no result"));
         else resolve(uploaded);

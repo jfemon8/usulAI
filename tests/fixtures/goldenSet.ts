@@ -85,6 +85,21 @@ export const GOLDEN_SET: GoldenCase[] = [
     forbidSources: ["quran", "hadith", "ijma"],
   },
   {
+    question: "সীরাত অনুযায়ী বদর যুদ্ধ কীভাবে হয়েছিল?",
+    expectSources: ["sirat"],
+    forbidSources: ["quran", "hadith", "ijma", "qiyas"],
+  },
+  {
+    question: "সীরাতে হিজরতের ঘটনা কীভাবে বর্ণিত হয়েছে?",
+    expectSources: ["sirat"],
+    forbidSources: ["quran", "hadith", "ijma", "qiyas"],
+  },
+  {
+    question: "what does the seerah say about the battle of khandaq",
+    expectSources: ["sirat"],
+    forbidSources: ["quran", "hadith", "ijma", "qiyas"],
+  },
+  {
     question: "what is qiyas and who rejected it",
     expectSources: ["qiyas"],
     forbidSources: ["quran", "hadith", "ijma"],

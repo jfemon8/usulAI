@@ -41,8 +41,10 @@ coverage/
 # raw ingestion sources (large binary files, not for git)
 data/ijma/*
 data/qiyas/*
+data/sirat/*
 !data/ijma/.gitkeep
 !data/qiyas/.gitkeep
+!data/sirat/.gitkeep
 
 # generated widget bundle
 public/widget.js

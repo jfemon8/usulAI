@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { isArabicText, mergeChunks, pageBlocks } from "@/lib/sourceView/pageText";
-import { mirror, splitRightToLeftToken, wrapWords } from "@/lib/sourceView/textLayout";
+import {
+  mirror,
+  splitRightToLeftToken,
+  visualPunctuation,
+  wrapWords,
+} from "@/lib/sourceView/textLayout";
 
 const first = "620 - وأجمعوا أن السارق إذا سرق مرات إذا قدم إلى الحاكم في آخر السرقات.";
 const second = "621 - وأجمعوا في أن قطع يد السارق إذا شهد عليه بالسرقة شاهدان عدلان.";
@@ -49,6 +54,7 @@ describe("right-to-left layout helpers", () => {
     expect(splitRightToLeftToken("(رحمه")).toEqual({ leading: "(", core: "رحمه", trailing: "" });
     expect(splitRightToLeftToken("الحرز:")).toEqual({ leading: "", core: "الحرز", trailing: ":" });
     expect(mirror("(")).toBe(")");
+    expect(visualPunctuation("):")).toBe(":(");
   });
 
   it("breaks a single word wider than the line instead of overflowing the page", () => {

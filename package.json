@@ -23,6 +23,7 @@
     "import:quranenc": "tsx scripts/import-quranenc.ts",
     "import:ijma": "tsx scripts/import-openiti.ts ijma",
     "import:qiyas": "tsx scripts/import-openiti.ts qiyas",
+    "import:sirat": "tsx scripts/import-openiti.ts sirat && tsx scripts/import-public-domain.ts",
     "translate:sources": "tsx scripts/translate-sources.ts",
     "storage:report": "tsx scripts/storage-report.ts",
     "storage:optimize": "tsx scripts/storage-optimize.ts",

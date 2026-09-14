@@ -1,6 +1,7 @@
 import { readdir, readFile } from "fs/promises";
 import path from "path";
 import { z } from "zod";
+import { FILE_INGESTION_CONFIG } from "@/config/site";
 import { parsePdfPages } from "@/lib/ingestion/parsers/pdfParser";
 import { parseDocxHtml } from "@/lib/ingestion/parsers/docxParser";
 import { parsePlainText } from "@/lib/ingestion/parsers/textParser";
@@ -32,7 +33,26 @@ const metadataSchema = z.object({
   source: z.string().optional(),
   pageOffset: z.number().int().optional(),
   chapters: z.array(z.object({ title: z.string().min(1), page: z.number().int() })).optional(),
+  restricted: z.boolean().optional(),
 });
+
+const BENGALI_LETTER = /\p{Script=Bengali}/gu;
+const ANY_LETTER = /\p{L}/gu;
+
+const ANSI_BANGLA_SIGNATURE = /[‡†ˆ©¨ÖÕÓ¯]/g;
+
+export function lacksUnicodeBangla(sections: BookSection[]): boolean {
+  const text = sections.map((section) => section.text).join(" ");
+  const letters = text.match(ANY_LETTER)?.length ?? 0;
+  const bengali = text.match(BENGALI_LETTER)?.length ?? 0;
+  const arabic = text.match(/\p{Script=Arabic}/gu)?.length ?? 0;
+  const signature = text.match(ANSI_BANGLA_SIGNATURE)?.length ?? 0;
+  return (
+    letters > 0 &&
+    bengali + arabic < letters * FILE_INGESTION_CONFIG.minBanglaLetterShare &&
+    signature >= letters * FILE_INGESTION_CONFIG.minAnsiSignatureShare
+  );
+}
 
 export interface CitationInput extends BookLocation {
   fileName: string;
@@ -167,11 +187,22 @@ export async function loadFileDocuments({
       continue;
     }
 
+    const title = metadata.title ?? path.parse(file).name;
+
+    if (lacksUnicodeBangla(sections)) {
+      logger.warn(
+        `Skipped "${file}": the extracted text has almost no Unicode Bangla letters, so the file most likely uses a legacy ANSI font such as SutonnyMJ. Convert it to Unicode or export it as text first.`,
+        { sourceType },
+      );
+      continue;
+    }
+
+    const restricted = metadata.restricted === true;
     let storageKey: string | null = null;
 
     if (archiveRawFile) {
       try {
-        storageKey = await uploadRawDocument(`${sourceType}/${file}`, buffer);
+        storageKey = await uploadRawDocument(`${sourceType}/${file}`, buffer, { restricted });
       } catch (error) {
         logger.warn(`Raw file archive failed for "${file}", continuing without it`, {
           sourceType,
@@ -180,7 +211,6 @@ export async function loadFileDocuments({
       }
     }
 
-    const title = metadata.title ?? path.parse(file).name;
     const offset = metadata.pageOffset ?? 0;
 
     for (const section of sections) {
@@ -197,7 +227,7 @@ export async function loadFileDocuments({
           part: index + 1,
           partCount: chunks.length,
           fileName: file,
-          storageKey,
+          storageKey: restricted ? null : storageKey,
         });
 
         const repeats = (seen.get(citation.reference) ?? 0) + 1;
@@ -213,6 +243,7 @@ export async function loadFileDocuments({
             ...(section.chapter ? { chapter: section.chapter } : {}),
             ...(section.volume !== undefined ? { volume: section.volume } : {}),
             ...(section.page !== undefined ? { page: section.page } : {}),
+            ...(restricted ? { restricted: true } : {}),
             storageKey,
           },
           provenance: [title, metadata.author, metadata.edition].filter(Boolean).join(" | "),

@@ -109,6 +109,19 @@ describe("planIngestion", () => {
     expect(plan.stale).toEqual(["x9"]);
   });
 
+  it("never prunes a private book whose file is simply absent from this machine", () => {
+    const plan = planIngestion(
+      [document("s:1", "a", { fileName: "public.md" })],
+      [
+        stored("x1", "s:1", "a", { metadata: { fileName: "public.md" } }),
+        stored("x2", "p:1", "private", { metadata: { fileName: "rahiq.pdf", restricted: true } }),
+        stored("x3", "s:2", "old", { metadata: { fileName: "public.md" } }),
+      ],
+    );
+
+    expect(plan.stale).toEqual(["x3"]);
+  });
+
   it("keeps the embedded copy of a duplicated reference and marks the rest as duplicates", () => {
     const plan = planIngestion(
       [document("1:1", "a")],

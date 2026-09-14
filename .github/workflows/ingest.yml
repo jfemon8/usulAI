@@ -64,8 +64,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Rebuild ijma books from OpenITI
-        run: npm run import:ijma
+      - name: Rebuild ijma, qiyas and sirat books from OpenITI
+        run: npm run import:ijma && npm run import:qiyas && npm run import:sirat
 
       - name: Run ingestion
         shell: bash

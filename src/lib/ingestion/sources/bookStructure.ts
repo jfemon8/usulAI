@@ -22,6 +22,7 @@ export interface BookMetadata {
   license?: string;
   pageOffset?: number;
   chapters?: ChapterStart[];
+  restricted?: boolean;
 }
 
 export interface BookLocation {

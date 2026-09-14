@@ -29,6 +29,13 @@ describe("arabicQueryTerms", () => {
     expect(arabicQueryTerms("লা ইলাহা ইল্লাল্লাহ")).toEqual([]);
   });
 
+  it("maps sirah events to the Arabic the sirah books use", () => {
+    expect(arabicQueryTerms("বদর যুদ্ধ ও হিজরতের ঘটনা")).toEqual(
+      expect.arrayContaining(["بدر", "الهجرة"]),
+    );
+    expect(arabicQueryTerms("battle of khandaq in the seerah")).toContain("الخندق");
+  });
+
   it("does not fire inside an unrelated word", () => {
     expect(arabicQueryTerms("মাসুদের গল্প")).toEqual([]);
   });
