@@ -3,6 +3,7 @@ import { ARABIC_TEXT_SOURCES, DB_CONFIG, SOURCE_TRANSLATION_CONFIG } from "@/con
 import { arabicSkeleton, normalizeArabic } from "@/lib/ai/arabicText";
 import { isArabicDominant } from "@/lib/ai/answerText";
 import { generateWithPreferredModels } from "@/lib/ai/auxiliaryModel";
+import { BACKGROUND_PRIORITY_HEADERS } from "@/lib/ai/providers";
 import { getDb } from "@/lib/db/mongoClient";
 import { TRANSLATION_LABELS } from "@/lib/ingestion/translations";
 import { logger } from "@/lib/utils/logger";
@@ -224,6 +225,7 @@ export async function translateSource(
       prompt: `উৎস: ${reference}\n\n${JSON.stringify(segments, null, 1)}`,
       maxOutputTokens: SOURCE_TRANSLATION_CONFIG.maxOutputTokens,
       timeoutMs: SOURCE_TRANSLATION_CONFIG.timeoutMs,
+      headers: BACKGROUND_PRIORITY_HEADERS,
     },
     models,
     true,
@@ -245,6 +247,90 @@ export async function translateSource(
     await collection()
   ).replaceOne(
     { _id: translationKey(arabic) },
+    { ...translation, model: result.modelId, createdAt: new Date() },
+    { upsert: true },
+  );
+  return translation;
+}
+
+export type PassageKind = "arabic" | "english";
+
+export const ENGLISH_TRANSLATION_SYSTEM = `তুমি ইসলামি ইতিহাস, জীবনী ও ফিকহ গ্রন্থের পুরনো ইংরেজি অনুবাদ থেকে বাংলায় নির্ভুল অনুবাদক। একটি ইংরেজি অংশ পাবে; শুধু তার বিশ্বস্ত, প্রাঞ্জল বাংলা অনুবাদ ফেরত দাও, অন্য কিছু নয়।
+
+নিয়ম:
+- নিজের ব্যাখ্যা, মতামত, টীকা বা শিরোনাম যোগ করবে না, কিছু বাদও দেবে না।
+- লেখাটি স্ক্যান করা বইয়ের OCR, তাই কিছু বানান ভাঙা থাকতে পারে। ব্যক্তি ও স্থানের নাম প্রচলিত বাংলা বানানে লিখবে; কোনো অংশ পড়া না গেলে অনুমান করে পূরণ করবে না, সেখানে "(অস্পষ্ট)" লিখবে।
+- ইসলামি পরিভাষার প্রচলিত বাংলা রূপ ব্যবহার করবে; বাংলা শব্দের ভেতরে ইংরেজি হরফ মেশাবে না।
+- লম্বা ড্যাশ (—) ব্যবহার করবে না।`;
+
+const LATIN_LETTER = /\p{Script=Latin}/u;
+const MIN_ENGLISH_SHARE = 0.8;
+
+export function isEnglishPassage(text: string): boolean {
+  return letterShare(text, LATIN_LETTER) >= MIN_ENGLISH_SHARE;
+}
+
+export function passageKind(text: string): PassageKind | null {
+  if (isArabicDominant(text)) return "arabic";
+  return isEnglishPassage(text) ? "english" : null;
+}
+
+function collapse(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
+export function englishTranslationKey(text: string): string {
+  return `en:${createHash("sha256").update(collapse(text)).digest("hex")}`;
+}
+
+export function passageTranslationKey(text: string, kind: PassageKind): string {
+  return kind === "arabic" ? translationKey(text) : englishTranslationKey(text);
+}
+
+export function parseEnglishTranslation(reply: string, english: string): SourceTranslation | null {
+  const bangla = cleanTranslation(reply.replace(/^\s*```[a-z]*\s*|\s*```\s*$/gi, ""));
+  if (letterShare(bangla, /\p{Script=Bengali}/u) < SOURCE_TRANSLATION_CONFIG.minBengaliRatio) {
+    return null;
+  }
+  if (hasBrokenScript(bangla)) return null;
+  return { segments: [{ arabic: "", bangla, english: collapse(english) }] };
+}
+
+export async function translateEnglishSource(
+  english: string,
+  reference: string,
+  models: readonly string[] = SOURCE_TRANSLATION_CONFIG.models,
+): Promise<SourceTranslation | null> {
+  if (collapse(english).length === 0) return null;
+
+  const result = await generateWithPreferredModels(
+    "English source translation",
+    {
+      system: ENGLISH_TRANSLATION_SYSTEM,
+      prompt: `উৎস: ${reference}\n\n${collapse(english)}`,
+      maxOutputTokens: SOURCE_TRANSLATION_CONFIG.maxOutputTokens,
+      timeoutMs: SOURCE_TRANSLATION_CONFIG.timeoutMs,
+      headers: BACKGROUND_PRIORITY_HEADERS,
+    },
+    models,
+    true,
+  );
+  if (!result) return null;
+
+  const translation = parseEnglishTranslation(result.text, english);
+  if (!translation) {
+    logger.warn("English source translation rejected by validation", {
+      reference,
+      model: result.modelId,
+      replyChars: result.text.length,
+    });
+    return null;
+  }
+
+  await (
+    await collection()
+  ).replaceOne(
+    { _id: englishTranslationKey(english) },
     { ...translation, model: result.modelId, createdAt: new Date() },
     { upsert: true },
   );
@@ -288,8 +374,12 @@ async function withSlot<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
-export function translateOnDemand(chunk: RetrievedChunk): Promise<SourceTranslation | null> {
-  const key = translationKey(chunk.content);
+export function translatePassageOnDemand(
+  content: string,
+  reference: string,
+  kind: PassageKind = "arabic",
+): Promise<SourceTranslation | null> {
+  const key = passageTranslationKey(content, kind);
   const existing = inFlight.get(key);
   if (existing) return existing;
 
@@ -298,7 +388,11 @@ export function translateOnDemand(chunk: RetrievedChunk): Promise<SourceTranslat
     return Promise.resolve(null);
   }
 
-  const job = withSlot(() => translateSource(chunk.content, chunk.citation.reference))
+  const job = withSlot(() =>
+    kind === "arabic"
+      ? translateSource(content, reference)
+      : translateEnglishSource(content, reference),
+  )
     .then((translation) => {
       if (translation) failedAt.delete(key);
       else failedAt.set(key, Date.now());
@@ -307,7 +401,7 @@ export function translateOnDemand(chunk: RetrievedChunk): Promise<SourceTranslat
     .catch((error: unknown) => {
       failedAt.set(key, Date.now());
       logger.warn("On-demand source translation failed", {
-        reference: chunk.citation.reference,
+        reference,
         error: String(error).slice(0, 160),
       });
       return null;
@@ -318,6 +412,18 @@ export function translateOnDemand(chunk: RetrievedChunk): Promise<SourceTranslat
   return job;
 }
 
+export function translationCoolingDown(content: string, kind: PassageKind): boolean {
+  const lastFailure = failedAt.get(passageTranslationKey(content, kind));
+  return (
+    lastFailure !== undefined &&
+    Date.now() - lastFailure < SOURCE_TRANSLATION_CONFIG.failureCooldownMs
+  );
+}
+
+export function translateOnDemand(chunk: RetrievedChunk): Promise<SourceTranslation | null> {
+  return translatePassageOnDemand(chunk.content, chunk.citation.reference, "arabic");
+}
+
 export interface TranslationJobs {
   jobs: Promise<unknown>[];
   results: Map<string, SourceTranslation>;
@@ -325,11 +431,14 @@ export interface TranslationJobs {
 
 export function startMissingTranslations(context: RetrievedChunk[]): TranslationJobs {
   const results = new Map<string, SourceTranslation>();
-  const jobs = context.filter(needsTranslation).map((chunk) =>
-    translateOnDemand(chunk).then((translation) => {
-      if (translation) results.set(chunk.id, translation);
-    }),
-  );
+  const jobs = context
+    .filter(needsTranslation)
+    .slice(0, SOURCE_TRANSLATION_CONFIG.maxPerRequest)
+    .map((chunk) =>
+      translateOnDemand(chunk).then((translation) => {
+        if (translation) results.set(chunk.id, translation);
+      }),
+    );
   return { jobs, results };
 }
 

@@ -379,12 +379,12 @@ ${invented}
     expect(streamWords(screenshot, strictOptions)).toBe(enrichAnswer(screenshot, strictOptions));
   });
 
-  it("holds back only the part of a line that could still change", () => {
+  it("streams whole sentences and holds back the one still being written", () => {
     const enricher = createQuoteEnricher(strictOptions);
 
-    expect(enricher.push("প্রতিবেশীর হক ")).toBe("প্রতিবেশীর হক");
-    expect(enricher.push("অত্যন্ত [")).toBe(" অত্যন্ত");
-    expect(enricher.push("2]। ")).toBe("।");
+    expect(enricher.push("প্রতিবেশীর হক ")).toBe("");
+    expect(enricher.push("অত্যন্ত [")).toBe("");
+    expect(enricher.push("2]। ")).toBe("প্রতিবেশীর হক অত্যন্ত।");
   });
 
   it("keeps a quotation that is in the sources and Arabic chapter names from the references", () => {
@@ -400,5 +400,94 @@ ${invented}
     expect(output).toContain(ayah);
     expect(output).toContain("ذكر فرض الحج وكم فرضه");
     expect(output).not.toContain("দেখানো হয়নি");
+  });
+});
+
+describe("strict mode for an English answer that echoes its references", () => {
+  const nur: EnrichmentSource = { ...quran, index: 1, reference: "An-Nur 24:31" };
+  const hadith: EnrichmentSource = { ...abuDawud, index: 2, reference: "Sunan Abi Dawud 5152" };
+  const options: EnricherOptions = { sources: [nur, hadith], language: "other", strict: true };
+  const echoed = `Muslim women may recite the Quran, but scholars say a woman should not raise her voice before non-mahram Men [1] (Quran, An-Nur 24:31).
+
+[1] (Quran, An-Nur 24:31)
+[2] (Hadith, Sunan Abi Dawud 5152)
+
+Sources:
+- An-Nur 24:31 [1]
+
+Most Muslim scholars agree on this.`;
+
+  it("keeps capital letters that the foreign-script filter used to delete", () => {
+    const output = enrichAnswer(echoed, options);
+
+    expect(output).toContain("Muslim women");
+    expect(output).toContain("non-mahram Men");
+    expect(output).toContain("Most Muslim scholars");
+  });
+
+  it("drops the echoed reference after a marker and every reference list line", () => {
+    const output = enrichAnswer(echoed, options);
+
+    expect(output).toContain("non-mahram Men [1].");
+    expect(output).not.toContain("(Quran, An-Nur 24:31)");
+    expect(output).not.toContain("Sunan Abi Dawud 5152");
+    expect(output).not.toContain("Sources:");
+    expect(output).not.toContain("- An-Nur 24:31 [1]");
+  });
+
+  it("does not append evidence for a number cited only inside a dropped list", () => {
+    expect(enrichAnswer(echoed, options)).not.toContain("Evidence [2]");
+  });
+
+  it("streams word by word to exactly the same text", () => {
+    expect(streamWords(echoed, options)).toBe(enrichAnswer(echoed, options));
+  });
+
+  it("drops a paragraph the model repeats word for word", () => {
+    const paragraph =
+      "A woman may recite the Quran quietly when non-mahram men can hear her voice [1].";
+    const output = enrichAnswer(`${paragraph}\n\n${paragraph}\n\nEnd.`, options);
+
+    expect(output.split(paragraph)).toHaveLength(2);
+    expect(output).toContain("End.");
+  });
+
+  it("strips letters and marks from scripts no source uses", () => {
+    const output = enrichAnswer("নামাজের কল\u0947্যাণ [1]।", {
+      ...options,
+      language: "bangla",
+    });
+
+    expect(output).not.toContain("\u0947");
+  });
+});
+
+describe("strict mode against a model that retells what the app already added", () => {
+  const options: EnricherOptions = { sources: [quran], language: "bangla", strict: true };
+  const retold = `সুদের বরকত নেই [1]।
+
+${ayah}
+
+আল্লাহ তা’আলা সুদকে নিশ্চিহ্ন করেন এবং দান খয়রাতকে বর্ধিত করেন। [1]
+
+হাদিস থেকে দলিল:
+
+এই আয়াতে বলা হয়েছে যে সুদের বরকত থাকে না [1]। আলেমগণ একমত যে সুদ সব অবস্থায় হারাম।`;
+
+  it("shows the meaning once, under the quote", () => {
+    const output = enrichAnswer(retold, options);
+    expect(output.split("দান খয়রাতকে বর্ধিত করেন")).toHaveLength(2);
+    expect(output).toContain(`**বাংলা অর্থঃ** ${quran.bangla} [1]`);
+  });
+
+  it("drops the per-source heading and the consensus it cannot cite", () => {
+    const output = enrichAnswer(retold, options);
+    expect(output).not.toContain("হাদিস থেকে দলিল");
+    expect(output).not.toContain("আলেমগণ একমত");
+    expect(output).toContain("সুদের বরকত থাকে না [1]।");
+  });
+
+  it("streams word by word to exactly the same text", () => {
+    expect(streamWords(retold, options)).toBe(enrichAnswer(retold, options));
   });
 });

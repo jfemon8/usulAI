@@ -4,6 +4,7 @@ interface ArabicEquivalent {
   match: readonly string[];
   arabic: readonly string[];
   wholeWord?: boolean;
+  alsoRequires?: readonly string[];
 }
 
 const EQUIVALENTS: readonly ArabicEquivalent[] = [
@@ -260,6 +261,99 @@ const EQUIVALENTS: readonly ArabicEquivalent[] = [
   },
   { match: ["ইমাম বুখারী", "ইমাম বুখারি"], arabic: ["البخاري"], wholeWord: true },
   { match: ["হাসান বসরী", "হাসান বাসরী"], arabic: ["الحسن البصري"], wholeWord: true },
+  {
+    match: ["ইস্তেহাযা", "ইস্তিহাযা", "ইস্তিহাজা", "ইস্তেহাজা", "istihadha", "irregular bleeding"],
+    arabic: ["الاستحاضة", "المستحاضة"],
+  },
+  {
+    match: ["menstruation", "menstruating", "menses", "hayez", "haiz"],
+    arabic: ["الحيض", "الحائض"],
+  },
+  {
+    match: ["মুসাফির", "মুসাফির", "সফর", "traveller", "traveler", "travelling", "musafir"],
+    arabic: ["المسافر", "السفر"],
+  },
+  {
+    match: ["কসর", "কছর", "qasr"],
+    arabic: ["قصر الصلاة", "القصر", "صلاة المسافر", "نوى الإقامة", "مسيرة ثلاثة أيام"],
+    wholeWord: true,
+  },
+  {
+    match: ["shorten", "shortening"],
+    alsoRequires: ["prayer", "salah", "travel", "traveller", "traveler", "journey"],
+    arabic: ["قصر الصلاة", "صلاة المسافر", "نوى الإقامة", "مسيرة ثلاثة أيام"],
+  },
+  { match: ["মুক্তাদি", "মুকতাদি", "muqtadi"], arabic: ["المأموم", "المقتدي"] },
+  { match: ["কেরাত", "কিরাত", "কিরাআত", "ক্বিরাত", "qirat", "recit"], arabic: ["القراءة"] },
+  { match: ["তিলাওয়াত", "তেলাওয়াত", "tilawat"], arabic: ["القراءة", "تلاوة القرآن"] },
+  { match: ["জোরে", "উচ্চস্বরে", "aloud", "loudly"], arabic: ["الجهر"], wholeWord: true },
+  { match: ["আস্তে", "নিঃশব্দে", "quietly", "silently"], arabic: ["الإسرار"], wholeWord: true },
+  { match: ["কণ্ঠস্বর", "আওয়াজ", "voice"], arabic: ["صوت المرأة", "الصوت"] },
+  {
+    match: ["মাসিক", "পিরিয়ড", "period", "masik"],
+    alsoRequires: [
+      "নামাজ",
+      "নামায",
+      "রোজা",
+      "রক্ত",
+      "অনিয়মিত",
+      "স্রাব",
+      "namaz",
+      "prayer",
+      "salah",
+      "roza",
+      "irregular",
+      "oniyomito",
+      "bleeding",
+    ],
+    arabic: ["الحيض", "الاستحاضة", "المستحاضة"],
+  },
+  {
+    match: ["মহিলা", "নারী", "মেয়ে", "women", "woman", "female", "mohila", "nari", "meye"],
+    alsoRequires: [
+      "জোরে",
+      "উচ্চস্বরে",
+      "কণ্ঠ",
+      "আওয়াজ",
+      "গলা",
+      "স্বর",
+      "loud",
+      "aloud",
+      "voice",
+      "jore",
+      "awaj",
+      "kontho",
+    ],
+    arabic: ["نغمة المرأة", "صوت المرأة", "المرأة لا ترفع صوتها"],
+  },
+  {
+    match: ["ব্যান্ডেজ", "প্লাস্টার", "জাবিরা", "bandage", "splint"],
+    arabic: ["الجبيرة", "الجبائر"],
+  },
+  { match: ["মাসেহ", "মাসাহ", "মাসহ", "masah", "wiping"], arabic: ["المسح"] },
+  { match: ["মোজা", "socks", "khuff"], arabic: ["المسح على الخفين", "الخفين"], wholeWord: true },
+  { match: ["নিসাব", "নেসাব", "nisab"], arabic: ["النصاب"] },
+  { match: ["অগ্রিম যাকাত", "অগ্রিম জাকাত", "advance zakat"], arabic: ["تعجيل الزكاة"] },
+  { match: ["উকিল", "ওকালত", "প্রতিনিধি", "agent", "wakil"], arabic: ["الوكالة", "الوكيل"] },
+  { match: ["অভিভাবক", "ওলি", "wali", "guardian"], arabic: ["الولي", "الولاية"], wholeWord: true },
+  { match: ["লোন", "loan", "mortgage"], arabic: ["القرض", "الربا"] },
+  { match: ["আত্মহত্যা", "suicide"], arabic: ["قتل نفسه", "قاتل نفسه", "الانتحار"] },
+  {
+    match: ["জ্যোতিষ", "রাশিফল", "গণক", "গণনা", "astrology", "horoscope", "fortune teller"],
+    arabic: ["الكهانة", "العراف", "التنجيم"],
+  },
+  { match: ["গাধা", "donkey"], arabic: ["الحمر الأهلية", "الحمار"] },
+  { match: ["মাকরূহ", "মাকরুহ", "মাকরুহ", "makruh"], arabic: ["مكروه", "الكراهة"] },
+  { match: ["বিতর", "বেতের", "witr"], arabic: ["الوتر"], wholeWord: true },
+  { match: ["তারাবীহ", "তারাবিহ", "তারাবি", "tarawih"], arabic: ["التراويح", "قيام رمضان"] },
+  { match: ["সাহু", "sahw"], arabic: ["سجود السهو"], wholeWord: true },
+  { match: ["দাড়ি", "beard"], arabic: ["اللحية"], wholeWord: true },
+  {
+    match: ["গান", "বাদ্যযন্ত্র", "music", "singing"],
+    arabic: ["الغناء", "المعازف"],
+    wholeWord: true,
+  },
+  { match: ["ছবি", "ফটো", "photograph", "picture"], arabic: ["التصوير", "الصور"] },
   { match: ["মাযহাব", "মাজহাব", "madhhab"], arabic: ["مذهب", "المذهب"] },
   { match: ["ফতোয়া", "ফতওয়া", "fatwa"], arabic: ["الفتوى", "فتوى"] },
 ];
@@ -267,8 +361,16 @@ const EQUIVALENTS: readonly ArabicEquivalent[] = [
 const BOUNDARY = String.raw`(?:^|[\s,.।?!"'()\[\]/:;-])`;
 const WORD_END = String.raw`(?:ের|এর|য়ের|র|কে|ও)?(?=$|[\s,.।?!"'()\[\]/:;-])`;
 
+function termPattern(terms: readonly string[], wholeWord: boolean | undefined): RegExp {
+  return new RegExp(
+    `${BOUNDARY}(?:${terms.map((term) => composeNukta(term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})${wholeWord ? WORD_END : ""}`,
+    "iu",
+  );
+}
+
 const MATCHERS = EQUIVALENTS.map((entry) => ({
   arabic: entry.arabic,
+  required: entry.alsoRequires ? termPattern(entry.alsoRequires, false) : null,
   pattern: new RegExp(
     `${BOUNDARY}(?:${entry.match.map((term) => composeNukta(term).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})${entry.wholeWord ? WORD_END : ""}`,
     "iu",
@@ -279,7 +381,10 @@ export function arabicQueryTerms(query: string): string[] {
   const normalized = composeNukta(query);
   return [
     ...new Set(
-      MATCHERS.filter(({ pattern }) => pattern.test(normalized)).flatMap(({ arabic }) => arabic),
+      MATCHERS.filter(
+        ({ pattern, required }) =>
+          pattern.test(normalized) && (required === null || required.test(normalized)),
+      ).flatMap(({ arabic }) => arabic),
     ),
   ];
 }

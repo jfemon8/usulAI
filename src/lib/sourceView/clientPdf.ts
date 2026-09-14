@@ -11,20 +11,23 @@ export interface RenderedSource {
   pages: RenderedPage[];
   highlight?: { page: number; top: number };
   externalUrl?: string;
+  translationPending?: boolean;
 }
 
 interface CacheEntry {
   promise: Promise<RenderedSource>;
   value?: RenderedSource;
   usedAt: number;
+  refresh?: Promise<RenderedSource>;
 }
 
 const FALLBACK_ERROR = "সূত্রটি এখন দেখানো যাচ্ছে না।";
 const cache = new Map<string, CacheEntry>();
 const holds = new Map<string, number>();
+const fullFetchedAt = new Map<string, number>();
 
-export function sourcePdfUrl(reference: string): string {
-  return `/api/source-view?ref=${encodeURIComponent(reference)}`;
+export function sourcePdfUrl(reference: string, prefetch = false): string {
+  return `/api/source-view?ref=${encodeURIComponent(reference)}${prefetch ? "&prefetch=1" : ""}`;
 }
 
 function revoke(rendered: RenderedSource) {
@@ -70,8 +73,8 @@ async function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   );
 }
 
-async function renderSource(reference: string): Promise<RenderedSource> {
-  const response = await fetch(sourcePdfUrl(reference));
+async function renderSource(reference: string, prefetch: boolean): Promise<RenderedSource> {
+  const response = await fetch(sourcePdfUrl(reference, prefetch));
 
   if (!response.ok) {
     const body = (await response.json().catch(() => null)) as { error?: string } | null;
@@ -82,6 +85,7 @@ async function renderSource(reference: string): Promise<RenderedSource> {
   const highlightPage = Number(response.headers.get("x-highlight-page"));
   const highlightTop = Number(response.headers.get("x-highlight-top"));
   const externalUrl = response.headers.get("x-source-external-url") ?? undefined;
+  const translationPending = response.headers.get("x-translation-pending") === "1";
   const pdfUrl = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
   const pages: RenderedPage[] = [];
 
@@ -122,6 +126,7 @@ async function renderSource(reference: string): Promise<RenderedSource> {
         }
       : {}),
     ...(externalUrl ? { externalUrl } : {}),
+    ...(translationPending ? { translationPending } : {}),
   };
 }
 
@@ -192,13 +197,46 @@ export function peekRenderedSource(reference: string): RenderedSource | undefine
   return entry?.value && isFresh(reference, entry, Date.now()) ? entry.value : undefined;
 }
 
-export function loadRenderedSource(reference: string): Promise<RenderedSource> {
+function refreshPending(
+  reference: string,
+  entry: CacheEntry,
+  now: number,
+): Promise<RenderedSource> {
+  if (entry.refresh) return entry.refresh;
+  fullFetchedAt.set(reference, now);
+
+  const previous = entry.value;
+  const refresh = renderSource(reference, false).then(
+    (rendered) => {
+      cache.set(reference, {
+        promise: Promise.resolve(rendered),
+        value: rendered,
+        usedAt: Date.now(),
+      });
+      if (previous) setTimeout(() => revoke(previous), SOURCE_VIEW_CONFIG.revokeDelayMs);
+      prune(Date.now());
+      return rendered;
+    },
+    (error: unknown) => {
+      entry.refresh = undefined;
+      throw error;
+    },
+  );
+  entry.refresh = refresh;
+  return refresh;
+}
+
+export function loadRenderedSource(reference: string, prefetch = false): Promise<RenderedSource> {
   const now = Date.now();
   const cached = cache.get(reference);
 
   if (cached && (!cached.value || isFresh(reference, cached, now))) {
     cached.usedAt = now;
-    return cached.promise;
+    const retryDue = now - (fullFetchedAt.get(reference) ?? 0) >= SOURCE_VIEW_CONFIG.pendingRetryMs;
+    if (!prefetch && cached.value?.translationPending && retryDue) {
+      return refreshPending(reference, cached, now);
+    }
+    return cached.refresh ?? cached.promise;
   }
 
   if (cached?.value) {
@@ -206,8 +244,9 @@ export function loadRenderedSource(reference: string): Promise<RenderedSource> {
     revoke(cached.value);
   }
 
+  if (!prefetch) fullFetchedAt.set(reference, now);
   const entry: Partial<CacheEntry> & { usedAt: number } = { usedAt: now };
-  const promise = renderSource(reference).then(
+  const promise = renderSource(reference, prefetch).then(
     (rendered) => {
       entry.value = rendered;
       entry.usedAt = Date.now();
@@ -226,7 +265,7 @@ export function loadRenderedSource(reference: string): Promise<RenderedSource> {
 
 export function prefetchRenderedSource(reference: string): void {
   if (cache.has(reference)) return;
-  loadRenderedSource(reference).catch(() => undefined);
+  loadRenderedSource(reference, true).catch(() => undefined);
 }
 
 export function holdRenderedSource(reference: string): () => void {

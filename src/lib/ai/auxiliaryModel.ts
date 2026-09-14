@@ -1,5 +1,6 @@
 import { generateText } from "ai";
 import { AUXILIARY_CONFIG } from "@/config/site";
+import { healthyFirst, recordModelFailure, recordModelSuccess } from "@/lib/ai/modelHealth";
 import { getModelChain } from "@/lib/ai/providers";
 import { logger } from "@/lib/utils/logger";
 
@@ -8,6 +9,8 @@ export interface AuxiliaryPrompt {
   prompt: string;
   maxOutputTokens?: number;
   timeoutMs?: number;
+  headers?: Record<string, string>;
+  signal?: AbortSignal;
 }
 
 export async function generateWithChain(
@@ -30,7 +33,7 @@ export async function generateWithPreferredModels(
     const index = preferred.indexOf(modelId);
     return index < 0 ? preferred.length : index;
   };
-  const ordered = [...chain].sort((a, b) => rank(a.modelId) - rank(b.modelId));
+  const ordered = healthyFirst([...chain].sort((a, b) => rank(a.modelId) - rank(b.modelId)));
 
   for (const { tier, provider, modelId, model } of ordered) {
     try {
@@ -42,9 +45,14 @@ export async function generateWithPreferredModels(
         maxOutputTokens: options.maxOutputTokens ?? AUXILIARY_CONFIG.maxOutputTokens,
         maxRetries: 0,
         ...(options.timeoutMs ? { abortSignal: AbortSignal.timeout(options.timeoutMs) } : {}),
+        ...(options.headers ? { headers: options.headers } : {}),
       });
-      if (text.trim().length > 0) return { text, modelId };
+      if (text.trim().length > 0) {
+        recordModelSuccess(modelId);
+        return { text, modelId };
+      }
     } catch (error) {
+      recordModelFailure(modelId, error);
       logger.warn(`${purpose}: tier "${tier}" failed, trying next`, {
         provider,
         modelId,
@@ -61,11 +69,15 @@ export async function generateWithChainFrom(
   options: AuxiliaryPrompt,
   from: number,
 ): Promise<{ text: string; attempt: number } | null> {
-  const chain = getModelChain();
+  const chain = healthyFirst(getModelChain());
   let lastError: unknown;
 
   for (const [attempt, { tier, provider, modelId, model }] of chain.entries()) {
     if (attempt < from) continue;
+    if (options.signal?.aborted) {
+      lastError = new Error("time budget spent");
+      break;
+    }
 
     try {
       const { text } = await generateText({
@@ -75,12 +87,17 @@ export async function generateWithChainFrom(
         temperature: AUXILIARY_CONFIG.temperature,
         maxOutputTokens: options.maxOutputTokens ?? AUXILIARY_CONFIG.maxOutputTokens,
         maxRetries: 0,
+        ...(options.signal ? { abortSignal: options.signal } : {}),
       });
 
-      if (text.trim().length > 0) return { text, attempt };
+      if (text.trim().length > 0) {
+        recordModelSuccess(modelId);
+        return { text, attempt };
+      }
       lastError = new Error(`${provider}/${modelId} returned empty text`);
     } catch (error) {
       lastError = error;
+      recordModelFailure(modelId, error);
       logger.warn(`${purpose}: tier "${tier}" failed, trying next`, {
         provider,
         modelId,

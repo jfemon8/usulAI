@@ -165,6 +165,7 @@ export const SOURCE_TRANSLATION_CONFIG = {
   minSegmentChars: 60,
   models: ["gemini-3.6-flash", "glm-4.5-flash"] as readonly string[],
   maxConcurrent: 2,
+  maxPerRequest: 1,
   responseWaitMs: 45_000,
   failureCooldownMs: 600_000,
   maxConsecutiveFailures: 5,
@@ -221,8 +222,20 @@ export const QUOTE_ENRICHMENT_CONFIG = {
   minSegmentOverlap: 0.5,
 } as const;
 
+export const MODEL_HEALTH_CONFIG = {
+  authCooldownMs: 1_800_000,
+  quotaCooldownMs: 1_800_000,
+  rateCooldownMs: 45_000,
+  overloadCooldownMs: 30_000,
+} as const;
+
 export const ANSWER_GATE_CONFIG = {
   trustedModels: ["gemini-3.6-flash", "glm-4.5-flash"] as readonly string[],
+  excludedAnswerModels: [
+    "glm-4.6v-flash",
+    "glm-4.7-flash",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+  ] as readonly string[],
   minArabicRunWords: 3,
   minArabicMatchRatio: 0.5,
   maxForeignLatinWords: 1,
@@ -246,6 +259,8 @@ export const MODEL_ATTEMPT_CONFIG = {
   firstTokenTimeoutMs: 45_000,
   requestBudgetMs: 285_000,
   minAttemptMs: 15_000,
+  transientRetryRounds: 2,
+  transientRetryWaitMs: 15_000,
 } as const;
 
 export const OPENROUTER_FALLBACK_MODELS = [
@@ -258,12 +273,19 @@ export const ZAI_CONFIG = {
   baseUrl: "https://api.z.ai/api/paas/v4",
   thinking: "disabled",
   models: ["glm-4.7-flash", "glm-4.6v-flash", "glm-4.5-flash"],
+  maxConcurrentPerModel: 2,
+  reservedForAnswers: 1,
+  auxiliaryWaitMs: 30_000,
+  abandonedHoldMs: 45_000,
+  slotMaxHoldMs: 300_000,
 } as const;
 
 export const AUXILIARY_CONFIG = {
   temperature: 0,
   maxOutputTokens: 400,
   rewriteCacheSize: 200,
+  longQuestionWords: 25,
+  rewriteBudgetMs: 45_000,
   rerankCacheSize: 300,
 } as const;
 
@@ -284,6 +306,8 @@ export const RERANK_CONFIG = {
   minCandidates: 1,
   poolFactor: 2,
   snippetChars: 320,
+  maxConcurrent: 2,
+  budgetMs: 60_000,
 } as const;
 
 export const CONTEXT_CONFIG = {
@@ -628,6 +652,33 @@ export const OPENITI_CONFIG = {
       part: "হানাফি ফিকহ",
     },
     {
+      slug: "marghinani-al-hidaya",
+      repo: "0600AH",
+      version: "0593BurhanDinFarghaniMarghinani.HidayaFiSharhBidaya.JK000242-ara1",
+      title: "আল-হিদায়া (ইমাম মারগীনানী)",
+      author: "বুরহানুদ্দীন আলী ইবনু আবী বকর আল-মারগীনানী (মৃ. ৫৯৩ হি.)",
+      part: "হানাফি ফিকহ, দলিলসহ",
+      inlineHeadings: true,
+    },
+    {
+      slug: "mawsili-al-ikhtiyar",
+      repo: "0700AH",
+      version: "0683IbnMahmudMajdDinMawsili.IkhtiyarLiTaclil.JK009404-ara1",
+      title: "আল-ইখতিয়ার লি-তা'লীলিল মুখতার (ইবনু মাওদূদ আল-মাওসিলী)",
+      author: "আবদুল্লাহ ইবনু মাহমূদ ইবনু মাওদূদ আল-মাওসিলী (মৃ. ৬৮৩ হি.)",
+      part: "হানাফি ফিকহ, দলিলসহ",
+      inlineHeadings: true,
+    },
+    {
+      slug: "ibn-abidin-radd-al-muhtar",
+      repo: "1275AH",
+      version: "1252IbnCabidinDimashqi.RaddMukhtar.JK000170-ara1",
+      title: "রাদ্দুল মুহতার আলাদ দুররিল মুখতার (ইবনু আবিদীন)",
+      author: "মুহাম্মাদ আমীন ইবনু উমার ইবনু আবিদীন আশ-শামী (মৃ. ১২৫২ হি.)",
+      part: "হানাফি মাযহাবের ফতোয়ার প্রধান কিতাব (ফাতাওয়া শামী)",
+      inlineHeadings: true,
+    },
+    {
       slug: "ibn-abi-zayd-al-risala",
       repo: "0400AH",
       version: "0386IbnAbiZaydQayrawani.Risala.JK000171-ara1",
@@ -965,6 +1016,9 @@ export const SOURCE_VIEW_CONFIG = {
   renderScale: 2.5,
   clientCacheMs: 30 * 60_000,
   clientCacheEntries: 16,
+  translationWaitMs: 40_000,
+  pendingRetryMs: 60_000,
+  revokeDelayMs: 5_000,
   wheelLineHeight: 16,
   keyboardPanStep: 80,
   zoomStep: 0.25,

@@ -54,6 +54,39 @@ describe("detectQuestionLanguage", () => {
   });
 });
 
+describe("masail-style questions in each language", () => {
+  it("reads everyday Banglish masail as Banglish", () => {
+    const banglish = [
+      "Mohilara jore quran tilawat korle ki gunah hobe?",
+      "Hayez er shomoy quran porte parbe?",
+      "Musafir obosthay namaz kosor korte hoy kina",
+      "Home loan niye bari kena jabe?",
+      "Sud somporke islam ki bole",
+    ];
+
+    for (const question of banglish) {
+      expect(detectQuestionLanguage(question), question).toBe("banglish");
+    }
+  });
+
+  it("keeps English masail questions in English, even with Islamic terms", () => {
+    const english = [
+      "Can women recite the Quran loudly in front of non-mahram men?",
+      "Is it haram to take a home loan with interest?",
+      "What should a woman with irregular menstruation do about salah?",
+      "How many rakats does a traveller pray for Zuhr?",
+    ];
+
+    for (const question of english) {
+      expect(detectQuestionLanguage(question), question).toBe("other");
+    }
+  });
+
+  it("answers a question mixing English and Bangla script in Bangla", () => {
+    expect(detectQuestionLanguage("What is the hukum of নামাজ while travelling?")).toBe("bangla");
+  });
+});
+
 describe("follow-ups from the screenshot", () => {
   it("recognises a long Banglish follow-up that only had one known marker before", () => {
     expect(

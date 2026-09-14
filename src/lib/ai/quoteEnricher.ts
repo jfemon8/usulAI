@@ -7,6 +7,18 @@ import {
   vocalizationRatio,
 } from "@/lib/ai/arabicText";
 import { groundingHaystack, isArabicRunGrounded } from "@/lib/ai/answerGate";
+import {
+  completedSentencesEnd,
+  copiedTranslationSource,
+  dropSentences,
+  dropUnsupportedClaims,
+  isReferenceListLine,
+  isSourceSectionHeading,
+  normalizeCitationDigits,
+  referenceEchoStart,
+  referenceLinePossible,
+  stripReferenceEchoes,
+} from "@/lib/ai/answerText";
 import type { QuestionLanguage } from "@/lib/ai/language";
 import { transliterateArabic } from "@/lib/ai/transliterate";
 
@@ -49,15 +61,20 @@ const LABEL_ROOTS = [
   "অনুবাদ",
   "অর্থ",
   "উচ্চারণ",
+  "আয়াতের",
+  "হাদিসের",
+  "হাদীসের",
   "english",
   "translation",
   "transliteration",
   "pronunciation",
   "meaning",
+  "verse",
+  "hadith",
 ];
 
 const LABEL_LINE =
-  /^(?:বাংলা(?:য়)?(?:\s+এর)?\s*(?:অনুবাদ|অর্থ|উচ্চারণ)?|অনুবাদ|অর্থ|উচ্চারণ|english(?:\s+(?:meaning|translation|pronunciation|transliteration))?|translation|transliteration|pronunciation|meaning)\s*\**\s*[:ঃ]/iu;
+  /^(?:(?:আয়াতের|আয়াতটির|হাদিসের|হাদীসের|হাদিসটির)\s+(?:বাংলা\s+)?(?:অর্থ|অনুবাদ|উচ্চারণ)|বাংলা(?:য়)?(?:\s+এর)?\s*(?:অনুবাদ|অর্থ|উচ্চারণ)?|অনুবাদ|অর্থ|উচ্চারণ|english(?:\s+(?:meaning|translation|pronunciation|transliteration))?|(?:verse|hadith|ayah)\s+(?:meaning|translation)|(?:meaning|translation)\s+of\s+the\s+(?:verse|hadith|ayah)|translation|transliteration|pronunciation|meaning)\s*\**\s*[:ঃ]/iu;
 
 const DECORATION = /^[\s>*_•-]+/u;
 
@@ -344,6 +361,14 @@ function groundingTexts(options: EnricherOptions): string[] {
   ]);
 }
 
+const FOREIGN_SCRIPT_CHARACTER =
+  /(?![\p{Script=Bengali}\p{Script=Latin}\p{Script=Arabic}\p{Script=Common}\p{Script=Inherited}])[\p{L}\p{M}]/gu;
+const REPEATABLE_LINE_CHARS = 40;
+
+function lineKey(text: string): string {
+  return text.replace(/\s+/g, " ").trim();
+}
+
 export function createAnswerCleaner(options: EnricherOptions): (text: string) => string {
   if (!options.strict) return (text) => text;
 
@@ -352,8 +377,12 @@ export function createAnswerCleaner(options: EnricherOptions): (text: string) =>
   const note = options.language === "other" ? UNGROUNDED_QUOTE_NOTE.en : UNGROUNDED_QUOTE_NOTE.bn;
 
   return (text) => {
-    let cleaned = text.replace(/\s*\[(\d+)\]/g, (marker, number: string) =>
-      Number(number) >= 1 && Number(number) <= count ? marker : "",
+    let cleaned = dropUnsupportedClaims(
+      stripReferenceEchoes(text)
+        .replace(FOREIGN_SCRIPT_CHARACTER, "")
+        .replace(/\s*\[(\d+)\]/g, (marker, number: string) =>
+          Number(number) >= 1 && Number(number) <= count ? marker : "",
+        ),
     );
 
     for (const run of quoteRuns(cleaned)) {
@@ -365,8 +394,9 @@ export function createAnswerCleaner(options: EnricherOptions): (text: string) =>
   };
 }
 
-function heldBackFrom(text: string, strict: boolean): number {
+function heldBackFrom(text: string, strict: boolean, references: readonly string[]): number {
   if (!strict) return text.length;
+  if (referenceLinePossible(text, references)) return 0;
 
   let end = text.length;
   const arabic = text.search(ARABIC_LETTER);
@@ -374,6 +404,11 @@ function heldBackFrom(text: string, strict: boolean): number {
 
   const open = text.lastIndexOf("[");
   if (open >= 0 && !text.includes("]", open)) end = Math.min(end, open);
+
+  const echo = referenceEchoStart(text);
+  if (echo >= 0) end = Math.min(end, echo);
+
+  end = Math.min(end, completedSentencesEnd(text));
 
   const trailingSpace = text.slice(0, end).search(/\s+$/);
   return trailingSpace >= 0 ? trailingSpace : end;
@@ -390,6 +425,19 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
   let tail = "";
   let seen = "";
   const quoted = new Set<number>();
+  const longLines = new Set<string>();
+  const references = options.sources.flatMap((source) =>
+    source.reference ? [source.reference] : [],
+  );
+
+  const repeatsEarlierLine = (text: string, complete: boolean) => {
+    if (!strict) return false;
+    const key = lineKey(text);
+    if (key.length === 0) return false;
+    if (complete) return key.length >= REPEATABLE_LINE_CHARS && longLines.has(key);
+    for (const earlier of longLines) if (earlier.startsWith(key)) return true;
+    return false;
+  };
 
   const emit = (text: string) => {
     if (text.length === 0) return;
@@ -408,10 +456,34 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
     emit(`${block}\n\n`);
   };
 
+  const translations = options.sources.map((source) => ({
+    index: source.index,
+    texts: [
+      source.bangla ?? "",
+      source.english ?? "",
+      ...(source.segments ?? []).flatMap((segment) => [
+        segment.bangla ?? "",
+        segment.english ?? "",
+      ]),
+    ],
+  }));
+
+  const dropRepeatedMeanings = (text: string) =>
+    strict
+      ? dropSentences(text, (sentence) => {
+          const index = copiedTranslationSource(sentence, translations);
+          return index !== null && quoted.has(index);
+        })
+      : text;
+
   const emitLine = (final: boolean) => {
-    const end = final ? line.length : Math.max(lineEmitted, heldBackFrom(line, strict));
+    const end = final
+      ? line.length
+      : lineEmitted === 0 && repeatsEarlierLine(line, false)
+        ? 0
+        : Math.max(lineEmitted, heldBackFrom(line, strict, references));
     if (end <= lineEmitted) return;
-    emit(clean(line.slice(lineEmitted, end)));
+    emit(dropRepeatedMeanings(clean(line.slice(lineEmitted, end))));
     lineEmitted = end;
   };
 
@@ -433,6 +505,15 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
   };
 
   const endLine = () => {
+    if (
+      strict &&
+      lineEmitted === 0 &&
+      (isReferenceListLine(line, references) ||
+        isSourceSectionHeading(line) ||
+        repeatsEarlierLine(line, true))
+    ) {
+      state = "label";
+    }
     if (state === "undecided") {
       if (stripDecoration(line).length === 0) {
         state = "prose";
@@ -447,6 +528,8 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
     if (state !== "label") {
       emit("\n");
       rememberQuote();
+      const key = lineKey(line);
+      if (key.length >= REPEATABLE_LINE_CHARS) longLines.add(key);
     }
 
     line = "";
@@ -457,11 +540,10 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
   return {
     push(text) {
       output = "";
-      seen += text;
       const pieces = text.split("\n");
 
       pieces.forEach((piece, index) => {
-        line += piece;
+        line = normalizeCitationDigits(line + piece);
         if (index < pieces.length - 1) {
           endLine();
           return;
@@ -471,11 +553,21 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
         if (state === "prose") emitLine(false);
       });
 
+      seen += output;
       return output;
     },
     flush() {
       output = "";
       if (line.length > 0) {
+        if (
+          strict &&
+          lineEmitted === 0 &&
+          (isReferenceListLine(line, references) ||
+            isSourceSectionHeading(line) ||
+            repeatsEarlierLine(line, true))
+        ) {
+          state = "label";
+        }
         if (state === "undecided") {
           if (isLabelLine(line)) state = "label";
           else startProse();
@@ -488,7 +580,7 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
       }
       flushPending();
 
-      const appendix = evidenceAppendix(seen, quoted, options);
+      const appendix = evidenceAppendix(seen + output, quoted, options);
       if (appendix) {
         if (!tail.endsWith("\n\n")) emit(tail.endsWith("\n") ? "\n" : "\n\n");
         emit(appendix);

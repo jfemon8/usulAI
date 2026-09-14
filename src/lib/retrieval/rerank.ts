@@ -113,7 +113,11 @@ function verdictKey(question: string, group: RetrievedChunk[]): string {
     .join(",")}`;
 }
 
-async function rerankGroup(question: string, group: RetrievedChunk[]): Promise<RetrievedChunk[]> {
+async function rerankGroup(
+  question: string,
+  group: RetrievedChunk[],
+  signal: AbortSignal,
+): Promise<RetrievedChunk[]> {
   if (group.length < RERANK_CONFIG.minCandidates) return group;
 
   const key = verdictKey(question, group);
@@ -134,6 +138,7 @@ async function rerankGroup(question: string, group: RetrievedChunk[]): Promise<R
   const request = {
     system: RERANK_SYSTEM,
     prompt: `প্রশ্ন: ${question}\n\nউদ্ধৃতিসমূহ:\n${listing}\n\nপ্রাসঙ্গিক নম্বর:`,
+    signal,
   };
 
   try {
@@ -143,6 +148,7 @@ async function rerankGroup(question: string, group: RetrievedChunk[]): Promise<R
     let keep = parseKeepList(verdict.text, group.length);
     if (keep === null) return group;
 
+    if (keep.length === 0 && signal.aborted) return group;
     if (keep.length === 0) {
       const second = await generateWithChainFrom(
         "Re-rank second opinion",
@@ -194,13 +200,27 @@ export async function rerankContext(
 ): Promise<RetrievedChunk[]> {
   if (context.length < RERANK_CONFIG.minCandidates) return context;
 
-  const kept = await Promise.all(
-    groupBySource(context).map((group) => rerankGroup(question, group)),
+  const groups = groupBySource(context);
+  const kept: RetrievedChunk[][] = new Array(groups.length);
+  const signal = AbortSignal.timeout(RERANK_CONFIG.budgetMs);
+  let next = 0;
+  const worker = async () => {
+    while (next < groups.length) {
+      const index = next;
+      next += 1;
+      const group = groups[index] as RetrievedChunk[];
+      kept[index] = signal.aborted ? group : await rerankGroup(question, group, signal);
+    }
+  };
+  await Promise.all(
+    Array.from({ length: Math.min(RERANK_CONFIG.maxConcurrent, groups.length) }, worker),
   );
 
   const survivors = new Set(kept.flat().map((chunk) => chunk.id));
   const filtered = context.filter((chunk) => survivors.has(chunk.id));
 
-  logger.info(`Re-ranked context: kept ${filtered.length} of ${context.length}`);
+  logger.info(`Re-ranked context: kept ${filtered.length} of ${context.length}`, {
+    ...(signal.aborted ? { budgetSpent: true } : {}),
+  });
   return filtered;
 }

@@ -193,7 +193,9 @@ export function SourceViewer({ sources, startIndex, onClose }: SourceViewerProps
   }, [delivery]);
 
   useEffect(() => {
-    if (!reference || peekRenderedSource(reference)) return;
+    if (!reference) return;
+    const peeked = peekRenderedSource(reference);
+    if (peeked && !peeked.translationPending) return;
     let active = true;
     loadRenderedSource(reference)
       .then((value) => {

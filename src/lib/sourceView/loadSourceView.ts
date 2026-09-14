@@ -10,7 +10,14 @@ import {
   type OpenItiBook,
 } from "@/config/site";
 import { describeGrades } from "@/lib/ai/hadithGrade";
-import { loadTranslations, translationKey } from "@/lib/ai/sourceTranslation";
+import {
+  loadTranslations,
+  passageKind,
+  passageTranslationKey,
+  translatePassageOnDemand,
+  type SourceTranslation,
+} from "@/lib/ai/sourceTranslation";
+import { runAfterResponse } from "@/lib/utils/afterResponse";
 import { getDocumentsCollection } from "@/lib/db/mongoClient";
 import { splitSourceBlocks, TRANSLATION_LABELS } from "@/lib/ingestion/translations";
 import { isArabicText, mergeChunks, pageBlocks, type ViewBlock } from "@/lib/sourceView/pageText";
@@ -24,6 +31,11 @@ export interface SourceView {
   blocks: ViewBlock[];
   attribution?: string;
   externalUrl?: string;
+  translationPending?: boolean;
+}
+
+export interface SourceViewOptions {
+  translationWaitMs?: number;
 }
 
 interface DocumentRow {
@@ -118,7 +130,41 @@ async function pageRows(row: DocumentRow): Promise<DocumentRow[]> {
   return rows.some((candidate) => candidate._id.equals(row._id)) ? rows : [row];
 }
 
-async function bookView(row: DocumentRow): Promise<SourceView> {
+async function within<T>(job: Promise<T>, waitMs: number): Promise<T | undefined> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const result = await Promise.race([
+    job,
+    new Promise<undefined>((resolve) => {
+      timer = setTimeout(() => resolve(undefined), waitMs);
+    }),
+  ]);
+  clearTimeout(timer);
+  return result;
+}
+
+async function passageTranslation(
+  row: DocumentRow,
+  waitMs: number,
+): Promise<{
+  translation?: SourceTranslation;
+  pending: boolean;
+  kind: "arabic" | "english" | null;
+}> {
+  const kind = row.metadata?.restricted ? null : passageKind(row.content);
+  if (!kind) return { pending: false, kind };
+
+  const key = passageTranslationKey(row.content, kind);
+  const cached = (await loadTranslations([key])).get(key);
+  if (cached) return { translation: cached, pending: false, kind };
+  if (waitMs <= 0) return { pending: true, kind };
+
+  const job = translatePassageOnDemand(row.content, row.citation.reference, kind);
+  const translation = (await within(job, waitMs)) ?? undefined;
+  if (!translation) runAfterResponse(() => job);
+  return translation ? { translation, pending: false, kind } : { pending: true, kind };
+}
+
+async function bookView(row: DocumentRow, options: SourceViewOptions): Promise<SourceView> {
   const rows = await pageRows(row);
   const sections = rows.reduce<DocumentRow[][]>((groups, candidate) => {
     const last = groups[groups.length - 1];
@@ -146,8 +192,9 @@ async function bookView(row: DocumentRow): Promise<SourceView> {
   const publicBook = PUBLIC_DOMAIN_BOOKS.find(
     (candidate) => `${candidate.slug}.md` === row.metadata?.fileName,
   );
-  const translation = (await loadTranslations([translationKey(row.content)])).get(
-    translationKey(row.content),
+  const { translation, pending, kind } = await passageTranslation(
+    row,
+    options.translationWaitMs ?? SOURCE_VIEW_CONFIG.translationWaitMs,
   );
   const { chapter, page, volume } = row.metadata ?? {};
 
@@ -164,20 +211,35 @@ async function bookView(row: DocumentRow): Promise<SourceView> {
       .join(" · "),
   ].filter((line) => line.length > 0);
 
-  const translated: ViewBlock[] = translation
+  const banglaMeaning: ViewBlock[] = translation
     ? [
         {
           kind: "text",
           label: `হাইলাইট করা অংশের বাংলা অর্থ (${SOURCE_TRANSLATION_CONFIG.modelLabel})`,
           text: translation.segments.map((segment) => segment.bangla).join(" "),
         },
+      ]
+    : [];
+  const englishMeaning: ViewBlock[] =
+    translation && kind === "arabic"
+      ? [
+          {
+            kind: "text",
+            label: `English meaning (AI translation)`,
+            text: translation.segments.map((segment) => segment.english).join(" "),
+          },
+        ]
+      : [];
+  const pendingNote: ViewBlock[] = pending
+    ? [
         {
           kind: "text",
-          label: `English meaning (AI translation)`,
-          text: translation.segments.map((segment) => segment.english).join(" "),
+          label: `হাইলাইট করা অংশের বাংলা অর্থ (${SOURCE_TRANSLATION_CONFIG.modelLabel})`,
+          text: "অর্থ এখনো তৈরি হয়নি। কিছুক্ষণ পরে সূত্রটি আবার খুললে অর্থ দেখা যাবে।",
         },
       ]
     : [];
+  const translated = [...banglaMeaning, ...englishMeaning, ...pendingNote];
 
   return {
     sourceType: row.sourceType,
@@ -189,6 +251,7 @@ async function bookView(row: DocumentRow): Promise<SourceView> {
       row.citation.reference,
     details,
     blocks: [...pageContent, ...translated],
+    ...(pending ? { translationPending: true } : {}),
     ...(book
       ? { attribution: `OpenITI (KITAB), CC BY-NC-SA 4.0 · ${book.version}` }
       : publicBook
@@ -199,7 +262,10 @@ async function bookView(row: DocumentRow): Promise<SourceView> {
   };
 }
 
-export async function loadSourceView(reference: string): Promise<SourceView | null> {
+export async function loadSourceView(
+  reference: string,
+  options: SourceViewOptions = {},
+): Promise<SourceView | null> {
   const collection = await getDocumentsCollection();
   const row = (await collection.findOne(
     { sourceType: { $in: [...SOURCE_PRIORITY] }, "citation.reference": reference },
@@ -212,6 +278,6 @@ export async function loadSourceView(reference: string): Promise<SourceView | nu
     citation: hydrateCitation(row.citation, row.sourceType, row.metadata),
   };
   return ARABIC_TEXT_SOURCES.includes(row.sourceType)
-    ? bookView(hydrated)
+    ? bookView(hydrated, options)
     : scriptureView(hydrated);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateAnswer, type GateInput } from "@/lib/ai/answerGate";
+import { answerLanguageMatches, validateAnswer, type GateInput } from "@/lib/ai/answerGate";
 
 const RLM = String.fromCharCode(0x200f);
 
@@ -165,5 +165,44 @@ describe("validateAnswer on the replayed screenshot conversation", () => {
     const answer = `নবীজি (সা.) বলেছেন:\n\nمَا زَالَ جِبْرِيلُ يُوصِينِي بِالْجَارِ\n\nঅর্থাৎ প্রতিবেশীর হক গুরুত্বপূর্ণ [1]।`;
 
     expect(validateAnswer(answer, hadithInput).ok).toBe(true);
+  });
+});
+
+describe("answerLanguageMatches", () => {
+  const english =
+    "Women may recite the Quran aloud when no non-mahram man can hear, and quietly otherwise [1].";
+  const bangla =
+    "মহিলারা এমন জায়গায় জোরে কুরআন তিলাওয়াত করতে পারেন যেখানে বেগানা পুরুষ শোনে না [1]।";
+
+  it("waits for enough letters while the answer is still streaming", () => {
+    expect(answerLanguageMatches("Women may", "other")).toBeNull();
+    expect(answerLanguageMatches("মহিলারা", "bangla")).toBeNull();
+  });
+
+  it("accepts an answer in the expected language", () => {
+    expect(answerLanguageMatches(english, "other", true)).toBe(true);
+    expect(answerLanguageMatches(bangla, "bangla", true)).toBe(true);
+    expect(answerLanguageMatches(bangla, "banglish", true)).toBe(true);
+  });
+
+  it("rejects a Bangla answer to an English question and the reverse", () => {
+    expect(answerLanguageMatches(bangla, "other", true)).toBe(false);
+    expect(answerLanguageMatches(english, "bangla", true)).toBe(false);
+  });
+
+  it("does not count Arabic quotations or reference names against a Bangla answer", () => {
+    const quoted = `${bangla}\n\nيَا أَيُّهَا النَّبِيُّ قُل لِّأَزْوَاجِكَ وَبَنَاتِكَ\n\nসূরা আল-আহযাব (Al-Ahzaab 33:59) এ কথা বলে।`;
+    expect(answerLanguageMatches(quoted, "bangla", true)).toBe(true);
+  });
+
+  it("validateAnswer reports the mismatch", () => {
+    expect(
+      validateAnswer(bangla, {
+        contextTexts: ["x"],
+        references: ["An-Nur 24:31"],
+        question: "Can women recite aloud?",
+        language: "other",
+      }).reasons,
+    ).toContain("language-mismatch: expected other");
   });
 });

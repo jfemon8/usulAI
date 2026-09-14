@@ -49,3 +49,47 @@ describe("arabicQueryTerms", () => {
     expect(arabicQueryTerms("ইমাম আবু হানিফার জীবনী")).toContain("أبو حنيفة");
   });
 });
+
+describe("masail vocabulary", () => {
+  it("maps everyday masail words to the Arabic the fiqh books use", () => {
+    expect(arabicQueryTerms("সফরে কসর নামাজ কত দিন")).toEqual(
+      expect.arrayContaining(["المسافر", "قصر الصلاة", "الصلاة"]),
+    );
+    expect(arabicQueryTerms("ইস্তেহাযার রক্ত হলে নামাজ")).toContain("الاستحاضة");
+    expect(arabicQueryTerms("Can women recite the Quran aloud?")).toEqual(
+      expect.arrayContaining(["القراءة", "الجهر"]),
+    );
+    expect(arabicQueryTerms("ব্যান্ডেজের উপর মাসেহ")).toEqual(
+      expect.arrayContaining(["الجبيرة", "المسح"]),
+    );
+    expect(arabicQueryTerms("আত্মহত্যাকারীর জানাযা")).toEqual(
+      expect.arrayContaining(["قتل نفسه", "الجنازة"]),
+    );
+  });
+
+  it("keeps short words from firing inside longer ones", () => {
+    expect(arabicQueryTerms("গানিমতের মাল")).not.toContain("الغناء");
+    expect(arabicQueryTerms("মোজাম্মেল সাহেবের প্রশ্ন")).not.toContain("الخفين");
+    expect(arabicQueryTerms("কসরত করা")).not.toContain("القصر");
+  });
+});
+
+describe("combined terms", () => {
+  it("asks the fiqh books about a woman's voice only when both women and voice are in the question", () => {
+    expect(arabicQueryTerms("মহিলারা কি জোরে কুরআন তিলাওয়াত করতে পারবে?")).toContain(
+      "نغمة المرأة",
+    );
+    expect(arabicQueryTerms("Can women recite the Quran loudly?")).toContain("صوت المرأة");
+    expect(arabicQueryTerms("মহিলাদের পর্দার বিধান")).not.toContain("نغمة المرأة");
+    expect(arabicQueryTerms("ইমাম কি জোরে কেরাত পড়বেন")).not.toContain("نغمة المرأة");
+  });
+});
+
+describe("travel prayer", () => {
+  it("reaches the Hanafi chapter on the traveller's prayer in Bangla and English", () => {
+    expect(arabicQueryTerms("সফরে কসর নামাজ কত দিন পড়া যাবে?")).toContain("صلاة المسافر");
+    expect(arabicQueryTerms("How many days can a traveller shorten his prayers?")).toContain(
+      "نوى الإقامة",
+    );
+  });
+});

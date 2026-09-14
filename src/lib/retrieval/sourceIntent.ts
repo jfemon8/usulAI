@@ -83,10 +83,40 @@ function escapeTerm(term: string): string {
     .replace(/'/g, "['’]?");
 }
 
+const TOPIC_BEFORE: Partial<Record<SourceType, readonly string[]>> = {
+  quran: [
+    "recite",
+    "recites",
+    "reciting",
+    "read",
+    "reads",
+    "reading",
+    "memorize",
+    "memorise",
+    "memorizing",
+    "memorising",
+    "touch",
+    "touching",
+    "hold",
+    "holding",
+    "carry",
+    "carrying",
+    "learn",
+    "learning",
+    "teach",
+    "teaching",
+    "complete",
+    "finish",
+  ],
+};
+
 function markerSource(sourceType: SourceType): string {
   const topics = TOPIC_AFTER[sourceType] ?? [];
   const notTopic = topics.length > 0 ? `(?!\\s*(?:${topics.map(escapeTerm).join("|")}))` : "";
-  return `(?:${SOURCE_MARKERS[sourceType].map(escapeTerm).join("|")})${SUFFIX}${END}${notTopic}`;
+  const verbs = TOPIC_BEFORE[sourceType] ?? [];
+  const notObject =
+    verbs.length > 0 ? `(?<!(?:${verbs.join("|")})\\s+(?:the\\s+(?:holy\\s+)?)?)` : "";
+  return `${notObject}(?:${SOURCE_MARKERS[sourceType].map(escapeTerm).join("|")})${SUFFIX}${END}${notTopic}`;
 }
 
 const MATCHERS = SOURCE_PRIORITY.map((sourceType) => ({
@@ -95,8 +125,48 @@ const MATCHERS = SOURCE_PRIORITY.map((sourceType) => ({
   strip: new RegExp(`(${BOUNDARY})${markerSource(sourceType)}`, "giu"),
 }));
 
+const SCRIPTURE_PAIR = [
+  String.raw`(?:কুরআন|কোরআন|কুরান|কোরান)\s*(?:ও|এবং|আর|,|-)?\s*(?:হাদিস|হাদীস|সুন্নাহ|সুন্নাহর)(?:ের|র|\s*এর)?`,
+  String.raw`(?:quran|qur'?an|koran)\s*(?:o|and|&|,|-)?\s*(?:hadith|hadis|hadees|sunnah)(?:\s*er|s)?`,
+];
+const IN_LIGHT_OF = [
+  "আলোকে",
+  "আলোয়",
+  "অনুযায়ী",
+  "অনুসারে",
+  "দৃষ্টিতে",
+  "দৃষ্টিকোণ",
+  "ভিত্তিতে",
+  "মতে",
+  "দলিলসহ",
+  "দলীলসহ",
+  "রেফারেন্সসহ",
+  "aloke",
+  "onujayi",
+  "anujayi",
+  "dristite",
+  "drishtite",
+  "mote",
+];
+const GENERIC_SCOPE = new RegExp(
+  [
+    ...SCRIPTURE_PAIR.map(
+      (pair) => String.raw`${pair}\s*(?:${IN_LIGHT_OF.map(escapeTerm).join("|")})`,
+    ),
+    String.raw`(?:in\s+(?:the\s+)?light\s+of|according\s+to|based\s+on)\s+(?:the\s+)?(?:quran|qur'?an|koran)\s*(?:and|&|,)?\s*(?:the\s+)?(?:hadith|sunnah|hadiths)`,
+  ]
+    .map(composeNukta)
+    .join("|"),
+  "giu",
+);
+
+export function withoutGenericScope(question: string): string {
+  return composeNukta(question).replace(GENERIC_SCOPE, " ");
+}
+
 export function detectSourceIntent(question: string): SourceType[] | null {
-  const named = MATCHERS.filter(({ pattern }) => pattern.test(composeNukta(question))).map(
+  const text = withoutGenericScope(question);
+  const named = MATCHERS.filter(({ pattern }) => pattern.test(text)).map(
     ({ sourceType }) => sourceType,
   );
   return named.length > 0 ? named : null;

@@ -19,7 +19,7 @@ const BENGALI_LETTER = /(?=\p{L})\p{Script=Bengali}/u;
 const FOREIGN_LETTER = /(?=\p{L})(?!\p{Script=Bengali})\p{L}/u;
 const LATIN_WORD = /\p{Script=Latin}{3,}/gu;
 const FOREIGN_SCRIPT_LETTER =
-  /(?=\p{L})(?![\p{Script=Bengali}\p{Script=Latin}\p{Script=Arabic}\p{Script=Common}\p{Script=Inherited}])\p{L}|[\u067E\u0686\u0698\u0679\u0688\u0691\u06A9\u06AF\u06BA\u06BE\u06CC\u06D2]/gu;
+  /(?![\p{Script=Bengali}\p{Script=Latin}\p{Script=Arabic}\p{Script=Common}\p{Script=Inherited}])[\p{L}\p{M}]|[\u067E\u0686\u0698\u0679\u0688\u0691\u06A9\u06AF\u06BA\u06BE\u06CC\u06D2]/gu;
 const CITATION = /\[(\d+)\]/g;
 
 const HONORIFICS = [
@@ -117,6 +117,24 @@ function checkForeignLatin(answer: string, input: GateInput): string[] {
     : [];
 }
 
+const LANGUAGE_PROBE_LETTERS = 60;
+
+export function answerLanguageMatches(
+  answer: string,
+  language: QuestionLanguage,
+  final = false,
+): boolean | null {
+  const prose = answer.replace(/\[\d+\]/g, "");
+  const bengali = (prose.match(/(?=\p{L})\p{Script=Bengali}/gu) ?? []).length;
+  const latin = (prose.match(/\p{Script=Latin}/gu) ?? []).length;
+  const letters = bengali + latin;
+  if (letters < LANGUAGE_PROBE_LETTERS && !final) return null;
+  if (letters === 0) return true;
+
+  const bengaliShare = bengali / letters;
+  return language === "other" ? bengaliShare <= 0.3 : bengaliShare >= 0.5;
+}
+
 export function validateAnswer(answer: string, input: GateInput): GateVerdict {
   const contextJoined = input.contextTexts.join("\n\n");
 
@@ -129,6 +147,9 @@ export function validateAnswer(answer: string, input: GateInput): GateVerdict {
     ...checkMixedScript(answer),
     ...checkForeignScript(answer, contextJoined),
     ...checkForeignLatin(answer, input),
+    ...(answerLanguageMatches(answer, input.language, true) === false
+      ? [`language-mismatch: expected ${input.language}`]
+      : []),
   ];
 
   return { ok: reasons.length === 0, reasons };

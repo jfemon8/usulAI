@@ -7,7 +7,7 @@ import {
 } from "@/config/site";
 import { logQuery, summariseRetrieval, type GateRejection } from "@/lib/analytics/queryLog";
 import { detectConversationLanguage } from "@/lib/ai/language";
-import { getModelChain } from "@/lib/ai/providers";
+import { ANSWER_PRIORITY_HEADERS, getModelChain, type TieredModel } from "@/lib/ai/providers";
 import { rewriteQuery, type ConversationTurn } from "@/lib/ai/queryRewriter";
 import { buildSystemPrompt, buildRagPrompt } from "@/lib/ai/prompt";
 import { findVerifiedAnswer } from "@/lib/analytics/verifiedAnswers";
@@ -23,7 +23,13 @@ import {
 } from "@/lib/ai/sourceTranslation";
 import { createRepetitionGuard } from "@/lib/ai/repetitionGuard";
 import { createWordPacer } from "@/lib/ai/wordPacer";
-import { validateAnswer, type GateInput } from "@/lib/ai/answerGate";
+import { answerLanguageMatches, validateAnswer, type GateInput } from "@/lib/ai/answerGate";
+import {
+  answerOrder,
+  isTransientFailure,
+  recordModelFailure,
+  recordModelSuccess,
+} from "@/lib/ai/modelHealth";
 import { preferredGrade } from "@/lib/ai/hadithGrade";
 import { sanitizeSourceContent, splitSourceBlocks } from "@/lib/ingestion/translations";
 import { createQuoteEnricher, enrichAnswer, type EnricherOptions } from "@/lib/ai/quoteEnricher";
@@ -37,7 +43,7 @@ export const maxDuration = 300;
 
 const NO_CONTEXT_REPLY = `দুঃখিত, আপনার এই প্রশ্নের উত্তর দেওয়ার মতো কোনো দলিল আমার সংগ্রহে খুঁজে পাইনি।
 
-আমি শুধু কুরআন, হাদিস, ইজমা, কিয়াস ও সীরাত থেকে পাওয়া দলিলের ভিত্তিতেই উত্তর দিই; দলিল ছাড়া নিজে থেকে কিছু বলি না।
+আমি শুধু কুরআন, হাদিস, ইজমা, কিয়াস, সীরাত ও ফিকহের কিতাব থেকে পাওয়া দলিলের ভিত্তিতেই উত্তর দিই; দলিল ছাড়া নিজে থেকে কিছু বলি না।
 
 প্রশ্নটি একটু ভিন্নভাবে বা আরও নির্দিষ্ট করে জিজ্ঞেস করে দেখতে পারেন। আর এই মাসআলার নির্ভরযোগ্য সমাধানের জন্য নিকটস্থ একজন যোগ্য আলেমের সাথে পরামর্শ করার অনুরোধ করছি।`;
 
@@ -187,7 +193,11 @@ export async function POST(request: Request) {
       }),
     );
   });
-  const chain = getModelChain();
+  const fullChain = getModelChain();
+  const answerChain = fullChain.filter(
+    (entry) => !ANSWER_GATE_CONFIG.excludedAnswerModels.includes(entry.modelId),
+  );
+  const chain = answerOrder(answerChain.length > 0 ? answerChain : fullChain);
 
   const sources: AnswerSource[] = context.map((chunk, index) => ({
     index: index + 1,
@@ -208,160 +218,243 @@ export async function POST(request: Request) {
       let lastError: unknown;
       const gateRejections: GateRejection[] = [];
 
-      for (const [attempt, { tier, provider, modelId, model }] of chain.entries()) {
-        const remaining = deadline - Date.now();
+      let pending: TieredModel[] = chain;
+      let attempt = -1;
 
-        if (remaining < MODEL_ATTEMPT_CONFIG.minAttemptMs) {
-          lastError = new Error(
-            `request time budget spent after ${attempt} of ${chain.length} attempts`,
-          );
-          logger.warn(`Stopping before attempt ${attempt + 1}/${chain.length}: time budget spent`, {
-            remainingMs: remaining,
+      rounds: for (
+        let round = 0;
+        round <= MODEL_ATTEMPT_CONFIG.transientRetryRounds && pending.length > 0;
+        round += 1
+      ) {
+        if (round > 0) {
+          const waitMs = MODEL_ATTEMPT_CONFIG.transientRetryWaitMs;
+          if (deadline - Date.now() < waitMs + MODEL_ATTEMPT_CONFIG.minAttemptMs) break;
+          logger.info("Retrying models that were only rate limited or overloaded", {
+            models: pending.map((entry) => entry.modelId).join(", "),
+            waitMs,
           });
-          break;
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
         }
 
-        const textId = crypto.randomUUID();
-        let emitted = false;
+        const transient: TieredModel[] = [];
 
-        const controller = new AbortController();
-        const budget = setTimeout(() => controller.abort(), remaining);
-        let stall: ReturnType<typeof setTimeout> | undefined;
+        for (const entry of pending) {
+          const { tier, provider, modelId, model } = entry;
+          attempt += 1;
+          const remaining = deadline - Date.now();
 
-        const gated = !ANSWER_GATE_CONFIG.trustedModels.includes(modelId);
-        let streamError: unknown;
-        const pacer = createWordPacer({
-          write: (chunk) => writer.write({ type: "text-delta", id: textId, delta: chunk }),
-        });
+          if (remaining < MODEL_ATTEMPT_CONFIG.minAttemptMs) {
+            lastError = new Error(
+              `request time budget spent after ${attempt} of ${chain.length} attempts`,
+            );
+            logger.warn(
+              `Stopping before attempt ${attempt + 1}/${chain.length}: time budget spent`,
+              {
+                remainingMs: remaining,
+              },
+            );
+            break rounds;
+          }
 
-        try {
-          const result = streamText({
-            model,
-            system,
-            prompt,
-            maxRetries: MODEL_ATTEMPT_CONFIG.retries,
-            abortSignal: controller.signal,
-            onError: ({ error }) => {
-              streamError = error;
-            },
+          const textId = crypto.randomUUID();
+          let emitted = false;
+
+          const controller = new AbortController();
+          const budget = setTimeout(() => controller.abort(), remaining);
+          let stall: ReturnType<typeof setTimeout> | undefined;
+
+          const gated = !ANSWER_GATE_CONFIG.trustedModels.includes(modelId);
+          let streamError: unknown;
+          const pacer = createWordPacer({
+            write: (chunk) => writer.write({ type: "text-delta", id: textId, delta: chunk }),
           });
 
-          await translationsReady;
-          stall = setTimeout(
-            () => controller.abort(),
-            Math.min(MODEL_ATTEMPT_CONFIG.firstTokenTimeoutMs, Math.max(0, deadline - Date.now())),
-          );
+          try {
+            const result = streamText({
+              model,
+              system,
+              prompt,
+              maxRetries: MODEL_ATTEMPT_CONFIG.retries,
+              abortSignal: controller.signal,
+              ...(tier === "reserve" ? { headers: ANSWER_PRIORITY_HEADERS } : {}),
+              onError: ({ error }) => {
+                streamError = error;
+              },
+            });
 
-          const guard = createRepetitionGuard(contextText);
+            await translationsReady;
+            const lastInChain = entry === pending[pending.length - 1];
+            stall = setTimeout(
+              () => controller.abort(),
+              Math.min(
+                lastInChain ? Number.POSITIVE_INFINITY : MODEL_ATTEMPT_CONFIG.firstTokenTimeoutMs,
+                Math.max(0, deadline - Date.now()),
+              ),
+            );
 
-          const send = (piece: string) => {
-            if (piece.length === 0) return;
-            if (!emitted) {
-              writer.write({ type: "text-start", id: textId });
-              emitted = true;
-            }
-            pacer.push(piece);
-          };
+            const guard = createRepetitionGuard(contextText);
 
-          if (gated) {
-            let full = "";
+            const send = (piece: string) => {
+              if (piece.length === 0) return;
+              if (!emitted) {
+                writer.write({ type: "text-start", id: textId });
+                emitted = true;
+              }
+              pacer.push(piece);
+            };
 
-            for await (const delta of result.textStream) {
-              clearTimeout(stall);
-              full += delta;
-            }
+            if (gated) {
+              let full = "";
 
-            if (full.trim().length > 0) {
-              const verdict = validateAnswer(full, gateInput);
+              for await (const delta of result.textStream) {
+                clearTimeout(stall);
+                full += delta;
+              }
 
-              if (!verdict.ok) {
-                gateRejections.push({ modelId, reasons: verdict.reasons });
-                lastError = new Error(`${provider}/${modelId} rejected by the answer gate`);
-                logger.warn(`Attempt ${attempt + 1}/${chain.length} rejected by the answer gate`, {
-                  tier,
-                  provider,
+              if (full.trim().length > 0) {
+                const verdict = validateAnswer(full, gateInput);
+
+                if (!verdict.ok) {
+                  gateRejections.push({ modelId, reasons: verdict.reasons });
+                  lastError = new Error(`${provider}/${modelId} rejected by the answer gate`);
+                  logger.warn(
+                    `Attempt ${attempt + 1}/${chain.length} rejected by the answer gate`,
+                    {
+                      tier,
+                      provider,
+                      modelId,
+                      reasons: verdict.reasons.join(" | "),
+                    },
+                  );
+                  continue;
+                }
+
+                send(enrichAnswer(full, enrichmentOptions));
+              }
+            } else {
+              const enricher = createQuoteEnricher(enrichmentOptions);
+              let probe = "";
+              let probing = true;
+              let wrongLanguage = false;
+
+              const release = (text: string) => {
+                if (!probing) {
+                  send(enricher.push(text));
+                  return;
+                }
+                probe += text;
+                const verdict = answerLanguageMatches(probe, language);
+                if (verdict === null) return;
+                probing = false;
+                if (!verdict) {
+                  wrongLanguage = true;
+                  return;
+                }
+                send(enricher.push(probe));
+              };
+
+              for await (const delta of result.textStream) {
+                clearTimeout(stall);
+                const step = guard.push(delta);
+                release(step.emit);
+                if (wrongLanguage || step.stopped) break;
+              }
+
+              if (!wrongLanguage && !guard.wasCut()) release(guard.flush());
+
+              if (!wrongLanguage && probing && probe.length > 0) {
+                probing = false;
+                if (answerLanguageMatches(probe, language, true) === false) wrongLanguage = true;
+                else send(enricher.push(probe));
+              }
+
+              if (wrongLanguage) {
+                controller.abort();
+                gateRejections.push({
                   modelId,
-                  reasons: verdict.reasons.join(" | "),
+                  reasons: [`language-mismatch: expected ${language}`],
                 });
+                lastError = new Error(`${provider}/${modelId} answered in the wrong language`);
+                logger.warn(
+                  `Attempt ${attempt + 1}/${chain.length} answered in the wrong language`,
+                  {
+                    tier,
+                    provider,
+                    modelId,
+                  },
+                );
                 continue;
               }
 
-              send(enrichAnswer(full, enrichmentOptions));
+              if (guard.wasCut()) {
+                controller.abort();
+                logger.warn(`Attempt ${attempt + 1}/${chain.length} started looping, answer cut`, {
+                  tier,
+                  provider,
+                  modelId,
+                });
+              }
+              send(enricher.flush());
             }
-          } else {
-            const enricher = createQuoteEnricher(enrichmentOptions);
 
-            for await (const delta of result.textStream) {
-              clearTimeout(stall);
-              const step = guard.push(delta);
-              send(enricher.push(step.emit));
-              if (step.stopped) break;
-            }
-
-            if (guard.wasCut()) {
-              controller.abort();
-              logger.warn(`Attempt ${attempt + 1}/${chain.length} started looping, answer cut`, {
-                tier,
-                provider,
+            if (emitted) {
+              recordModelSuccess(modelId);
+              await pacer.finish();
+              writer.write({ type: "text-end", id: textId });
+              void logQuery({
+                question,
+                searchQuery: query,
+                rewritten,
+                historyTurns: history.length,
+                ...(retrieval.scopedTo ? { scopedTo: retrieval.scopedTo } : {}),
+                language,
+                ...summariseRetrieval(context),
+                answered: true,
+                modelTier: tier,
                 modelId,
+                attempt: attempt + 1,
+                loopCut: guard.wasCut(),
+                gateRejections: gateRejections.length > 0 ? gateRejections : undefined,
               });
-              send(enricher.flush());
-            } else {
-              send(enricher.push(guard.flush()));
-              send(enricher.flush());
-            }
-          }
-
-          if (emitted) {
-            await pacer.finish();
-            writer.write({ type: "text-end", id: textId });
-            void logQuery({
-              question,
-              searchQuery: query,
-              rewritten,
-              historyTurns: history.length,
-              ...(retrieval.scopedTo ? { scopedTo: retrieval.scopedTo } : {}),
-              language,
-              ...summariseRetrieval(context),
-              answered: true,
-              modelTier: tier,
-              modelId,
-              attempt: attempt + 1,
-              loopCut: guard.wasCut(),
-              gateRejections: gateRejections.length > 0 ? gateRejections : undefined,
-            });
-            return;
-          }
-
-          lastError = streamError ?? new Error(`${provider}/${modelId} returned an empty stream`);
-          logger.warn(`Attempt ${attempt + 1}/${chain.length} produced no output, trying next`, {
-            tier,
-            provider,
-            modelId,
-            ...(streamError ? { error: String(streamError).slice(0, 200) } : {}),
-          });
-        } catch (error) {
-          lastError = error;
-          logger.warn(`Attempt ${attempt + 1}/${chain.length} failed, trying next`, {
-            tier,
-            provider,
-            modelId,
-            error: String(error).slice(0, 200),
-          });
-
-          if (emitted) {
-            await pacer.finish();
-            writer.write({ type: "text-end", id: textId });
-            if (controller.signal.aborted && Date.now() >= deadline - 1000) {
-              logger.warn("Answer cut at the request time budget", { tier, provider, modelId });
               return;
             }
-            throw error;
+
+            lastError = streamError ?? new Error(`${provider}/${modelId} returned an empty stream`);
+            if (streamError) recordModelFailure(modelId, streamError);
+            if (streamError && isTransientFailure(streamError)) transient.push(entry);
+            logger.warn(`Attempt ${attempt + 1}/${chain.length} produced no output, trying next`, {
+              tier,
+              provider,
+              modelId,
+              ...(streamError ? { error: String(streamError).slice(0, 200) } : {}),
+            });
+          } catch (error) {
+            lastError = error;
+            recordModelFailure(modelId, streamError ?? error);
+            if (!emitted && isTransientFailure(streamError ?? error)) transient.push(entry);
+            logger.warn(`Attempt ${attempt + 1}/${chain.length} failed, trying next`, {
+              tier,
+              provider,
+              modelId,
+              error: String(error).slice(0, 200),
+            });
+
+            if (emitted) {
+              await pacer.finish();
+              writer.write({ type: "text-end", id: textId });
+              if (controller.signal.aborted && Date.now() >= deadline - 1000) {
+                logger.warn("Answer cut at the request time budget", { tier, provider, modelId });
+                return;
+              }
+              throw error;
+            }
+          } finally {
+            clearTimeout(stall);
+            clearTimeout(budget);
           }
-        } finally {
-          clearTimeout(stall);
-          clearTimeout(budget);
         }
+
+        pending = transient;
       }
 
       logger.error(`Every model attempt failed (${chain.length} tried)`, {

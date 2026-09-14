@@ -4,7 +4,11 @@ vi.mock("@/lib/db/mongoClient", () => ({ getDb: vi.fn() }));
 vi.mock("@/lib/ai/auxiliaryModel", () => ({ generateWithPreferredModels: vi.fn() }));
 
 const {
+  englishTranslationKey,
   mergeVocalization,
+  parseEnglishTranslation,
+  passageKind,
+  passageTranslationKey,
   needsTranslation,
   parseTranslation,
   splitPassage,
@@ -227,5 +231,40 @@ describe("translating at response time", () => {
     const translated = withTranslation(chunk, { segments: [{ arabic: first, bangla, english }] });
 
     expect(startMissingTranslations([translated]).jobs).toHaveLength(0);
+  });
+});
+
+describe("English book passages", () => {
+  const english =
+    "In the thirteenth year of his mission the Prophet left Mecca by night with Abu Bakr and hid in the cave of Thaur for three days.";
+
+  it("tells Arabic, English and Bangla passages apart", () => {
+    expect(passageKind(first)).toBe("arabic");
+    expect(passageKind(english)).toBe("english");
+    expect(passageKind("নবী (সা.) আবু বকরকে নিয়ে রাতে মক্কা ত্যাগ করেন।")).toBeNull();
+  });
+
+  it("keys English translations apart from Arabic ones and ignores whitespace", () => {
+    expect(passageTranslationKey(english, "english")).toBe(englishTranslationKey(`  ${english}\n`));
+    expect(passageTranslationKey(english, "english")).toMatch(/^en:[0-9a-f]{64}$/);
+    expect(passageTranslationKey(first, "arabic")).toBe(translationKey(first));
+  });
+
+  it("accepts a clean Bangla translation and keeps the English original", () => {
+    const parsed = parseEnglishTranslation(
+      "নবুওয়াতের তেরোতম বছরে নবী রাতের বেলা আবু বকরকে নিয়ে মক্কা ত্যাগ করেন এবং তিন দিন সাওর গুহায় লুকিয়ে থাকেন।",
+      english,
+    );
+
+    expect(parsed?.segments).toHaveLength(1);
+    expect(parsed?.segments[0]?.english).toBe(english);
+    expect(parsed?.segments[0]?.bangla).toContain("সাওর গুহায়");
+  });
+
+  it("rejects a reply that is not Bangla or fuses scripts inside a word", () => {
+    expect(parseEnglishTranslation(english, english)).toBeNull();
+    expect(
+      parseEnglishTranslation("নবী রাতের বেলা মক্কাtyag করেন এবং গুহায় লুকিয়ে থাকেন।", english),
+    ).toBeNull();
   });
 });

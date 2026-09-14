@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   attachOrphanCitations,
+  completedSentencesEnd,
+  dropUnsupportedClaims,
+  isSourceSectionHeading,
+  normalizeCitationDigits,
   isArabicDominant,
+  isReferenceListLine,
   normalizeDashes,
   prepareAnswer,
+  referenceEchoStart,
   separateArabicQuotes,
   splitMarkdownBlocks,
+  stripReferenceEchoes,
   stripTrailingSources,
 } from "@/lib/ai/answerText";
 
@@ -173,5 +180,128 @@ describe("separateArabicQuotes", () => {
   it("leaves a short Arabic word inside a sentence alone", () => {
     const line = "এর অর্থ: الله মহান";
     expect(separateArabicQuotes(line)).toBe(line);
+  });
+});
+
+describe("reference echoes and model-written reference lists", () => {
+  it("removes the context header a model copies after or before a marker", () => {
+    expect(stripReferenceEchoes("It is allowed [1] (Quran, An-Nur 24:31).")).toBe(
+      "It is allowed [1].",
+    );
+    expect(stripReferenceEchoes("এটি জায়েজ (হাদিস, সহীহ বুখারী 1) [2]।")).toBe("এটি জায়েজ [2]।");
+    expect(stripReferenceEchoes("এটি কি\u09AF\u09BCাসের নীতি [3] (কি\u09DFাস, আল-লুমা)।")).toBe(
+      "এটি কি\u09AF\u09BCাসের নীতি [3]।",
+    );
+  });
+
+  it("keeps ordinary parentheses in prose", () => {
+    const prose = "Zakat is due on savings (above the nisab) [1].";
+    expect(stripReferenceEchoes(prose)).toBe(prose);
+  });
+
+  it("recognises list lines, including ones that only repeat a known reference", () => {
+    expect(isReferenceListLine("[1] (কুরআন, আল-আহযাব 33:59)")).toBe(true);
+    expect(isReferenceListLine("**References:**")).toBe(true);
+    expect(isReferenceListLine("- Al-Ahzaab 33:59 [1]", ["Al-Ahzaab 33:59"])).toBe(true);
+    expect(isReferenceListLine("- Al-Ahzaab 33:59 [1]")).toBe(false);
+    expect(
+      isReferenceListLine("Al-Ahzaab 33:59 tells believing women to draw their cloaks [1].", [
+        "Al-Ahzaab 33:59",
+      ]),
+    ).toBe(false);
+  });
+
+  it("prepareAnswer strips a list written in the middle of an answer", () => {
+    const text =
+      "হিজাব ফরজ [1]।\n\n[1] (কুরআন, আল-আহযাব 33:59)\n[2] (হাদিস, সহীহ বুখারী 146)\n\nব্যাখ্যা।";
+    expect(prepareAnswer(text)).not.toContain("আল-আহযাব");
+    expect(prepareAnswer(text)).toContain("ব্যাখ্যা।");
+  });
+
+  it("referenceEchoStart holds back a marker that may still get a copied header", () => {
+    expect(referenceEchoStart("It is allowed [1] (Qur")).toBe(14);
+    expect(referenceEchoStart("It is allowed.")).toBe(-1);
+  });
+});
+
+describe("claims a model cannot back with a citation", () => {
+  it("drops a consensus claim or a scholar attribution that cites nothing", () => {
+    const text =
+      "মহিলাদের জোরে তিলাওয়াত না করা উত্তম [2]। আলেমগণ একমত যে মহিলাদের স্বর নিচু রাখা উচিত। ইবনু রুশদ (রহ.) বিদায়াতুল মুজতাহিদে উল্লেখ করেছেন যে এটি মাকরূহ। বিস্তারিত জানতে মুফতির পরামর্শ নিন।";
+
+    expect(dropUnsupportedClaims(text)).toBe(
+      "মহিলাদের জোরে তিলাওয়াত না করা উত্তম [2]। বিস্তারিত জানতে মুফতির পরামর্শ নিন।",
+    );
+  });
+
+  it("keeps the same claims when they carry a citation, and denials of consensus", () => {
+    const cited = "ইবনুল মুনযির (রহ.) উল্লেখ করেছেন যে আলেমগণ একমত যে নামাজ ফরজ [3]।";
+    const denial = "এ বিষয়ে আলেমদের কোনো ইজমা রয়েছে বলে প্রাপ্ত দলিলে পাওয়া যায়নি।";
+
+    expect(dropUnsupportedClaims(cited)).toBe(cited);
+    expect(dropUnsupportedClaims(denial)).toBe(denial);
+    expect(
+      dropUnsupportedClaims(
+        "Scholars are agreed that it is disliked. It is allowed [1].",
+      ).trimStart(),
+    ).toBe("It is allowed [1].");
+  });
+
+  it("finds where the finished sentences end, keeping a citation written after the full stop", () => {
+    expect(completedSentencesEnd("প্রথম কথা। [1] দ্বিতীয়")).toBe("প্রথম কথা। [1]".length);
+    expect(completedSentencesEnd("ইমাম আবু হানীফা রহ. বলেন")).toBe(0);
+    expect(completedSentencesEnd("It is allowed.")).toBe(0);
+  });
+});
+
+describe("per-source headings", () => {
+  it("recognises headings that sort evidence by source", () => {
+    for (const heading of [
+      "হাদিস থেকে দলিল:",
+      "আলেমদের ঐকমত্য (ইজমা) থেকে দলিল:",
+      "**ফিকহ থেকে দলিল**",
+      "### কুরআনের দলিল",
+      "Evidence from the Hadith:",
+    ]) {
+      expect(isSourceSectionHeading(heading), heading).toBe(true);
+    }
+  });
+
+  it("leaves prose that mentions evidence alone", () => {
+    expect(isSourceSectionHeading("হাদিসের দলিল অনুযায়ী এটি জায়েজ [1]।")).toBe(false);
+    expect(isSourceSectionHeading("মূল কথা:")).toBe(false);
+  });
+});
+
+describe("citations written with Bengali digits", () => {
+  it("become ordinary citation numbers", () => {
+    expect(normalizeCitationDigits("নীরব থাকুন। [\u09E9] আর [\u09E7\u09E8]")).toBe(
+      "নীরব থাকুন। [3] আর [12]",
+    );
+    expect(normalizeCitationDigits("১২টি রাকাত")).toBe("১২টি রাকাত");
+  });
+
+  it("count as citations for a consensus claim", () => {
+    const text = "আলেমগণ এ বিষয়ে একমত। [\u09EC] ব্যাখ্যা।";
+    expect(dropUnsupportedClaims(normalizeCitationDigits(text))).toBe(
+      "আলেমগণ এ বিষয়ে একমত। [6] ব্যাখ্যা।",
+    );
+    expect(dropUnsupportedClaims("চার মাযহাবের আলেমগণ এ বিষয়ে একমত। ব্যাখ্যা।")).toBe(
+      " ব্যাখ্যা।",
+    );
+  });
+});
+
+describe("numbered markdown headings per source", () => {
+  it("recognises them", () => {
+    for (const heading of [
+      "### ১. হাদিস সমর্থিত বিধান",
+      "### ২. ইজমা (আলেমদের ঐকমত্য)",
+      "### ৩. ফিকহ (মাযহাবী বিধান)",
+      "## Quran",
+    ]) {
+      expect(isSourceSectionHeading(heading), heading).toBe(true);
+    }
+    expect(isSourceSectionHeading("### সফরের দূরত্ব ও মেয়াদ")).toBe(false);
   });
 });

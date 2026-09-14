@@ -71,3 +71,51 @@ describe("searching a scoped question for its topic", () => {
     expect(topicQuery("কী?")).toBe("কী?");
   });
 });
+
+describe("formulaic 'in the light of Quran and Hadith' does not scope", () => {
+  it("searches every source for masail that ask for Quran and Hadith evidence in general", () => {
+    const generic = [
+      "কুরআন ও হাদীসের আলোকে জানাবেন, সফরে কসর কত দিন?",
+      "কুরআন-হাদিস অনুযায়ী মহিলাদের জোরে তিলাওয়াত করা জায়েজ?",
+      "কোরআন হাদিসের দৃষ্টিতে হোম লোন নেওয়া যাবে কি",
+      "quran hadis er aloke hayez er shomoy ki ki kora jabe",
+      "What is the ruling on a home loan in the light of the Quran and Sunnah?",
+    ];
+
+    for (const question of generic) {
+      expect(detectSourceIntent(question), question).toBeNull();
+    }
+  });
+
+  it("still scopes a question that asks what the Quran and hadith themselves say", () => {
+    expect(detectSourceIntent("পর্দা সম্পর্কে কুরআন ও হাদিসে কী বলা আছে?")).toEqual([
+      "quran",
+      "hadith",
+    ]);
+    expect(detectSourceIntent("কুরআনের আলোকে পর্দার বিধান")).toEqual(["quran"]);
+  });
+});
+
+describe("salutations and courtesy words are not search terms", () => {
+  it("drops the greeting and closing of a masail question", () => {
+    expect(
+      topicQuery(
+        "আসসালামু আলাইকুম ওয়া রাহমাতুল্লাহি ওয়া বারাকাতুহু। মুহতারাম মুফতি সাহেব, সফরে কসর নামাজ কত দিন পড়া যাবে? দয়া করে জানাবেন। জাযাকাল্লাহু খাইরান",
+      ),
+    ).toBe("সফরে কসর নামাজ কত দিন পড়া যাবে");
+  });
+
+  it("drops English and Banglish greetings too", () => {
+    expect(topicQuery("Assalamu alaikum sir, please tell me the ruling on qasr. Jazakallah")).toBe(
+      "tell me ruling qasr",
+    );
+  });
+});
+
+describe("the Quran as the object of a verb is a topic, not a scope", () => {
+  it("does not scope English questions about reciting or touching the Quran", () => {
+    expect(detectSourceIntent("Can women recite the Quran loudly?")).toBeNull();
+    expect(detectSourceIntent("Is it allowed to touch the Holy Quran without wudu?")).toBeNull();
+    expect(detectSourceIntent("What does the Quran say about patience?")).toEqual(["quran"]);
+  });
+});
