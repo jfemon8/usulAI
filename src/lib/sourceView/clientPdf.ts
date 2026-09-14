@@ -125,6 +125,68 @@ async function renderSource(reference: string): Promise<RenderedSource> {
   };
 }
 
+export type PdfDelivery = "downloaded" | "opened" | "failed";
+
+const UNSAFE_FILE_CHARACTERS = /[\\/:*?"<>|]+/g;
+const DOWNLOAD_UNSUPPORTED_AGENT = /FBAN|FBAV|Instagram|Line\/|MicroMessenger|; wv\)/i;
+
+export function sourcePdfFileName(reference: string): string {
+  const base = [...reference]
+    .map((character) => ((character.codePointAt(0) ?? 0) < 32 ? " " : character))
+    .join("")
+    .replace(UNSAFE_FILE_CHARACTERS, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, SOURCE_VIEW_CONFIG.maxFileNameChars);
+  return `${base || "source"}.pdf`;
+}
+
+function clickLink(href: string, attributes: Record<string, string>) {
+  const link = document.createElement("a");
+  link.href = href;
+  link.rel = "noopener noreferrer";
+  link.style.display = "none";
+  for (const [name, value] of Object.entries(attributes)) link.setAttribute(name, value);
+  document.body.append(link);
+  try {
+    link.click();
+  } finally {
+    link.remove();
+  }
+}
+
+function canDownload(): boolean {
+  return (
+    "download" in HTMLAnchorElement.prototype &&
+    !DOWNLOAD_UNSUPPORTED_AGENT.test(navigator.userAgent)
+  );
+}
+
+export function openPdfInNewTab(href: string): PdfDelivery {
+  try {
+    const opened = window.open(href, "_blank");
+    if (opened) {
+      opened.opener = null;
+      return "opened";
+    }
+    clickLink(href, { target: "_blank" });
+    return "opened";
+  } catch {
+    return "failed";
+  }
+}
+
+export function downloadRenderedSource(rendered: RenderedSource, reference: string): PdfDelivery {
+  if (!canDownload()) return openPdfInNewTab(rendered.pdfUrl);
+
+  try {
+    clickLink(rendered.pdfUrl, { download: sourcePdfFileName(reference) });
+    return "downloaded";
+  } catch {
+    return openPdfInNewTab(rendered.pdfUrl);
+  }
+}
+
 export function peekRenderedSource(reference: string): RenderedSource | undefined {
   const entry = cache.get(reference);
   return entry?.value && isFresh(reference, entry, Date.now()) ? entry.value : undefined;

@@ -466,6 +466,8 @@ export const SOURCE_VIEW_CONFIG = {
   maxReferenceChars: 300,
   maxChunkOverlapChars: 400,
   minChunkOverlapChars: 20,
+  maxFileNameChars: 120,
+  downloadFeedbackMs: 2_500,
   cacheSeconds: 86_400,
   page: { width: 420, height: 595, margin: 36 },
   fontSize: { title: 14, detail: 9.5, label: 9.5, text: 11, arabic: 16, footer: 7.5 },

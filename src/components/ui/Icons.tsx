@@ -149,6 +149,13 @@ export const FileTextIcon = (props: IconProps) => (
   </Base>
 );
 
+export const DownloadIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M12 4v11M7 10.5l5 5 5-5" />
+    <path d="M5 19.5h14" />
+  </Base>
+);
+
 export const ExternalLinkIcon = (props: IconProps) => (
   <Base {...props}>
     <path d="M15 3h6v6M10 14L21 3" />

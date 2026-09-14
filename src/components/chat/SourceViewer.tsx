@@ -7,13 +7,13 @@ import {
   useTransformComponent,
   type ReactZoomPanPinchRef,
 } from "react-zoom-pan-pinch";
-import { clsx } from "clsx";
 import {
+  CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   CloseIcon,
+  DownloadIcon,
   ExternalLinkIcon,
-  FileTextIcon,
   FitPageIcon,
   HighlighterIcon,
   ZoomInIcon,
@@ -21,10 +21,12 @@ import {
 } from "@/components/ui/Icons";
 import { SOURCE_VIEW_CONFIG } from "@/config/site";
 import {
+  downloadRenderedSource,
   holdRenderedSource,
   loadRenderedSource,
   peekRenderedSource,
   prefetchRenderedSource,
+  type PdfDelivery,
   type RenderedSource,
 } from "@/lib/sourceView/clientPdf";
 import type { AnswerSource } from "@/types";
@@ -40,6 +42,13 @@ interface LoadResult {
   rendered?: RenderedSource;
   error?: string;
 }
+
+const DELIVERY_LABELS: Record<PdfDelivery | "idle", string> = {
+  idle: "PDF ডাউনলোড করুন",
+  downloaded: "PDF ডাউনলোড শুরু হয়েছে",
+  opened: "ডাউনলোড করা যায়নি, তাই PDF নতুন ট্যাবে খোলা হয়েছে",
+  failed: "PDF ডাউনলোড বা খোলা যায়নি, আবার চেষ্টা করুন",
+};
 
 const SOURCE_LABELS: Record<AnswerSource["sourceType"], string> = {
   quran: "কুরআন",
@@ -103,6 +112,7 @@ export function SourceViewer({ sources, startIndex, onClose }: SourceViewerProps
   const [position, setPosition] = useState(startIndex);
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<LoadResult | null>(null);
+  const [delivery, setDelivery] = useState<{ key: string; state: PdfDelivery } | null>(null);
   const transformRef = useRef<ReactZoomPanPinchRef>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -174,6 +184,12 @@ export function SourceViewer({ sources, startIndex, onClose }: SourceViewerProps
     if (!reference) return;
     return holdRenderedSource(reference);
   }, [reference]);
+
+  useEffect(() => {
+    if (!delivery) return;
+    const timer = setTimeout(() => setDelivery(null), SOURCE_VIEW_CONFIG.downloadFeedbackMs);
+    return () => clearTimeout(timer);
+  }, [delivery]);
 
   useEffect(() => {
     if (!reference || peekRenderedSource(reference)) return;
@@ -362,8 +378,6 @@ export function SourceViewer({ sources, startIndex, onClose }: SourceViewerProps
 
   if (!source) return null;
 
-  const highlightLabel = rendered?.highlight ? "হলুদ অংশটি উত্তরে ব্যবহৃত হয়েছে" : undefined;
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-[2px] sm:p-8 lg:p-10"
@@ -397,7 +411,6 @@ export function SourceViewer({ sources, startIndex, onClose }: SourceViewerProps
             <p id="source-viewer-description" className="mt-0.5 truncate text-xs text-(--text-3)">
               {SOURCE_LABELS[source.sourceType]}
               {source.grade ? ` · ${source.grade}` : ""}
-              {highlightLabel ? ` · ${highlightLabel}` : ""}
             </p>
           </div>
           <ToolButton label="বন্ধ করুন" onClick={onClose}>
@@ -534,18 +547,24 @@ export function SourceViewer({ sources, startIndex, onClose }: SourceViewerProps
                 </div>
 
                 <div className="flex items-center gap-0.5">
-                  <a
-                    href={rendered?.pdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-disabled={!rendered}
-                    tabIndex={rendered ? undefined : -1}
-                    className={clsx(ICON_BUTTON, !rendered && "pointer-events-none opacity-35")}
-                    aria-label="PDF নতুন ট্যাবে খুলুন"
-                    title="PDF নতুন ট্যাবে খুলুন"
+                  <ToolButton
+                    label={DELIVERY_LABELS[delivery?.key === reference ? delivery.state : "idle"]}
+                    onClick={() => {
+                      if (!rendered) return;
+                      const state = downloadRenderedSource(rendered, reference);
+                      setDelivery({ key: reference, state });
+                    }}
+                    disabled={!rendered}
                   >
-                    <FileTextIcon />
-                  </a>
+                    {delivery?.key === reference && delivery.state !== "failed" ? (
+                      <CheckIcon />
+                    ) : (
+                      <DownloadIcon />
+                    )}
+                  </ToolButton>
+                  <span role="status" className="sr-only">
+                    {delivery?.key === reference ? DELIVERY_LABELS[delivery.state] : ""}
+                  </span>
                   {rendered?.externalUrl ? (
                     <a
                       href={rendered.externalUrl}
