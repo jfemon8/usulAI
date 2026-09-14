@@ -139,4 +139,10 @@ export const GOLDEN_SET: GoldenCase[] = [
     expectSources: ["fiqh"],
     forbidSources: ["quran", "hadith", "ijma", "qiyas", "sirat"],
   },
+  {
+    question: "পর্দা সম্পর্কে কুরআনে কী নির্দেশ এসেছে?",
+    expectSources: ["quran"],
+    forbidSources: ["hadith", "ijma", "qiyas", "sirat", "fiqh"],
+    expectReferences: ["Al-Ahzaab 33:59"],
+  },
 ];

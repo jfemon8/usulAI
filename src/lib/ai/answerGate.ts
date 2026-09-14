@@ -49,29 +49,30 @@ function arabicWords(normalized: string): string[] {
   return normalized.split(" ").filter((word) => ARABIC_LETTER.test(word));
 }
 
-function checkArabic(answer: string, contextArabic: string): string[] {
+export function groundingHaystack(texts: readonly string[]): string {
+  return ` ${arabicWords(normalizeArabic(texts.join("\n\n"))).join(" ")} `;
+}
+
+export function isArabicRunGrounded(run: string, haystack: string): boolean {
   const { minArabicRunWords, minArabicMatchRatio } = ANSWER_GATE_CONFIG;
-  const haystack = ` ${arabicWords(contextArabic).join(" ")} `;
-  const reasons: string[] = [];
+  let windows = 0;
+  let found = 0;
 
-  for (const run of arabicRuns(answer)) {
-    let windows = 0;
-    let found = 0;
-
-    for (const words of pieces(normalizeArabic(run))) {
-      for (let start = 0; start + minArabicRunWords <= words.length; start += 1) {
-        windows += 1;
-        const window = words.slice(start, start + minArabicRunWords).join(" ");
-        if (haystack.includes(` ${window} `)) found += 1;
-      }
-    }
-
-    if (windows > 0 && found / windows < minArabicMatchRatio) {
-      reasons.push(`arabic-not-verbatim: ${normalizeArabic(run).slice(0, 48)}`);
+  for (const words of pieces(normalizeArabic(run))) {
+    for (let start = 0; start + minArabicRunWords <= words.length; start += 1) {
+      windows += 1;
+      const window = words.slice(start, start + minArabicRunWords).join(" ");
+      if (haystack.includes(` ${window} `)) found += 1;
     }
   }
 
-  return reasons;
+  return windows === 0 || found / windows >= minArabicMatchRatio;
+}
+
+function checkArabic(answer: string, haystack: string): string[] {
+  return arabicRuns(answer)
+    .filter((run) => !isArabicRunGrounded(run, haystack))
+    .map((run) => `arabic-not-verbatim: ${normalizeArabic(run).slice(0, 48)}`);
 }
 
 function checkCitations(answer: string, sourceCount: number): string[] {
@@ -120,7 +121,7 @@ export function validateAnswer(answer: string, input: GateInput): GateVerdict {
   const contextJoined = input.contextTexts.join("\n\n");
 
   const reasons = [
-    ...checkArabic(answer, normalizeArabic(contextJoined)),
+    ...checkArabic(answer, groundingHaystack([contextJoined, ...input.references])),
     ...checkCitations(answer, input.contextTexts.length),
     ...(findLoopStart(answer, normalizeForLoopCheck(contextJoined), "all") === null
       ? []

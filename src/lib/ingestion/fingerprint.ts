@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { MODEL_CONFIG, RETRIEVAL_CONFIG } from "@/config/site";
+import { storedCitation, storedMetadata } from "@/lib/db/documentShape";
 import type { IngestionDocument } from "@/types";
 
 export interface StoredFingerprint {
@@ -46,9 +47,10 @@ function canonical(value: unknown): string {
 }
 
 function describedChanged(incoming: IngestionDocument, stored: StoredFingerprint): boolean {
-  if (canonical(incoming.citation) !== canonical(stored.citation)) return true;
+  const citation = storedCitation(incoming.citation, incoming.sourceType, incoming.metadata);
+  if (canonical(citation) !== canonical(stored.citation)) return true;
 
-  return Object.entries(incoming.metadata ?? {}).some(
+  return Object.entries(storedMetadata(incoming.metadata ?? {}, incoming.sourceType)).some(
     ([key, value]) => canonical(value) !== canonical(stored.metadata[key]),
   );
 }

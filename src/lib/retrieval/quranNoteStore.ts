@@ -68,6 +68,11 @@ export async function loadSurahNotes(surahs: number[]): Promise<Map<number, Sura
   return result;
 }
 
+export async function* eachSurahNotes(): AsyncGenerator<[number, SurahNotes]> {
+  const cursor = (await notesCollection()).find({}, { projection: { notes: 1 } });
+  for await (const row of cursor) yield [row._id, unpackSurahNotes(row.notes)];
+}
+
 export async function saveSurahNotes(surah: number, notes: SurahNotes): Promise<boolean> {
   const packed = packSurahNotes(notes);
   const collection = await notesCollection();

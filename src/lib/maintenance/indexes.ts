@@ -7,6 +7,7 @@ const REDUNDANT_DOCUMENT_INDEXES = [
   "sourceType_1",
   "sourceType_1_metadata.collection_1_metadata.hadithNumber_1",
   "sourceType_1_metadata.surah_1_metadata.ayah_1",
+  "sourceType_1_citation.reference_1",
 ];
 
 const DAY_SECONDS = 86_400;
@@ -60,7 +61,10 @@ async function ensureTtl(
 export async function ensureStorageIndexes(db: Db): Promise<{ dropped: string[] }> {
   const documents = db.collection(DB_CONFIG.collection);
 
-  await documents.createIndex({ sourceType: 1, "citation.reference": 1 });
+  await documents.createIndex(
+    { sourceType: 1, "citation.reference": "hashed" },
+    { name: "source_reference_hashed" },
+  );
   await documents.createIndex(
     { "metadata.collection": 1, "metadata.hadithNumber": 1 },
     { partialFilterExpression: { sourceType: "hadith" }, name: "hadith_collection_number" },

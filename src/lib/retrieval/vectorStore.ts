@@ -3,6 +3,7 @@ import {
   ARABIC_TEXT_SOURCES,
   DB_CONFIG,
   HYBRID_CONFIG,
+  QURAN_NOTE_SEARCH_CONFIG,
   RETRIEVAL_CONFIG,
   SOURCE_PRIORITY,
 } from "@/config/site";
@@ -13,17 +14,35 @@ import {
   type IngestionPlan,
   type StoredFingerprint,
 } from "@/lib/ingestion/fingerprint";
+import {
+  HYDRATION_PROJECTION,
+  hydrateCitation,
+  storedCitation,
+  storedMetadata,
+  type StoredCitation,
+} from "@/lib/db/documentShape";
 import { arabicQueryTerms } from "@/lib/retrieval/arabicTerms";
 import { fuseRankings } from "@/lib/retrieval/fusion";
+import { searchQuranNotes } from "@/lib/retrieval/quranNoteIndex";
+import { topicQuery } from "@/lib/retrieval/questionFiller";
 import { expandQueryTerms } from "@/lib/retrieval/synonyms";
-import type { HadithGrade, RetrievedChunk, SourceCitation, SourceType } from "@/types";
+import type { HadithGrade, RetrievedChunk, SourceType } from "@/types";
 
 interface SearchRow {
   _id: unknown;
   content: string;
-  citation: SourceCitation;
+  citation: StoredCitation;
+  metadata?: Record<string, unknown>;
   score: number;
   grades?: HadithGrade[];
+}
+
+export function storedContentHash(content: string): Binary {
+  return new Binary(Buffer.from(contentHash(content), "hex"));
+}
+
+function hashHex(value: string | Binary): string {
+  return typeof value === "string" ? value : Buffer.from(value.buffer).toString("hex");
 }
 
 export function toFloat32Vector(embedding: number[]): Binary {
@@ -39,7 +58,7 @@ function toChunk(
     id: String(row._id),
     sourceType,
     content: row.content,
-    citation: row.citation,
+    citation: hydrateCitation(row.citation, sourceType, row.metadata),
     similarity: row.score,
     retrievedBy,
     ...(row.grades && row.grades.length > 0 ? { grades: row.grades } : {}),
@@ -70,6 +89,7 @@ export async function similaritySearch(
           _id: 1,
           content: 1,
           citation: 1,
+          ...HYDRATION_PROJECTION,
           grades: "$metadata.grades",
           score: { $meta: "vectorSearchScore" },
         },
@@ -114,6 +134,7 @@ async function runTextSearch(
           _id: 1,
           content: 1,
           citation: 1,
+          ...HYDRATION_PROJECTION,
           grades: "$metadata.grades",
           score: { $meta: "searchScore" },
         },
@@ -122,6 +143,48 @@ async function runTextSearch(
     .toArray();
 
   return rows.map((row) => toChunk(row, sourceType, "text"));
+}
+
+async function quranNoteHits(
+  query: string,
+  limit: number,
+  expandSynonyms: boolean,
+): Promise<RetrievedChunk[]> {
+  const hits = await searchQuranNotes(query, limit, expandSynonyms);
+  if (hits.length === 0) return [];
+
+  const collection = await getDocumentsCollection();
+  const rows = await collection
+    .find(
+      {
+        sourceType: "quran",
+        $or: hits.map((hit) => ({ "metadata.surah": hit.surah, "metadata.ayah": hit.ayah })),
+      },
+      { projection: { content: 1, citation: 1, ...HYDRATION_PROJECTION } },
+    )
+    .toArray();
+
+  return hits.flatMap((hit) => {
+    const row = rows.find(
+      (candidate) =>
+        candidate.metadata?.surah === hit.surah && candidate.metadata?.ayah === hit.ayah,
+    );
+    return row
+      ? [
+          toChunk(
+            {
+              _id: row._id,
+              content: row.content,
+              citation: row.citation,
+              metadata: row.metadata,
+              score: hit.score,
+            },
+            "quran",
+            "text",
+          ),
+        ]
+      : [];
+  });
 }
 
 export async function textSearch(
@@ -133,20 +196,29 @@ export async function textSearch(
   const extras = expandSynonyms ? expandQueryTerms(query) : [];
   const arabic = ARABIC_TEXT_SOURCES.includes(sourceType) ? arabicQueryTerms(query) : [];
 
-  const [plain, expanded, arabicHits] = await Promise.all([
-    runTextSearch(query, sourceType, limit),
+  const topic = topicQuery(query);
+
+  const [plain, expanded, arabicHits, noteHits] = await Promise.all([
+    runTextSearch(topic, sourceType, limit),
     extras.length > 0
-      ? runTextSearch(`${query} ${extras.join(" ")}`, sourceType, limit)
+      ? runTextSearch(`${topic} ${extras.join(" ")}`, sourceType, limit)
       : Promise.resolve<RetrievedChunk[]>([]),
     arabic.length > 0
       ? runTextSearch(arabicTermsClause(arabic), sourceType, limit)
+      : Promise.resolve<RetrievedChunk[]>([]),
+    sourceType === "quran"
+      ? quranNoteHits(query, limit, expandSynonyms)
       : Promise.resolve<RetrievedChunk[]>([]),
   ]);
 
   const confident = (hits: RetrievedChunk[]) =>
     hits.filter((hit) => hit.similarity >= HYBRID_CONFIG.minTextScore);
 
-  return fuseRankings([confident(plain), confident(expanded), confident(arabicHits)]);
+  return fuseRankings(
+    [confident(plain), confident(expanded), confident(arabicHits), confident(noteHits)],
+    HYBRID_CONFIG.fusionK,
+    [1, 1, 1, QURAN_NOTE_SEARCH_CONFIG.fusionWeight],
+  );
 }
 
 const WRITE_BATCH_SIZE = 500;
@@ -162,8 +234,8 @@ export async function loadFingerprints(sourceType: SourceType): Promise<StoredFi
   const rows = await collection
     .aggregate<{
       _id: ObjectId;
-      citation: SourceCitation;
-      contentHash?: string;
+      citation: StoredCitation;
+      contentHash?: string | Binary;
       content?: string;
       embedded: boolean;
       metadata?: Record<string, unknown>;
@@ -190,7 +262,7 @@ export async function loadFingerprints(sourceType: SourceType): Promise<StoredFi
   return rows.map((row) => ({
     id: String(row._id),
     reference: row.citation.reference,
-    hash: row.contentHash ?? contentHash(row.content ?? ""),
+    hash: row.contentHash ? hashHex(row.contentHash) : contentHash(row.content ?? ""),
     embedded: row.embedded,
     citation: row.citation,
     metadata: row.metadata ?? {},
@@ -222,9 +294,9 @@ export async function applyIngestionPlan(
       plan.inserts.slice(start, start + WRITE_BATCH_SIZE).map((document) => ({
         sourceType: document.sourceType,
         content: document.content,
-        contentHash: contentHash(document.content),
-        citation: document.citation,
-        metadata: document.metadata ?? {},
+        contentHash: storedContentHash(document.content),
+        citation: storedCitation(document.citation, document.sourceType, document.metadata),
+        metadata: storedMetadata(document.metadata ?? {}, document.sourceType),
       })),
     );
   }
@@ -236,9 +308,9 @@ export async function applyIngestionPlan(
         update: {
           $set: {
             content: document.content,
-            contentHash: contentHash(document.content),
-            citation: document.citation,
-            ...metadataSet(document.metadata),
+            contentHash: storedContentHash(document.content),
+            citation: storedCitation(document.citation, document.sourceType, document.metadata),
+            ...metadataSet(storedMetadata(document.metadata ?? {}, document.sourceType)),
           },
           $unset: { embedding: "", embeddingModel: "" },
         },
@@ -247,7 +319,12 @@ export async function applyIngestionPlan(
     ...plan.metadataOnly.map(({ id, document }) => ({
       updateOne: {
         filter: { _id: new ObjectId(id) },
-        update: { $set: { citation: document.citation, ...metadataSet(document.metadata) } },
+        update: {
+          $set: {
+            citation: storedCitation(document.citation, document.sourceType, document.metadata),
+            ...metadataSet(storedMetadata(document.metadata ?? {}, document.sourceType)),
+          },
+        },
       },
     })),
   ];
@@ -290,11 +367,13 @@ export async function attachEmbeddings(
   const result = await collection.bulkWrite(
     entries.map((entry) => {
       const hash = contentHash(entry.content);
+      const stored = storedContentHash(entry.content);
       return {
         updateOne: {
           filter: {
             _id: new ObjectId(entry.id),
             $or: [
+              { contentHash: stored },
               { contentHash: hash },
               { contentHash: { $exists: false }, content: entry.content },
             ],
@@ -303,7 +382,7 @@ export async function attachEmbeddings(
             $set: {
               embedding: toFloat32Vector(entry.embedding),
               embeddingModel: currentEmbeddingModel(),
-              contentHash: hash,
+              contentHash: stored,
             },
           },
         },
@@ -321,7 +400,15 @@ export async function findChunksByReferences(references: string[]): Promise<Retr
   const rows = await collection
     .find(
       { sourceType: { $in: [...SOURCE_PRIORITY] }, "citation.reference": { $in: references } },
-      { projection: { content: 1, citation: 1, sourceType: 1, "metadata.grades": 1 } },
+      {
+        projection: {
+          content: 1,
+          citation: 1,
+          sourceType: 1,
+          "metadata.grades": 1,
+          ...HYDRATION_PROJECTION,
+        },
+      },
     )
     .toArray();
 
@@ -329,10 +416,11 @@ export async function findChunksByReferences(references: string[]): Promise<Retr
     const row = rows.find((candidate) => candidate.citation.reference === reference);
     if (!row) return [];
 
-    const grades = (row.metadata as { grades?: HadithGrade[] } | undefined)?.grades;
+    const metadata = row.metadata as Record<string, unknown> | undefined;
+    const grades = metadata?.grades as HadithGrade[] | undefined;
     return [
       toChunk(
-        { _id: row._id, content: row.content, citation: row.citation, score: 0, grades },
+        { _id: row._id, content: row.content, citation: row.citation, metadata, score: 0, grades },
         row.sourceType,
         "history",
       ),

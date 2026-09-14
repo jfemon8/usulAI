@@ -343,3 +343,62 @@ describe("pronunciation needs harakat", () => {
     expect(enriched).not.toContain("বাংলা উচ্চারণঃ");
   });
 });
+
+describe("strict mode for answers that stream straight to the reader", () => {
+  const strictOptions: EnricherOptions = { sources: [quran], language: "bangla", strict: true };
+  const invented = "يَا أَيُّهَا الَّذِينَ آمَنُوا لَا تَدْخُلُوا بُيُوتًا غَيْرَ بُيُوتِكُمْ";
+  const screenshot = `সুদ কুরআনে নিষিদ্ধ [1]।
+
+${ayah}
+
+এছাড়াও আরেকটি আয়াতে বলা হয়েছে:
+
+${invented}
+
+এই আয়াতটি অনুমতি নেওয়ার কথা বলে [2]। আরেকটি নির্দেশ আছে [3]।`;
+
+  it("leaves out an Arabic quotation that no source contains, with its pronunciation", () => {
+    const output = enrichAnswer(screenshot, strictOptions);
+
+    expect(output).not.toContain("تَدْخُلُوا");
+    expect(output).toContain("দেওয়া দলিলে পাওয়া যায়নি এমন একটি আরবি উদ্ধৃতি");
+    expect(output.match(/বাংলা উচ্চারণঃ/g)).toHaveLength(1);
+    expect(output).toContain(`**বাংলা অর্থঃ** ${quran.bangla} [1]`);
+  });
+
+  it("removes citation numbers that point past the sources", () => {
+    const output = enrichAnswer(screenshot, strictOptions);
+
+    expect(output).toContain("অনুমতি নেওয়ার কথা বলে।");
+    expect(output).toContain("আরেকটি নির্দেশ আছে।");
+    expect(output).not.toMatch(/\[[23]\]/);
+    expect(output).toContain("নিষিদ্ধ [1]।");
+  });
+
+  it("streams word by word to exactly the same text", () => {
+    expect(streamWords(screenshot, strictOptions)).toBe(enrichAnswer(screenshot, strictOptions));
+  });
+
+  it("holds back only the part of a line that could still change", () => {
+    const enricher = createQuoteEnricher(strictOptions);
+
+    expect(enricher.push("প্রতিবেশীর হক ")).toBe("প্রতিবেশীর হক");
+    expect(enricher.push("অত্যন্ত [")).toBe(" অত্যন্ত");
+    expect(enricher.push("2]। ")).toBe("।");
+  });
+
+  it("keeps a quotation that is in the sources and Arabic chapter names from the references", () => {
+    const withReference: EnricherOptions = {
+      ...strictOptions,
+      sources: [{ ...quran, reference: "আল-ইকনা, ذكر فرض الحج وكم فرضه, খণ্ড 1" }],
+    };
+    const output = enrichAnswer(
+      `${ayah} [1]\n\nকিতাবের অধ্যায় ذكر فرض الحج وكم فرضه [1]।`,
+      withReference,
+    );
+
+    expect(output).toContain(ayah);
+    expect(output).toContain("ذكر فرض الحج وكم فرضه");
+    expect(output).not.toContain("দেখানো হয়নি");
+  });
+});

@@ -169,6 +169,7 @@ export async function POST(request: Request) {
       ...(chunk.segments ? { segments: chunk.segments } : {}),
     })),
     language: gateInput.language,
+    strict: true,
   });
   let enrichmentOptions = enrichmentFor(context);
 

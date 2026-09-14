@@ -17,6 +17,8 @@ async function main() {
         surahNotesMoved: report.notesMoved,
         arrayEmbeddingsConverted: report.arraysConverted,
         documentsTrimmed: report.fieldsCleared,
+        derivedFieldsRemoved: report.derivedFieldsRemoved,
+        contentHashesPacked: report.hashesPacked,
         indexesDropped: report.indexesDropped,
       },
       null,

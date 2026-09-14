@@ -1,14 +1,15 @@
 import { MongoClient, type Binary, type Collection, type Db } from "mongodb";
 import { DB_CONFIG } from "@/config/site";
 import { getDbEnv } from "@/lib/utils/env";
-import type { SourceCitation, SourceType } from "@/types";
+import type { StoredCitation } from "@/lib/db/documentShape";
+import type { SourceType } from "@/types";
 
 export interface DocumentRecord {
   sourceType: SourceType;
   content: string;
-  citation: SourceCitation;
+  citation: StoredCitation;
   metadata: Record<string, unknown>;
-  contentHash?: string;
+  contentHash?: string | Binary;
   embedding?: Binary;
   embeddingModel?: string;
 }

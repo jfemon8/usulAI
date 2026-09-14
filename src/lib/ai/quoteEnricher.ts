@@ -6,6 +6,7 @@ import {
   arabicWordCount,
   vocalizationRatio,
 } from "@/lib/ai/arabicText";
+import { groundingHaystack, isArabicRunGrounded } from "@/lib/ai/answerGate";
 import type { QuestionLanguage } from "@/lib/ai/language";
 import { transliterateArabic } from "@/lib/ai/transliterate";
 
@@ -22,6 +23,7 @@ export interface EnrichmentSource {
 export interface EnricherOptions {
   sources: EnrichmentSource[];
   language: QuestionLanguage;
+  strict?: boolean;
 }
 
 export interface QuoteEnricher {
@@ -329,7 +331,57 @@ function evidenceAppendix(seen: string, quoted: Set<number>, options: EnricherOp
     .join("\n\n");
 }
 
+const UNGROUNDED_QUOTE_NOTE = {
+  bn: "*(দেওয়া দলিলে পাওয়া যায়নি এমন একটি আরবি উদ্ধৃতি এখানে দেখানো হয়নি)*",
+  en: "*(An Arabic quotation that is not in the cited sources was left out here)*",
+};
+
+function groundingTexts(options: EnricherOptions): string[] {
+  return options.sources.flatMap((source) => [
+    source.arabic,
+    source.reference ?? "",
+    ...(source.segments ?? []).map((segment) => segment.arabic),
+  ]);
+}
+
+export function createAnswerCleaner(options: EnricherOptions): (text: string) => string {
+  if (!options.strict) return (text) => text;
+
+  const haystack = groundingHaystack(groundingTexts(options));
+  const count = options.sources.length;
+  const note = options.language === "other" ? UNGROUNDED_QUOTE_NOTE.en : UNGROUNDED_QUOTE_NOTE.bn;
+
+  return (text) => {
+    let cleaned = text.replace(/\s*\[(\d+)\]/g, (marker, number: string) =>
+      Number(number) >= 1 && Number(number) <= count ? marker : "",
+    );
+
+    for (const run of quoteRuns(cleaned)) {
+      if (isArabicRunGrounded(run, haystack)) continue;
+      cleaned = cleaned.replace(run, note);
+    }
+
+    return cleaned;
+  };
+}
+
+function heldBackFrom(text: string, strict: boolean): number {
+  if (!strict) return text.length;
+
+  let end = text.length;
+  const arabic = text.search(ARABIC_LETTER);
+  if (arabic >= 0) end = arabic;
+
+  const open = text.lastIndexOf("[");
+  if (open >= 0 && !text.includes("]", open)) end = Math.min(end, open);
+
+  const trailingSpace = text.slice(0, end).search(/\s+$/);
+  return trailingSpace >= 0 ? trailingSpace : end;
+}
+
 export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
+  const clean = createAnswerCleaner(options);
+  const strict = options.strict === true;
   let line = "";
   let state: "undecided" | "prose" | "label" = "undecided";
   let lineEmitted = 0;
@@ -356,11 +408,22 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
     emit(`${block}\n\n`);
   };
 
+  const emitLine = (final: boolean) => {
+    const end = final ? line.length : Math.max(lineEmitted, heldBackFrom(line, strict));
+    if (end <= lineEmitted) return;
+    emit(clean(line.slice(lineEmitted, end)));
+    lineEmitted = end;
+  };
+
+  const rememberQuote = () => {
+    const cleaned = clean(line);
+    if (quoteRuns(cleaned).length > 0) pending.push(cleaned);
+  };
+
   const startProse = () => {
     state = "prose";
     if (pending.length > 0 && !startsWithArabic(line)) flushPending();
-    emit(line);
-    lineEmitted = line.length;
+    emitLine(false);
   };
 
   const decide = () => {
@@ -373,19 +436,17 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
     if (state === "undecided") {
       if (stripDecoration(line).length === 0) {
         state = "prose";
-        emit(line);
       } else if (isLabelLine(line)) {
         state = "label";
       } else {
         startProse();
       }
-    } else if (state === "prose") {
-      emit(line.slice(lineEmitted));
     }
+    if (state === "prose") emitLine(true);
 
     if (state !== "label") {
       emit("\n");
-      if (quoteRuns(line).length > 0) pending.push(line);
+      rememberQuote();
     }
 
     line = "";
@@ -407,10 +468,7 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
         }
 
         if (state === "undecided") decide();
-        if (state === "prose") {
-          emit(line.slice(lineEmitted));
-          lineEmitted = line.length;
-        }
+        if (state === "prose") emitLine(false);
       });
 
       return output;
@@ -421,10 +479,9 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
         if (state === "undecided") {
           if (isLabelLine(line)) state = "label";
           else startProse();
-        } else if (state === "prose") {
-          emit(line.slice(lineEmitted));
         }
-        if (state !== "label" && quoteRuns(line).length > 0) pending.push(line);
+        if (state === "prose") emitLine(true);
+        if (state !== "label") rememberQuote();
         line = "";
         state = "undecided";
         lineEmitted = 0;

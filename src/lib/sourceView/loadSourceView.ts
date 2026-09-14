@@ -1,4 +1,5 @@
 import type { ObjectId } from "mongodb";
+import { hydrateCitation } from "@/lib/db/documentShape";
 import {
   ARABIC_TEXT_SOURCES,
   OPENITI_CONFIG,
@@ -206,5 +207,11 @@ export async function loadSourceView(reference: string): Promise<SourceView | nu
   )) as unknown as DocumentRow | null;
 
   if (!row) return null;
-  return ARABIC_TEXT_SOURCES.includes(row.sourceType) ? bookView(row) : scriptureView(row);
+  const hydrated: DocumentRow = {
+    ...row,
+    citation: hydrateCitation(row.citation, row.sourceType, row.metadata),
+  };
+  return ARABIC_TEXT_SOURCES.includes(row.sourceType)
+    ? bookView(hydrated)
+    : scriptureView(hydrated);
 }

@@ -2,6 +2,7 @@ import { AUXILIARY_CONFIG, RERANK_CONFIG } from "@/config/site";
 import { generateWithChainFrom } from "@/lib/ai/auxiliaryModel";
 import { TRANSLATION_LABELS, sanitizeSourceContent } from "@/lib/ingestion/translations";
 import { arabicQueryTerms } from "@/lib/retrieval/arabicTerms";
+import { isFiller } from "@/lib/retrieval/questionFiller";
 import { expandQueryTerms } from "@/lib/retrieval/synonyms";
 import { logger } from "@/lib/utils/logger";
 import { createLru, normalizeCacheKey } from "@/lib/utils/lru";
@@ -21,52 +22,11 @@ const TRANSLATION_BLOCK = new RegExp(
   `^(?:${TRANSLATION_LABELS.bangla}|${TRANSLATION_LABELS.english})\\s*:`,
 );
 
-const QUESTION_STOPWORDS = new Set([
-  "কী",
-  "কি",
-  "কার",
-  "কারা",
-  "কে",
-  "কেন",
-  "কোন",
-  "কোনো",
-  "কীভাবে",
-  "উপর",
-  "সম্পর্কে",
-  "বিষয়ে",
-  "করা",
-  "করে",
-  "হয়",
-  "হয়েছে",
-  "হবে",
-  "বলে",
-  "আছে",
-  "এবং",
-  "ও",
-  "the",
-  "what",
-  "does",
-  "say",
-  "about",
-  "is",
-  "are",
-  "of",
-  "on",
-  "in",
-  "to",
-  "a",
-  "an",
-  "and",
-  "how",
-  "why",
-  "who",
-]);
-
 export function questionTerms(question: string): string[] {
   const words = question
     .toLowerCase()
     .split(/[\s,.।?!"'()[\]:;।-]+/u)
-    .filter((word) => [...word].length >= 2 && !QUESTION_STOPWORDS.has(word));
+    .filter((word) => [...word].length >= 2 && !isFiller(word));
 
   return [
     ...new Set([

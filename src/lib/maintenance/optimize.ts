@@ -1,4 +1,5 @@
 import { Binary } from "mongodb";
+import { STORAGE_CONFIG } from "@/config/site";
 import { getDb, getDocumentsCollection } from "@/lib/db/mongoClient";
 import { ensureStorageIndexes } from "@/lib/maintenance/indexes";
 import { recordProvenance } from "@/lib/maintenance/provenance";
@@ -24,6 +25,8 @@ export interface OptimizeReport {
   notesMoved: number;
   arraysConverted: number;
   fieldsCleared: number;
+  derivedFieldsRemoved: Record<string, number>;
+  hashesPacked: number;
   indexesDropped: string[];
 }
 
@@ -125,6 +128,110 @@ async function clearUnusedFields(): Promise<number> {
   return result.modifiedCount;
 }
 
+async function removeDerivedFields(): Promise<Record<string, number>> {
+  const documents = await getDocumentsCollection();
+  const rawKey = {
+    $concat: [`${STORAGE_CONFIG.rawSourcesPrefix}/`, "$sourceType", "/", "$metadata.fileName"],
+  };
+
+  const steps: Record<string, { filter: Record<string, unknown>; field: string }> = {
+    "citation.sourceType": {
+      field: "citation.sourceType",
+      filter: {
+        "citation.sourceType": { $exists: true },
+        $expr: { $eq: ["$citation.sourceType", "$sourceType"] },
+      },
+    },
+    "citation.page": {
+      field: "citation.page",
+      filter: {
+        "citation.page": { $exists: true },
+        $expr: { $eq: ["$citation.page", "$metadata.page"] },
+      },
+    },
+    "citation.url (quran)": {
+      field: "citation.url",
+      filter: {
+        sourceType: "quran",
+        "citation.url": { $exists: true },
+        $expr: {
+          $eq: [
+            "$citation.url",
+            {
+              $concat: [
+                "https://quran.com/",
+                { $toString: "$metadata.surah" },
+                "/",
+                { $toString: "$metadata.ayah" },
+              ],
+            },
+          ],
+        },
+      },
+    },
+    "citation.url (books)": {
+      field: "citation.url",
+      filter: {
+        "citation.url": { $type: "string" },
+        "metadata.fileName": { $type: "string" },
+        "metadata.restricted": { $ne: true },
+        $expr: {
+          $and: [
+            { $eq: [{ $indexOfCP: ["$citation.url", "#"] }, -1] },
+            { $gte: [{ $indexOfCP: ["$citation.url", { $concat: ["/", rawKey] }] }, 0] },
+          ],
+        },
+      },
+    },
+    "metadata.storageKey": {
+      field: "metadata.storageKey",
+      filter: {
+        "metadata.storageKey": { $exists: true },
+        "metadata.fileName": { $type: "string" },
+        "metadata.restricted": { $ne: true },
+        $expr: {
+          $or: [{ $eq: ["$metadata.storageKey", null] }, { $eq: ["$metadata.storageKey", rawKey] }],
+        },
+      },
+    },
+  };
+
+  const removed: Record<string, number> = {};
+  for (const [name, { filter, field }] of Object.entries(steps)) {
+    const result = await documents.updateMany(filter, { $unset: { [field]: "" } });
+    removed[name] = result.modifiedCount;
+  }
+  return removed;
+}
+
+async function packContentHashes(): Promise<number> {
+  const documents = await getDocumentsCollection();
+  let packed = 0;
+
+  for (;;) {
+    const batch = await documents
+      .find({ contentHash: { $type: "string" } }, { projection: { contentHash: 1 } })
+      .limit(BATCH_SIZE * 4)
+      .toArray();
+    if (batch.length === 0) break;
+
+    const result = await documents.bulkWrite(
+      batch.map((doc) => ({
+        updateOne: {
+          filter: { _id: doc._id, contentHash: doc.contentHash },
+          update: {
+            $set: { contentHash: new Binary(Buffer.from(String(doc.contentHash), "hex")) },
+          },
+        },
+      })),
+      { ordered: false },
+    );
+    packed += result.modifiedCount;
+  }
+
+  return packed;
+}
+
 export async function optimizeStorage(): Promise<OptimizeReport> {
   const before = await storageUsage();
   logger.info(`Storage before: ${describeUsage(before)}`);
@@ -133,6 +240,8 @@ export async function optimizeStorage(): Promise<OptimizeReport> {
   const notesMoved = await moveQuranNotes();
   const arraysConverted = await convertArrayEmbeddings();
   const fieldsCleared = await clearUnusedFields();
+  const derivedFieldsRemoved = await removeDerivedFields();
+  const hashesPacked = await packContentHashes();
   const { dropped } = await ensureStorageIndexes(await getDb());
 
   const after = await storageUsage();
@@ -145,6 +254,8 @@ export async function optimizeStorage(): Promise<OptimizeReport> {
     notesMoved,
     arraysConverted,
     fieldsCleared,
+    derivedFieldsRemoved,
+    hashesPacked,
     indexesDropped: dropped,
   };
 }

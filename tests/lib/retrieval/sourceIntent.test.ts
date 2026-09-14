@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { detectSourceIntent } from "@/lib/retrieval/sourceIntent";
+import { detectSourceIntent, stripSourceMarkers } from "@/lib/retrieval/sourceIntent";
+import { topicQuery } from "@/lib/retrieval/questionFiller";
+import { composeNukta } from "@/lib/utils/bangla";
 
 describe("detectSourceIntent", () => {
   it("scopes a question that asks only about the Quran", () => {
@@ -29,5 +31,43 @@ describe("detectSourceIntent", () => {
 
   it("does not fire on a word that merely contains a marker", () => {
     expect(detectSourceIntent("সুরাইয়া আপার বিয়ের দাওয়াত")).toBeNull();
+  });
+});
+
+describe("searching a scoped question for its topic", () => {
+  it("drops the Quran or hadith marker so it cannot outrank the topic, as in the hijab screenshot", () => {
+    expect(stripSourceMarkers("পর্দা সম্পর্কে কুরআনে কী নির্দেশ এসেছে?", ["quran"])).toBe(
+      "পর্দা সম্পর্কে কী নির্দেশ এসেছে?",
+    );
+    expect(stripSourceMarkers("নিয়ত সম্পর্কে হাদিস", ["hadith"])).toBe(
+      composeNukta("নিয়ত সম্পর্কে"),
+    );
+  });
+
+  it("keeps the name of ijma, qiyas, sirat or fiqh, since it is usually also the topic", () => {
+    expect(stripSourceMarkers("কিয়াস কী এবং কিয়াসের রুকন কয়টি?", ["qiyas"])).toBe(
+      "কিয়াস কী এবং কিয়াসের রুকন কয়টি?",
+    );
+  });
+
+  it("keeps the question when nothing but the marker is left", () => {
+    expect(stripSourceMarkers("কুরআন", ["quran"])).toBe("কুরআন");
+  });
+
+  it("reads Quran recitation as the topic rather than a request for Quran evidence", () => {
+    expect(detectSourceIntent("কুরআন তিলাওয়াতের ফজিলত সম্পর্কে হাদিসে কী আছে?")).toEqual([
+      "hadith",
+    ]);
+  });
+
+  it("recognises Banglish spellings of qiyas and fiqh", () => {
+    expect(detectSourceIntent("Ijma kayes ei somporke ki bole?")).toEqual(["ijma", "qiyas"]);
+    expect(detectSourceIntent("hanafi mazhab e ki bole")).toEqual(["fiqh"]);
+  });
+
+  it("searches with the topic words only", () => {
+    expect(topicQuery("পর্দা সম্পর্কে কী নির্দেশ এসেছে?")).toBe("পর্দা");
+    expect(topicQuery("what does the say about patience")).toBe("patience");
+    expect(topicQuery("কী?")).toBe("কী?");
   });
 });

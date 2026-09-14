@@ -20,7 +20,7 @@ import {
 import { applyRankingSignals } from "@/lib/analytics/rankingSignals";
 import { capPerSource, mergeCarriedContext, sourceCap } from "@/lib/retrieval/carryForward";
 import { fuseRankings } from "@/lib/retrieval/fusion";
-import { detectSourceIntent } from "@/lib/retrieval/sourceIntent";
+import { detectSourceIntent, stripSourceMarkers } from "@/lib/retrieval/sourceIntent";
 import { rerankContext } from "@/lib/retrieval/rerank";
 import { logger } from "@/lib/utils/logger";
 import type { RetrievedChunk, SourceType } from "@/types";
@@ -135,7 +135,10 @@ export async function retrieveForQuestion(
   const scopedTo = options.sources ? null : detectSourceIntent(question);
 
   if (scopedTo) {
-    const scoped = await retrieveAnswerContext(query, { ...options, sources: scopedTo });
+    const scoped = await retrieveAnswerContext(stripSourceMarkers(query, scopedTo), {
+      ...options,
+      sources: scopedTo,
+    });
     if (scoped.length > 0) return { context: scoped, scopedTo };
     logger.info(
       `No evidence in ${scopedTo.join(", ")} for a scoped question, widening to all sources`,

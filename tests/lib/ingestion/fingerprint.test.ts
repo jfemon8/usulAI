@@ -5,6 +5,7 @@ import {
   planIngestion,
   type StoredFingerprint,
 } from "@/lib/ingestion/fingerprint";
+import { hydrateCitation, storedCitation, storedMetadata } from "@/lib/db/documentShape";
 import type { IngestionDocument } from "@/types";
 
 function document(reference: string, content: string, metadata: Record<string, unknown> = {}) {
@@ -27,7 +28,7 @@ function stored(
     reference,
     hash: contentHash(content),
     embedded: true,
-    citation: { sourceType: "quran", reference },
+    citation: { reference },
     metadata: {},
     ...extra,
   };
@@ -151,5 +152,84 @@ describe("fingerprints", () => {
 
   it("names the embedding model together with its dimensions", () => {
     expect(currentEmbeddingModel()).toBe("gemini-embedding-001@768");
+  });
+});
+
+describe("the stored document shape", () => {
+  const book: IngestionDocument = {
+    sourceType: "fiqh",
+    content: "text",
+    citation: {
+      sourceType: "fiqh",
+      reference: "মুখতাসারুল কুদূরী, باب صلاة الجمعة, পৃষ্ঠা 40",
+      url: "https://res.cloudinary.com/demo/raw/upload/v1/raw-sources/fiqh/quduri.md?_a=BAMAROLW0",
+      page: 40,
+    },
+    metadata: { fileName: "quduri.md", page: 40, storageKey: "raw-sources/fiqh/quduri.md" },
+  };
+
+  it("stores neither the fields a reader can rebuild nor the archive key", () => {
+    expect(storedCitation(book.citation, book.sourceType, book.metadata)).toEqual({
+      reference: book.citation.reference,
+    });
+    expect(storedMetadata(book.metadata ?? {}, book.sourceType)).toEqual({
+      fileName: "quduri.md",
+      page: 40,
+    });
+  });
+
+  it("treats a compacted stored book as unchanged when the loader rebuilds the full citation", () => {
+    const plan = planIngestion(
+      [book],
+      [
+        {
+          id: "b1",
+          reference: book.citation.reference,
+          hash: contentHash("text"),
+          embedded: false,
+          citation: { reference: book.citation.reference },
+          metadata: { fileName: "quduri.md", page: 40 },
+        },
+      ],
+    );
+
+    expect(plan.unchanged).toBe(1);
+    expect(plan.metadataOnly).toHaveLength(0);
+  });
+
+  it("keeps a private book's archive key and a PDF's page link", () => {
+    const privateMetadata = {
+      fileName: "p.pdf",
+      page: 3,
+      restricted: true,
+      storageKey: "raw-sources/sirat/p.pdf",
+    };
+    const pdfCitation = {
+      sourceType: "sirat" as const,
+      reference: "r",
+      url: "https://res.cloudinary.com/demo/raw/upload/v1/raw-sources/sirat/b.pdf#page=5",
+      page: 3,
+    };
+
+    expect(storedMetadata(privateMetadata, "sirat")).toEqual(privateMetadata);
+    expect(storedCitation(pdfCitation, "sirat", { fileName: "b.pdf", page: 3 })).toEqual({
+      reference: "r",
+      url: pdfCitation.url,
+    });
+  });
+
+  it("rebuilds the source type, page and quran.com link when reading", () => {
+    expect(
+      hydrateCitation({ reference: "Al-Faatiha 1:2" }, "quran", { surah: 1, ayah: 2 }),
+    ).toEqual({
+      reference: "Al-Faatiha 1:2",
+      sourceType: "quran",
+      url: "https://quran.com/1/2",
+    });
+    expect(hydrateCitation({ reference: "x" }, "fiqh", { page: 40 })).toEqual({
+      reference: "x",
+      sourceType: "fiqh",
+      page: 40,
+    });
   });
 });

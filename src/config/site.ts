@@ -181,6 +181,16 @@ export const HYBRID_CONFIG = {
   fusionK: 60,
 } as const;
 
+export const QURAN_NOTE_SEARCH_CONFIG = {
+  readyWaitMs: 6_000,
+  maxSuffixChars: 3,
+  minTermChars: 2,
+  k1: 1.2,
+  b: 0.75,
+  minScore: 3,
+  fusionWeight: 1,
+} as const;
+
 export const EMBEDDING_RUNTIME_CONFIG = {
   queryCacheSize: 300,
   providerCooldownMs: 300_000,
