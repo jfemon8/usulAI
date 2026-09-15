@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CHAT_HISTORY_CONFIG } from "@/config/site";
 import {
+  compactMessage,
+  compactMessages,
   deriveTitle,
   dropExpired,
   fitToBudget,
@@ -51,6 +53,87 @@ describe("upsertConversation", () => {
 
     expect(result).toHaveLength(CHAT_HISTORY_CONFIG.maxConversations);
     expect(result[0]?.id).toBe(`c${CHAT_HISTORY_CONFIG.maxConversations + 4}`);
+  });
+});
+
+describe("compactMessages", () => {
+  function answer(index: number): UsulUIMessage {
+    return {
+      id: `a${index}`,
+      role: "assistant",
+      parts: [
+        {
+          type: "data-sources",
+          data: [
+            {
+              index: 1,
+              sourceType: "quran",
+              reference: "Al-Baqara 2:255",
+              url: "https://quran.com/2/255",
+              page: 4,
+              similarity: 0.9,
+              grade: "সহীহ",
+            },
+          ],
+        },
+        { type: "step-start" },
+        { type: "text", text: `উত্তর ${index}`, state: "done" },
+        { type: "data-outcome", data: { retryable: false } },
+      ],
+    };
+  }
+
+  const full = CHAT_HISTORY_CONFIG.maxMessagesPerConversation;
+  const compact = CHAT_HISTORY_CONFIG.maxCompactMessages;
+
+  it("keeps the latest messages whole and the older ones with their text and references", () => {
+    const messages = Array.from({ length: full + 3 }, (_, index) => answer(index));
+    const result = compactMessages(messages);
+
+    expect(result).toHaveLength(full + 3);
+    expect(result.slice(3)).toEqual(messages.slice(3));
+    expect(result[0]).toEqual({
+      id: "a0",
+      role: "assistant",
+      parts: [
+        {
+          type: "data-sources",
+          data: [
+            {
+              index: 1,
+              sourceType: "quran",
+              reference: "Al-Baqara 2:255",
+              page: 4,
+              similarity: 0.9,
+            },
+          ],
+        },
+        { type: "text", text: "উত্তর 0" },
+      ],
+    });
+  });
+
+  it("is stable when a compacted conversation is saved again", () => {
+    const once = compactMessages(Array.from({ length: full + 10 }, (_, index) => answer(index)));
+
+    expect(compactMessages(once)).toEqual(once);
+    expect(compactMessage(once[0]!)).toEqual(once[0]);
+  });
+
+  it("bounds how many compact messages are kept", () => {
+    const messages = Array.from({ length: full + compact + 7 }, (_, index) => answer(index));
+    const result = compactMessages(messages);
+
+    expect(result).toHaveLength(full + compact);
+    expect(result[0]?.id).toBe("a7");
+  });
+
+  it("stores the conversation through upsert in compact form", () => {
+    const messages = Array.from({ length: full + 1 }, (_, index) => answer(index));
+    const [stored] = upsertConversation([], conversation("c", 1, messages));
+
+    expect(stored?.messages).toHaveLength(full + 1);
+    expect(stored?.messages[0]?.parts).toHaveLength(2);
   });
 });
 

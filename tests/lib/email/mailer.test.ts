@@ -58,27 +58,3 @@ describe("sendEmail", () => {
     expect(result.error).toContain("Unauthorized");
   });
 });
-
-describe("reviewNotification", () => {
-  it("describes the answer waiting for review in Bangla", async () => {
-    const { reviewNotification } = await import("@/lib/email/reviewNotification");
-    const email = reviewNotification(
-      {
-        verdict: "wrong-citation",
-        origin: "implicit",
-        question: "হিজাব কি ফরজ?",
-        answer: "হ্যাঁ [1]।",
-        sources: [{ reference: "Al-Ahzaab 33:59" }],
-        note: "ভুল দলিল",
-      },
-      "reviewer@example.com",
-    );
-
-    expect(email.to).toBe("reviewer@example.com");
-    expect(email.subject).toContain("সূত্র ভুল");
-    expect(email.category).toBe("Review Queue");
-    expect(email.text).toContain("1. Al-Ahzaab 33:59");
-    expect(email.text).toContain("ইউজারের পরের মেসেজ থেকে");
-    expect(email.text).toContain("ভুল দলিল");
-  });
-});

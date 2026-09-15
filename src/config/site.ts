@@ -144,6 +144,7 @@ export const DB_CONFIG = {
   collection: "documents",
   queryLogCollection: "query_logs",
   feedbackCollection: "answer_feedback",
+  feedbackTallyCollection: "feedback_tallies",
   verifiedAnswerCollection: "verified_answers",
   rankingSignalCollection: "ranking_signals",
   queryEmbeddingCollection: "query_embeddings",
@@ -257,6 +258,7 @@ export const CHAT_HISTORY_CONFIG = {
   maxAgeMs: 365 * 24 * 60 * 60 * 1000,
   maxConversations: 30,
   maxMessagesPerConversation: 40,
+  maxCompactMessages: 160,
   maxStorageBytes: 2_500_000,
   titleChars: 48,
 } as const;
@@ -311,11 +313,9 @@ export const EMAIL_CONFIG = {
   sender: { email: "usulai@demomailtrap.co", name: SITE_NAME },
   categories: {
     test: "Integration Test",
-    reviewQueue: "Review Queue",
     passwordReset: "Password Reset",
     welcome: "Welcome",
   },
-  maxQuoteChars: 1_500,
   defaultLocale: "bn",
   timeZone: "Asia/Dhaka",
   logoPath: "/pwa/icon-192.png",
@@ -1113,13 +1113,21 @@ export const FILE_INGESTION_CONFIG = {
 
 export const RATE_LIMIT_CONFIG = {
   scopes: {
-    chat: { minute: 5, hour: 30, day: 100, globalPerDay: 1500 },
-    feedback: { minute: 10, hour: 60, day: 200, globalPerDay: 5000 },
-    maintenance: { minute: 1, hour: 2, day: 4, globalPerDay: 6 },
-    sourceView: { minute: 30, hour: 300, day: 1000, globalPerDay: 30000 },
+    chat: { minute: 5, hour: 30, day: 100 },
+    feedback: { minute: 10, hour: 60, day: 200 },
+    maintenance: { minute: 1, hour: 2, day: 4 },
+    sourceView: { minute: 30, hour: 300, day: 1000 },
+    usage: { minute: 20, hour: 200, day: 1000 },
   },
   maxQuestionChars: 1000,
   maxMessages: 30,
+} as const;
+
+export const USAGE_CONFIG = {
+  command: "/usage",
+  warnRatio: 0.7,
+  criticalRatio: 0.9,
+  reportedScopes: ["chat", "sourceView", "feedback"],
 } as const;
 
 export const STORAGE_BUDGET = {
@@ -1135,7 +1143,8 @@ export const RETENTION_CONFIG = {
   queryLogDays: 90,
   queryEmbeddingDays: 60,
   maxQueryEmbeddings: 15_000,
-  resolvedFeedbackDays: 365,
+  feedbackTallyDays: 365,
+  feedbackDrainBatch: 2_000,
   staleSignalDays: 365,
   rollupBatchSize: 2_000,
 } as const;

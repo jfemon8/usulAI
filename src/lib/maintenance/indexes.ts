@@ -93,7 +93,6 @@ export async function ensureStorageIndexes(db: Db): Promise<{ dropped: string[] 
     SELF_LEARNING_CONFIG.memoryDays * DAY_SECONDS,
   );
   await db.collection(DB_CONFIG.learningCollection).createIndex({ topic: 1 }, { sparse: true });
-  await db.collection(DB_CONFIG.feedbackCollection).createIndex({ topic: 1 }, { sparse: true });
   await db.collection(DB_CONFIG.queryInsightsCollection).createIndex({ lastAskedAt: 1 });
   await db
     .collection(DB_CONFIG.rateLimitCollection)

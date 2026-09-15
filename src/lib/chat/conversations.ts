@@ -21,13 +21,45 @@ export function deriveTitle(messages: UsulUIMessage[]): string {
     : text;
 }
 
+export function compactMessage(message: UsulUIMessage): UsulUIMessage {
+  const text = messageText(message);
+  const parts: UsulUIMessage["parts"] = [];
+
+  for (const part of message.parts) {
+    if (part.type !== "data-sources") continue;
+    parts.push({
+      type: "data-sources",
+      data: part.data.map(({ index, sourceType, reference, page, similarity }) => ({
+        index,
+        sourceType,
+        reference,
+        ...(page === undefined ? {} : { page }),
+        similarity,
+      })),
+    });
+  }
+  if (text.length > 0) parts.push({ type: "text", text });
+
+  return { id: message.id, role: message.role, parts };
+}
+
+export function compactMessages(messages: UsulUIMessage[]): UsulUIMessage[] {
+  const fullFrom = Math.max(0, messages.length - CHAT_HISTORY_CONFIG.maxMessagesPerConversation);
+  const compactFrom = Math.max(0, fullFrom - CHAT_HISTORY_CONFIG.maxCompactMessages);
+
+  return [
+    ...messages.slice(compactFrom, fullFrom).map(compactMessage),
+    ...messages.slice(fullFrom),
+  ];
+}
+
 export function upsertConversation(
   list: Conversation[],
   conversation: Conversation,
 ): Conversation[] {
   const trimmed: Conversation = {
     ...conversation,
-    messages: conversation.messages.slice(-CHAT_HISTORY_CONFIG.maxMessagesPerConversation),
+    messages: compactMessages(conversation.messages),
   };
 
   return [trimmed, ...list.filter((item) => item.id !== conversation.id)]

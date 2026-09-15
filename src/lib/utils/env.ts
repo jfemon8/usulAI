@@ -56,9 +56,6 @@ const emailShape = {
   EMAIL_FROM_NAME: blank(z.string().min(1).optional()),
   SUPPORT_EMAIL: blank(z.string().email("SUPPORT_EMAIL must be an email address").optional()),
   EMAIL_LOGO_URL: blank(z.string().url().optional()),
-  REVIEW_NOTIFY_EMAIL: blank(
-    z.string().email("REVIEW_NOTIFY_EMAIL must be an email address").optional(),
-  ),
 };
 
 const appSchema = z.object(appShape);

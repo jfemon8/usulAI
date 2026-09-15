@@ -3,12 +3,14 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { clsx } from "clsx";
 import { ArrowUpIcon, StopIcon } from "@/components/ui/Icons";
-import { RATE_LIMIT_CONFIG } from "@/config/site";
+import { RATE_LIMIT_CONFIG, USAGE_CONFIG } from "@/config/site";
+import { isUsageCommand } from "@/lib/usage/usageView";
 
 interface ComposerProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
+  onCommand?: () => void;
   onStop: () => void;
   busy: boolean;
   autoFocus?: boolean;
@@ -22,11 +24,18 @@ export interface ComposerHandle {
 const MAX_HEIGHT = 208;
 
 export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Composer(
-  { value, onChange, onSubmit, onStop, busy, autoFocus, compact },
+  { value, onChange, onSubmit, onCommand, onStop, busy, autoFocus, compact },
   ref,
 ) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const canSend = !busy && value.trim().length > 0;
+  const command = isUsageCommand(value);
+  const canSend = (command && onCommand !== undefined) || (!busy && value.trim().length > 0);
+  const submit = () => {
+    if (command && onCommand) onCommand();
+    else if (canSend) onSubmit();
+  };
+  const showCommandHint =
+    value.startsWith("/") && USAGE_CONFIG.command.startsWith(value.trim().toLowerCase());
 
   useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus() }), []);
 
@@ -42,53 +51,70 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   }, [autoFocus]);
 
   return (
-    <form
-      className={clsx(
-        "flex items-end gap-2 border border-(--border) bg-(--bg) shadow-(--composer-shadow) transition-colors focus-within:border-(--border-strong)",
-        compact ? "rounded-3xl p-1.5 ps-3" : "rounded-[28px] p-2 ps-4",
-      )}
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (canSend) onSubmit();
-      }}
-    >
-      <textarea
-        ref={textareaRef}
-        rows={1}
-        maxLength={RATE_LIMIT_CONFIG.maxQuestionChars}
-        className="thin-scroll max-h-52 min-h-10 flex-1 resize-none bg-transparent py-2 text-base leading-6 text-(--text-1) outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap placeholder:text-(--text-3)"
-        placeholder="যেকোন মাসআলা জানতে প্রশ্ন করুন…"
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
-            event.preventDefault();
-            if (canSend) onSubmit();
-          }
-        }}
-        aria-label="আপনার প্রশ্ন"
-        enterKeyHint="send"
-      />
-
-      {busy ? (
+    <div className="relative">
+      {showCommandHint && onCommand ? (
         <button
           type="button"
-          onClick={onStop}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--text-1) text-(--bg) transition hover:opacity-85 active:scale-95"
-          aria-label="উত্তর থামান"
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={() => {
+            onCommand?.();
+          }}
+          className="absolute inset-x-2 bottom-full mb-2 flex items-center gap-3 rounded-2xl border border-(--border) bg-(--bg) px-4 py-3 text-left shadow-(--composer-shadow) transition hover:bg-(--surface-2)"
         >
-          <StopIcon className="h-4 w-4" />
+          <code className="rounded-md bg-(--surface-2) px-2 py-0.5 font-mono text-sm text-(--text-1)">
+            {USAGE_CONFIG.command}
+          </code>
+          <span className="text-sm text-(--text-2)">ব্যবহার এবং সংরক্ষিত তথ্যের হিসাব দেখুন</span>
         </button>
-      ) : (
-        <button
-          type="submit"
-          disabled={!canSend}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--accent) text-(--accent-contrast) transition hover:bg-(--accent-strong) active:scale-95 disabled:bg-(--surface-3) disabled:text-(--text-3)"
-          aria-label="পাঠান"
-        >
-          <ArrowUpIcon className="h-5 w-5" />
-        </button>
-      )}
-    </form>
+      ) : null}
+      <form
+        className={clsx(
+          "flex items-end gap-2 border border-(--border) bg-(--bg) shadow-(--composer-shadow) transition-colors focus-within:border-(--border-strong)",
+          compact ? "rounded-3xl p-1.5 ps-3" : "rounded-[28px] p-2 ps-4",
+        )}
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (canSend) submit();
+        }}
+      >
+        <textarea
+          ref={textareaRef}
+          rows={1}
+          maxLength={RATE_LIMIT_CONFIG.maxQuestionChars}
+          className="thin-scroll max-h-52 min-h-10 flex-1 resize-none bg-transparent py-2 text-base leading-6 text-(--text-1) outline-none placeholder:overflow-hidden placeholder:text-ellipsis placeholder:whitespace-nowrap placeholder:text-(--text-3)"
+          placeholder="যেকোন মাসআলা জানতে প্রশ্ন করুন…"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              if (canSend) submit();
+            }
+          }}
+          aria-label="আপনার প্রশ্ন"
+          enterKeyHint="send"
+        />
+
+        {busy ? (
+          <button
+            type="button"
+            onClick={onStop}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--text-1) text-(--bg) transition hover:opacity-85 active:scale-95"
+            aria-label="উত্তর থামান"
+          >
+            <StopIcon className="h-4 w-4" />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            disabled={!canSend}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-(--accent) text-(--accent-contrast) transition hover:bg-(--accent-strong) active:scale-95 disabled:bg-(--surface-3) disabled:text-(--text-3)"
+            aria-label="পাঠান"
+          >
+            <ArrowUpIcon className="h-5 w-5" />
+          </button>
+        )}
+      </form>
+    </div>
   );
 });

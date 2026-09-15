@@ -87,7 +87,7 @@ async function main() {
   console.log(`  helpful          ${feedback.helpful}`);
   console.log(`  unhelpful        ${feedback.unhelpful}`);
   console.log(`  wrong citation   ${feedback.wrongCitation}`);
-  console.log(`  awaiting review  ${feedback.pending}`);
+  console.log(`  topics tallied   ${feedback.topics}`);
   console.log(`  verified answers ${verified.length}`);
 
   if (verified.length > 0) {

@@ -1,6 +1,7 @@
 import { createHash } from "crypto";
 import { DB_CONFIG, RATE_LIMIT_CONFIG } from "@/config/site";
 import { getDb } from "@/lib/db/mongoClient";
+import type { ScopeUsage, WindowUsage } from "@/lib/usage/types";
 import { logger } from "@/lib/utils/logger";
 
 export type RateScope = keyof typeof RATE_LIMIT_CONFIG.scopes;
@@ -21,7 +22,7 @@ interface Counter {
 type CounterDoc = Partial<Record<WindowName, Counter>>;
 
 export type RateDecision =
-  { allowed: true } | { allowed: false; window: WindowName | "global"; retryAfterSeconds: number };
+  { allowed: true } | { allowed: false; window: WindowName; retryAfterSeconds: number };
 
 export function clientAddress(request: Request): string {
   const realIp = request.headers.get("x-real-ip")?.trim();
@@ -102,12 +103,7 @@ export async function consumeRateLimit(scope: RateScope, request: Request): Prom
 
   try {
     const client = await bump(`${scope}:${clientKey(request)}`, ["minute", "hour", "day"], now);
-    const personal = decide(client, limits, now);
-    if (!personal.allowed) return personal;
-
-    const global = await bump(`${scope}:global`, ["day"], now);
-    const overall = decide(global, { day: limits.globalPerDay }, now);
-    return overall.allowed ? overall : { ...overall, window: "global" };
+    return decide(client, limits, now);
   } catch (error) {
     logger.warn("Rate limit check failed, allowing the request", {
       scope,
@@ -117,11 +113,46 @@ export async function consumeRateLimit(scope: RateScope, request: Request): Prom
   }
 }
 
+function windowUsage(
+  counter: Counter | undefined,
+  limit: number,
+  window: WindowName,
+  now: number,
+): WindowUsage {
+  const current = windowIndex(now, window);
+  return {
+    used: counter && counter.w === current ? counter.c : 0,
+    limit,
+    resetsAt: (current + 1) * WINDOWS[window],
+  };
+}
+
+export function usageFrom(
+  client: CounterDoc,
+  limits: { minute: number; hour: number; day: number },
+  now: number,
+): ScopeUsage {
+  return {
+    minute: windowUsage(client.minute, limits.minute, "minute", now),
+    hour: windowUsage(client.hour, limits.hour, "hour", now),
+    day: windowUsage(client.day, limits.day, "day", now),
+  };
+}
+
+export async function readRateUsage(
+  scope: RateScope,
+  request: Request,
+  now: number = Date.now(),
+): Promise<ScopeUsage> {
+  const collection = (await getDb()).collection<{ _id: string } & CounterDoc>(
+    DB_CONFIG.rateLimitCollection,
+  );
+  const client = await collection.findOne({ _id: `${scope}:${clientKey(request)}` });
+  return usageFrom(client ?? {}, RATE_LIMIT_CONFIG.scopes[scope], now);
+}
+
 export function rateLimitResponse(decision: Extract<RateDecision, { allowed: false }>): Response {
-  const message =
-    decision.window === "global"
-      ? "আজকের জন্য প্রশ্নের সর্বোচ্চ সীমা পূর্ণ হয়ে গেছে। অনুগ্রহ করে আগামীকাল আবার চেষ্টা করুন।"
-      : `খুব অল্প সময়ে অনেকগুলো প্রশ্ন করা হয়েছে। অনুগ্রহ করে ${decision.retryAfterSeconds} সেকেন্ড পর আবার চেষ্টা করুন।`;
+  const message = `খুব অল্প সময়ে অনেকগুলো প্রশ্ন করা হয়েছে। অনুগ্রহ করে ${decision.retryAfterSeconds} সেকেন্ড পর আবার চেষ্টা করুন।`;
 
   return new Response(
     JSON.stringify({ error: message, retryAfterSeconds: decision.retryAfterSeconds }),

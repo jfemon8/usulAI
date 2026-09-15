@@ -14,7 +14,6 @@ export interface VerifiedAnswer {
   answer: string;
   sources: AnswerSource[];
   reviewerNote?: string;
-  feedbackId?: string;
   createdAt: Date;
   servedCount: number;
 }
@@ -37,7 +36,6 @@ export async function saveVerifiedAnswer(input: {
   answer: string;
   sources: AnswerSource[];
   reviewerNote?: string;
-  feedbackId?: string;
   origin?: VerifiedOrigin;
 }): Promise<void> {
   const verified = await collection();
@@ -54,7 +52,6 @@ export async function saveVerifiedAnswer(input: {
         answer: input.answer,
         sources: input.sources,
         reviewerNote: input.reviewerNote,
-        feedbackId: input.feedbackId,
         createdAt: new Date(),
       },
       $setOnInsert: { servedCount: 0 },

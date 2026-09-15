@@ -45,6 +45,10 @@
   --accent-contrast: #ffffff;
   --accent-soft: rgba(61, 109, 158, 0.14);
   --accent-ring: rgba(61, 109, 158, 0.42);
+  --warn: #9a6412;
+  --warn-soft: rgba(183, 121, 31, 0.14);
+  --danger: #b83227;
+  --danger-soft: rgba(192, 57, 43, 0.12);
 
   --radius-shell: 28px;
   --radius-card: 20px;
@@ -87,6 +91,10 @@
     --accent-contrast: #08121d;
     --accent-soft: rgba(127, 178, 228, 0.16);
     --accent-ring: rgba(127, 178, 228, 0.46);
+    --warn: #f0b95a;
+    --warn-soft: rgba(240, 185, 90, 0.16);
+    --danger: #ff8a7a;
+    --danger-soft: rgba(255, 138, 122, 0.16);
   }
 }
 
@@ -244,6 +252,36 @@
   .rise-in {
     animation: rise-in 0.42s cubic-bezier(0.22, 0.9, 0.28, 1) both;
   }
+
+  .sheet-overlay[data-state="open"] {
+    animation: overlay-in 0.24s ease-out both;
+  }
+
+  .sheet-overlay[data-state="closed"] {
+    animation: overlay-out 0.22s ease-in both;
+  }
+
+  .sheet-panel {
+    will-change: transform;
+  }
+
+  .sheet-panel[data-state="open"] {
+    animation: sheet-in 0.34s cubic-bezier(0.32, 0.72, 0, 1) both;
+  }
+
+  .sheet-panel[data-state="closed"] {
+    animation: sheet-out 0.24s cubic-bezier(0.4, 0, 1, 1) both;
+  }
+
+  @media (min-width: 40rem) {
+    .sheet-panel[data-state="open"] {
+      animation: dialog-in 0.22s cubic-bezier(0.22, 0.9, 0.28, 1) both;
+    }
+
+    .sheet-panel[data-state="closed"] {
+      animation: dialog-out 0.16s ease-in both;
+    }
+  }
 }
 
 @keyframes rise-in {
@@ -254,6 +292,61 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes overlay-out {
+  from {
+    opacity: var(--overlay-from, 1);
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes sheet-out {
+  from {
+    transform: translateY(var(--sheet-drag, 0px));
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes dialog-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
   }
 }
 

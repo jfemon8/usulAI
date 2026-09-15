@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { clsx } from "clsx";
@@ -8,6 +8,7 @@ import { AnswerMarkdown } from "@/components/chat/AnswerMarkdown";
 import { Composer } from "@/components/chat/Composer";
 import { MessageActions } from "@/components/chat/MessageActions";
 import { SourceCitationList } from "@/components/chat/SourceCitation";
+import { UsageModal } from "@/components/chat/UsageModal";
 import { ArrowDownIcon, RetryIcon } from "@/components/ui/Icons";
 import { LogoMark } from "@/components/ui/Logo";
 import { messageText } from "@/lib/chat/conversations";
@@ -235,6 +236,8 @@ export function ChatWindow({
   compact = false,
 }: ChatWindowProps) {
   const [input, setInput] = useState("");
+  const [usageOpen, setUsageOpen] = useState(false);
+  const closeUsage = useCallback(() => setUsageOpen(false), []);
   const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
@@ -317,11 +320,19 @@ export function ChatWindow({
       value={input}
       onChange={setInput}
       onSubmit={() => send(input)}
+      onCommand={() => {
+        setInput("");
+        setUsageOpen(true);
+      }}
       onStop={() => void stop()}
       busy={isLoading}
       autoFocus
       compact={compact}
     />
+  );
+
+  const usageModal = (
+    <UsageModal open={usageOpen} onClose={closeUsage} messages={messages} persistent={!compact} />
   );
 
   if (isEmpty) {
@@ -346,6 +357,7 @@ export function ChatWindow({
         >
           <div className={clsx("mx-auto w-full", column)}>{composer}</div>
         </div>
+        {usageModal}
       </div>
     );
   }
@@ -462,6 +474,7 @@ export function ChatWindow({
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">
         {liveStatus}
       </p>
+      {usageModal}
     </div>
   );
 }

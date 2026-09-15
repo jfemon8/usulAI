@@ -5,7 +5,7 @@ vi.mock("@/lib/db/mongoClient", () => ({ getDb: vi.fn(() => Promise.reject(new E
 const { topicKey } = await import("@/lib/learning/topicKey");
 const { classifyFollowUp, previousExchange } = await import("@/lib/learning/implicitFeedback");
 const { preferReliable, successRatio } = await import("@/lib/learning/modelStats");
-const { distinctSupporters } = await import("@/lib/analytics/feedback");
+const { isTrusted, tallyKey, tallyUpdate } = await import("@/lib/analytics/feedback");
 const { netSignal } = await import("@/lib/analytics/rankingSignals");
 const { createLru } = await import("@/lib/utils/lru");
 
@@ -94,11 +94,38 @@ describe("learning weights", () => {
     expect(netSignal({ positive: 0, negative: 0, implicitPositive: 1 })).toBe(0.5);
   });
 
-  it("needs distinct people before an answer is verified automatically", () => {
-    expect(distinctSupporters([{ clientKey: "a" }, { clientKey: "a" }, { clientKey: "a" }])).toBe(
-      1,
+  it("needs distinct people and no complaint before an answer is verified automatically", () => {
+    expect(isTrusted({ supporters: ["a"] })).toBe(false);
+    expect(isTrusted({ supporters: ["a", "b", "c"] })).toBe(true);
+    expect(isTrusted({ supporters: ["a", "b", "c"], unhelpful: 1 })).toBe(false);
+    expect(isTrusted({ supporters: ["a", "b", "c"], wrongCitation: 1 })).toBe(false);
+  });
+
+  it("tallies the same question asked in another order under one key", () => {
+    expect(tallyKey("সফরে কসর নামাজ কত দিন পড়া যাবে?")).toBe(
+      tallyKey("কত দিন সফরে কসর নামাজ পড়া যাবে"),
     );
-    expect(distinctSupporters([{ clientKey: "a" }, { clientKey: "b" }, { _id: "legacy" }])).toBe(3);
+    expect(tallyKey("নামাজ পড়া যাবে")).not.toBe(tallyKey("নামাজ পড়া যাবে না"));
+  });
+
+  it("counts a vote without storing the question, answer or note", () => {
+    const helpful = JSON.stringify(
+      tallyUpdate(
+        { verdict: "helpful", question: "যাকাতের নিসাব কত?", origin: "explicit", supporter: "a" },
+        new Date(0),
+      ),
+    );
+    const implicit = JSON.stringify(
+      tallyUpdate(
+        { verdict: "unhelpful", question: "যাকাতের নিসাব কত?", origin: "implicit", supporter: "b" },
+        new Date(0),
+      ),
+    );
+
+    expect(helpful).toContain('"$literal":["a"]');
+    expect(helpful).not.toContain("যাকাতের নিসাব কত?");
+    expect(implicit).not.toContain('"$literal"');
+    expect(implicit).toContain('"$unhelpful",0]},1]');
   });
 
   it("moves models whose answers keep failing the gate to the end, once there is enough evidence", () => {

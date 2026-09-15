@@ -46,7 +46,7 @@ npm run dev
 | -------------------------------------------------------------------------------------- | ---------- | --------------------------------------------------------------------------------------------- |
 | `MONGODB_URI`                                                                          | হ্যাঁ      | Atlas connection string (Atlas Network Access-এ `0.0.0.0/0` দিতে হয়, Vercel-এর IP স্থির নয়) |
 | `GOOGLE_GENERATIVE_AI_API_KEY` / `GROQ_API_KEY` / `OPENROUTER_API_KEY` / `ZAI_API_KEY` | অন্তত একটা | যেগুলো দেওয়া থাকবে শুধু সেই মডেলগুলোই চেষ্টা হবে; Gemini key থাকলে embedding-ও চালু হয়      |
-| `INGEST_API_SECRET`                                                                    | ঐচ্ছিক     | feedback review queue ও ingest trigger-এর গোপন হেডার                                          |
+| `INGEST_API_SECRET`                                                                    | ঐচ্ছিক     | ingest trigger ও rate-limit salt-এর গোপন মান                                                  |
 | `CRON_SECRET`                                                                          | ঐচ্ছিক     | দিলে দৈনিক cron এই secret দিয়ে যাচাই হয়; না দিলে শুধু Vercel cron, কড়া rate limit-সহ       |
 | `NEXT_PUBLIC_APP_URL`                                                                  | ঐচ্ছিক     | না দিলে Vercel-এর production URL নিজে থেকে ব্যবহার হয়                                        |
 | `GITHUB_DISPATCH_TOKEN`, `GITHUB_REPOSITORY`                                           | ঐচ্ছিক     | `/api/ingest` থেকে GitHub Actions ingestion চালু করতে                                         |

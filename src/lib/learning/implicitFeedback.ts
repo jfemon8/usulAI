@@ -202,7 +202,6 @@ export async function learnFromFollowUp(
         question: exchange.question.slice(0, 2000),
         answer: exchange.answer.slice(0, 8000),
         sources: exchange.sources,
-        note: exchange.followUp.slice(0, 2000),
         origin: "implicit",
         ...(clientKey ? { clientKey } : {}),
       });

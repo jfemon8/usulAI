@@ -2,6 +2,7 @@ import { DB_CONFIG, RETENTION_CONFIG, STORAGE_BUDGET } from "@/config/site";
 import { hydrateReference } from "@/lib/db/documentShape";
 import { pretranslateFrequentPassages } from "@/lib/learning/pretranslate";
 import { normalizeQuestion } from "@/lib/analytics/verifiedAnswers";
+import { tallyFeedback, type FeedbackOrigin, type FeedbackVerdict } from "@/lib/analytics/feedback";
 import { getDb, getDocumentsCollection } from "@/lib/db/mongoClient";
 import { bytesToFree, storageUsage, type StorageUsage } from "@/lib/maintenance/storage";
 import { logger } from "@/lib/utils/logger";
@@ -145,13 +146,46 @@ async function capQueryEmbeddings(dryRun: boolean): Promise<number> {
   return (await collection.deleteMany({ _id: { $in: oldest.map((row) => row._id) } })).deletedCount;
 }
 
-async function pruneOldPraise(dryRun: boolean): Promise<number> {
+interface StoredFeedback {
+  verdict: FeedbackVerdict;
+  question: string;
+  origin?: FeedbackOrigin;
+  clientKey?: string;
+}
+
+async function drainStoredFeedback(dryRun: boolean): Promise<number> {
+  const collection = (await getDb()).collection<StoredFeedback>(DB_CONFIG.feedbackCollection);
+  if (dryRun) return collection.countDocuments();
+
+  const rows = await collection
+    .find({}, { projection: { verdict: 1, question: 1, origin: 1, clientKey: 1 } })
+    .limit(RETENTION_CONFIG.feedbackDrainBatch)
+    .toArray();
+
+  for (const row of rows) {
+    await tallyFeedback({
+      verdict: row.verdict,
+      question: row.question,
+      origin: row.origin ?? "explicit",
+      supporter: row.clientKey ?? String(row._id),
+    });
+  }
+
+  const drained =
+    rows.length > 0
+      ? (await collection.deleteMany({ _id: { $in: rows.map((row) => row._id) } })).deletedCount
+      : 0;
+  if ((await collection.countDocuments()) === 0) await collection.drop().catch(() => false);
+  return drained;
+}
+
+async function pruneSettledTallies(dryRun: boolean): Promise<number> {
   const filter = {
-    verdict: "helpful",
-    status: "approved",
-    createdAt: { $lt: new Date(Date.now() - RETENTION_CONFIG.resolvedFeedbackDays * DAY_MS) },
+    updatedAt: { $lt: new Date(Date.now() - RETENTION_CONFIG.feedbackTallyDays * DAY_MS) },
+    unhelpful: { $in: [0, null] },
+    wrongCitation: { $in: [0, null] },
   };
-  const collection = (await getDb()).collection(DB_CONFIG.feedbackCollection);
+  const collection = (await getDb()).collection(DB_CONFIG.feedbackTallyCollection);
   return dryRun
     ? collection.countDocuments(filter)
     : (await collection.deleteMany(filter)).deletedCount;
@@ -214,7 +248,8 @@ export interface MaintenanceReport {
   ratio: number;
   insightsRolledUp: number;
   queryEmbeddingsCapped: number;
-  feedbackPruned: number;
+  feedbackDrained: number;
+  talliesPruned: number;
   signalsPruned: number;
   embeddingsEvicted: number;
   passagesPretranslated: number;
@@ -229,7 +264,8 @@ export async function runMaintenance(
 
   const insightsRolledUp = await rollupQueryLogs(dryRun);
   const queryEmbeddingsCapped = await capQueryEmbeddings(dryRun);
-  const feedbackPruned = await pruneOldPraise(dryRun);
+  const feedbackDrained = await drainStoredFeedback(dryRun);
+  const talliesPruned = await pruneSettledTallies(dryRun);
   const signalsPruned = await pruneNeutralSignals(dryRun);
   const pressure = dryRun ? before : await storageUsage();
   const embeddingsEvicted = await evictUnusedEmbeddings(pressure, dryRun);
@@ -254,7 +290,8 @@ export async function runMaintenance(
     ratio: after.ratio,
     insightsRolledUp,
     queryEmbeddingsCapped,
-    feedbackPruned,
+    feedbackDrained,
+    talliesPruned,
     signalsPruned,
     embeddingsEvicted,
     passagesPretranslated,
