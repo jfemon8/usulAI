@@ -165,6 +165,10 @@ export const DB_CONFIG = {
   adminResetTokenCollection: "admin_reset_tokens",
   adminAuditCollection: "admin_audit",
   siteContentCollection: "site_content",
+  staffAccountCollection: "staff_accounts",
+  staffCategoryCollection: "staff_categories",
+  reviewQueueCollection: "review_items",
+  helpRequestCollection: "help_requests",
   vectorIndex: "documents_embedding_idx",
   textIndex: "documents_text_idx",
   embeddingPath: "embedding",
@@ -324,6 +328,7 @@ export const EMAIL_CONFIG = {
   categories: {
     test: "Integration Test",
     passwordReset: "Password Reset",
+    helpAnswered: "Help Answered",
     welcome: "Welcome",
   },
   defaultLocale: "bn",
@@ -1131,6 +1136,9 @@ export const RATE_LIMIT_CONFIG = {
     admin: { minute: 240, hour: 5000, day: 40000 },
     adminLogin: { minute: 5, hour: 20, day: 60 },
     adminReset: { minute: 6, hour: 30, day: 60 },
+    helpRequest: { minute: 2, hour: 6, day: 12 },
+    helpTrack: { minute: 30, hour: 300, day: 2000 },
+    masail: { minute: 60, hour: 1200, day: 12000 },
   },
   maxQuestionChars: 1000,
   maxMessages: 30,
@@ -1163,9 +1171,53 @@ export const ADMIN_CONFIG = {
   protectedCollections: ["admin_accounts", "admin_sessions", "admin_reset_tokens"],
 } as const;
 
+export const STAFF_CONFIG = {
+  defaultCategories: [
+    { slug: "moderator", name: "মডারেটর", role: "moderator" },
+    { slug: "mufti", name: "মুফতি", role: "scholar" },
+    { slug: "alem", name: "আলেম", role: "scholar" },
+    { slug: "ulama", name: "ওলামা", role: "scholar" },
+    { slug: "imam", name: "ইমাম", role: "scholar" },
+    { slug: "shaykh", name: "শায়েখ", role: "scholar" },
+  ],
+  maxNameChars: 80,
+  maxCategoryNameChars: 40,
+  maxPhoneChars: 20,
+  generatedPasswordChars: 12,
+  categoryCacheMs: 30_000,
+} as const;
+
+export const REVIEW_CONFIG = {
+  maxOpenItems: 5_000,
+  maxQuestionChars: 2_000,
+  maxAnswerChars: 8_000,
+  maxNoteChars: 2_000,
+  claimMinutes: 60,
+} as const;
+
+export const HELP_CONFIG = {
+  path: "/help",
+  maxQuestionChars: 2_000,
+  maxDetailsChars: 4_000,
+  maxAnswerChars: 20_000,
+  claimMinutes: 120,
+  answeredRetentionDays: 180,
+  openRetentionDays: 365,
+  storageKey: "usul-ai:help-requests:v1",
+  maxStoredRequests: 50,
+} as const;
+
+export const MASAIL_CONFIG = {
+  path: "/masail",
+  pageSize: 20,
+  revalidateSeconds: 300,
+  maxSearchChars: 200,
+} as const;
+
 export const CHAT_COMMANDS = [
   { command: "/usage", description: "ব্যবহার এবং সংরক্ষিত তথ্যের হিসাব দেখুন" },
   { command: "/admin", description: "অ্যাডমিন প্যানেলে যান" },
+  { command: "/login", description: "মডারেটর ও আলেমদের লগইন" },
 ] as const;
 
 export const USAGE_CONFIG = {

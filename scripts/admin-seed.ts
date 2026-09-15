@@ -1,6 +1,7 @@
 import "./loadEnv";
 import { ADMIN_CONFIG, DB_CONFIG } from "@/config/site";
 import { ensureAccount } from "@/lib/admin/accounts";
+import { ensureDefaultCategories, ensureStaffIndexes, listCategories } from "@/lib/admin/staff";
 import { getDb, getMongoClient } from "@/lib/db/mongoClient";
 
 async function main() {
@@ -20,6 +21,13 @@ async function main() {
       `${email}: ${account?.passwordHash ? "ready" : "no password yet, use forgot password or set ADMIN_INITIAL_PASSWORD"}`,
     );
   }
+
+  await ensureStaffIndexes();
+  await ensureDefaultCategories();
+  const categories = await listCategories();
+  console.log(
+    `staff categories: ${categories.map((category) => `${category.name} (${category.role})`).join(", ")}`,
+  );
 
   await (await getMongoClient()).close();
 }

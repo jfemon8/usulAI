@@ -1,12 +1,21 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { clsx } from "clsx";
 import { AnnouncementBanner } from "@/components/chat/AnnouncementBanner";
 import { ChatWindow } from "@/components/chat/ChatWindow";
-import { CloseIcon, MenuIcon, PenIcon, SidebarIcon, TrashIcon } from "@/components/ui/Icons";
+import {
+  BookIcon,
+  CloseIcon,
+  MenuIcon,
+  PenIcon,
+  QuestionIcon,
+  SidebarIcon,
+  TrashIcon,
+} from "@/components/ui/Icons";
 import { LogoMark } from "@/components/ui/Logo";
-import { SITE_NAME } from "@/config/site";
+import { HELP_CONFIG, MASAIL_CONFIG, SITE_NAME } from "@/config/site";
 import {
   conversationStore,
   deriveTitle,
@@ -108,6 +117,20 @@ function SidebarContent({
           <PenIcon className="h-4 w-4" />
           নতুন চ্যাট
         </button>
+        <Link
+          href={MASAIL_CONFIG.path}
+          className="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-(--text-2) transition hover:bg-(--surface-2) hover:text-(--text-1)"
+        >
+          <BookIcon className="h-4 w-4" />
+          মাসআলা
+        </Link>
+        <Link
+          href={HELP_CONFIG.path}
+          className="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-(--text-2) transition hover:bg-(--surface-2) hover:text-(--text-1)"
+        >
+          <QuestionIcon className="h-4 w-4" />
+          আমার প্রশ্ন
+        </Link>
       </div>
 
       <nav

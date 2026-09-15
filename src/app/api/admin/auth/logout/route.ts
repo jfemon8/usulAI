@@ -5,7 +5,7 @@ import { destroyCurrentSession } from "@/lib/admin/sessions";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const POST = adminRoute(async (_request, session) => {
+export const POST = adminRoute("panel.use", async (_request, session) => {
   await destroyCurrentSession();
   await recordAudit(session.email, "auth.logout");
   return adminJson({ ok: true });

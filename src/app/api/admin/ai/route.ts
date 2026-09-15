@@ -34,9 +34,11 @@ function payload(stored: Awaited<ReturnType<typeof loadStoredAiSettings>>) {
   };
 }
 
-export const GET = adminRoute(async () => adminJson(payload(await loadStoredAiSettings())));
+export const GET = adminRoute("ai.manage", async () =>
+  adminJson(payload(await loadStoredAiSettings())),
+);
 
-export const PUT = adminRoute(async (request, session) => {
+export const PUT = adminRoute("ai.manage", async (request, session) => {
   const body = await readJson(request, aiSchema);
   const known = new Set(describeModelChain().map((model) => model.modelId));
   const unknown = body.disabledModels.filter((model) => !known.has(model));

@@ -5,7 +5,7 @@ import { adminJson, adminRoute } from "@/lib/admin/http";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const GET = adminRoute(async (request) => {
+export const GET = adminRoute("audit.view", async (request) => {
   const url = new URL(request.url);
   const before = url.searchParams.get("before");
   const email = url.searchParams.get("email")?.trim().toLowerCase();

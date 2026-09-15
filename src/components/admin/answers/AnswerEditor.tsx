@@ -42,6 +42,9 @@ interface AnswerDetail {
   sourceCount: number;
   createdAt: string | null;
   updatedAt: string | null;
+  author: { name: string; category: string } | null;
+  published: boolean;
+  publishedAt: string | null;
   answer: string;
   reviewerNote: string;
   topic: string;
@@ -290,6 +293,16 @@ export function AnswerEditor({ id }: { id?: string }) {
       {data ? (
         <div className="-mt-2 mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-(--text-3)">
           <OriginBadge origin={data.origin} />
+          {data.author ? (
+            <span>
+              লেখক: {data.author.category} {data.author.name}
+            </span>
+          ) : null}
+          {data.published ? (
+            <span>প্রকাশিত {formatWhen(data.publishedAt)}</span>
+          ) : data.author ? (
+            <span>অপ্রকাশিত</span>
+          ) : null}
           <span>দেখানো হয়েছে {formatCount(data.servedCount)} বার</span>
           <span>তৈরি {formatWhen(data.createdAt)}</span>
           {data.updatedAt ? (

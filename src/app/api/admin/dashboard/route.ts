@@ -4,4 +4,6 @@ import { adminJson, adminRoute } from "@/lib/admin/http";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const GET = adminRoute(async () => adminJson(await dashboardSnapshot()));
+export const GET = adminRoute("dashboard.view", async (_request, session) =>
+  adminJson(await dashboardSnapshot(session.role)),
+);

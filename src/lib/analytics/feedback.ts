@@ -9,6 +9,7 @@ import {
 import { recordRankingFeedback } from "@/lib/analytics/rankingSignals";
 import { forgetLearnedTopic } from "@/lib/learning/forget";
 import { topicKey } from "@/lib/learning/topicKey";
+import { enqueueReview } from "@/lib/reviews/queue";
 import type { AnswerSource } from "@/types";
 
 export type FeedbackVerdict = "helpful" | "unhelpful" | "wrong-citation";
@@ -21,6 +22,7 @@ export interface FeedbackInput {
   sources: AnswerSource[];
   clientKey?: string;
   origin?: FeedbackOrigin;
+  note?: string;
 }
 
 export interface FeedbackTally {
@@ -108,6 +110,17 @@ export async function tallyFeedback(input: TallyInput): Promise<FeedbackTally | 
 export async function recordFeedback(input: FeedbackInput): Promise<void> {
   const positive = input.verdict === "helpful";
   const origin = input.origin ?? "explicit";
+
+  if (!positive) {
+    await enqueueReview({
+      verdict: input.verdict === "wrong-citation" ? "wrong-citation" : "unhelpful",
+      question: input.question,
+      answer: input.answer,
+      sources: input.sources,
+      origin,
+      ...(input.note ? { note: input.note } : {}),
+    });
+  }
 
   await recordRankingFeedback(input.question, input.sources, positive, origin === "implicit");
 

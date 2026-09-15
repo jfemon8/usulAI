@@ -8,60 +8,134 @@ import { adminApi } from "@/components/admin/api";
 import { ToastProvider } from "@/components/admin/Dialog";
 import { IconButton } from "@/components/admin/ui";
 import {
+  AlertIcon,
   BadgeCheckIcon,
   BookIcon,
+  ChartIcon,
   CloseIcon,
   DashboardIcon,
   DatabaseIcon,
+  FlagIcon,
   FolderIcon,
   HomeIcon,
   LayoutIcon,
   ListIcon,
   LogoutIcon,
   MenuIcon,
+  PenIcon,
+  QuestionIcon,
   QuranIcon,
   SparklesIcon,
   UserIcon,
+  UsersIcon,
+  WrenchIcon,
 } from "@/components/ui/Icons";
 import { LogoMark } from "@/components/ui/Logo";
 import { ADMIN_CONFIG, SITE_NAME } from "@/config/site";
+import type { Permission, PrincipalView } from "@/lib/admin/roles";
 
-interface NavItem {
+export interface NavItem {
   href: string;
   label: string;
   icon: ComponentType<SVGProps<SVGSVGElement>>;
+  permission: Permission;
 }
 
 export const ADMIN_NAV: { title: string; items: NavItem[] }[] = [
   {
     title: "সারসংক্ষেপ",
-    items: [{ href: "/admin", label: "ড্যাশবোর্ড", icon: DashboardIcon }],
+    items: [
+      { href: "/admin", label: "ড্যাশবোর্ড", icon: DashboardIcon, permission: "dashboard.view" },
+    ],
+  },
+  {
+    title: "আলেমদের কাজ",
+    items: [
+      { href: "/admin/reviews", label: "উত্তর রিভিউ", icon: FlagIcon, permission: "reviews.view" },
+      {
+        href: "/admin/help",
+        label: "আলেমের কাছে প্রশ্ন",
+        icon: QuestionIcon,
+        permission: "help.view",
+      },
+      {
+        href: "/admin/masail",
+        label: "মাসআলা ও ফতোয়া",
+        icon: PenIcon,
+        permission: "masail.write",
+      },
+    ],
+  },
+  {
+    title: "মনিটরিং",
+    items: [
+      {
+        href: "/admin/monitor",
+        label: "প্রশ্ন ও উত্তরের লগ",
+        icon: ChartIcon,
+        permission: "monitor.view",
+      },
+      {
+        href: "/admin/maintenance",
+        label: "রক্ষণাবেক্ষণ",
+        icon: WrenchIcon,
+        permission: "maintenance.run",
+      },
+    ],
   },
   {
     title: "কনটেন্ট",
     items: [
-      { href: "/admin/corpus", label: "দলিল ভান্ডার", icon: BookIcon },
-      { href: "/admin/answers", label: "যাচাইকৃত উত্তর", icon: BadgeCheckIcon },
-      { href: "/admin/notes", label: "কুরআনের নোট", icon: QuranIcon },
-      { href: "/admin/site", label: "সাইট কনটেন্ট", icon: LayoutIcon },
-      { href: "/admin/ai", label: "AI সেটিংস", icon: SparklesIcon },
+      { href: "/admin/corpus", label: "দলিল ভান্ডার", icon: BookIcon, permission: "corpus.manage" },
+      {
+        href: "/admin/answers",
+        label: "যাচাইকৃত উত্তর",
+        icon: BadgeCheckIcon,
+        permission: "answers.manage",
+      },
+      { href: "/admin/notes", label: "কুরআনের নোট", icon: QuranIcon, permission: "notes.manage" },
+      { href: "/admin/site", label: "সাইট কনটেন্ট", icon: LayoutIcon, permission: "site.manage" },
+      { href: "/admin/ai", label: "AI সেটিংস", icon: SparklesIcon, permission: "ai.manage" },
     ],
   },
   {
     title: "রিসোর্স",
     items: [
-      { href: "/admin/files", label: "ফাইল (Cloudinary)", icon: FolderIcon },
-      { href: "/admin/database", label: "ডাটাবেস", icon: DatabaseIcon },
+      {
+        href: "/admin/files",
+        label: "ফাইল (Cloudinary)",
+        icon: FolderIcon,
+        permission: "files.manage",
+      },
+      {
+        href: "/admin/database",
+        label: "ডাটাবেস",
+        icon: DatabaseIcon,
+        permission: "database.manage",
+      },
     ],
   },
   {
-    title: "নিরাপত্তা",
+    title: "মানুষ ও নিরাপত্তা",
     items: [
-      { href: "/admin/audit", label: "অডিট লগ", icon: ListIcon },
-      { href: "/admin/account", label: "অ্যাকাউন্ট", icon: UserIcon },
+      {
+        href: "/admin/staff",
+        label: "স্টাফ ও ক্যাটাগরি",
+        icon: UsersIcon,
+        permission: "staff.manage",
+      },
+      { href: "/admin/audit", label: "অডিট লগ", icon: ListIcon, permission: "audit.view" },
+      { href: "/admin/account", label: "আমার অ্যাকাউন্ট", icon: UserIcon, permission: "panel.use" },
     ],
   },
 ];
+
+export function navFor(permissions: readonly Permission[]) {
+  return ADMIN_NAV.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => permissions.includes(item.permission)),
+  })).filter((group) => group.items.length > 0);
+}
 
 function isActive(pathname: string, href: string): boolean {
   return href === "/admin"
@@ -87,13 +161,13 @@ function Brand() {
 
 function Navigation({
   pathname,
-  email,
+  principal,
   onNavigate,
   onLogout,
   loggingOut,
 }: {
   pathname: string;
-  email: string;
+  principal: PrincipalView;
   onNavigate: () => void;
   onLogout: () => void;
   loggingOut: boolean;
@@ -104,7 +178,7 @@ function Navigation({
         className="thin-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-3"
         aria-label="অ্যাডমিন মেনু"
       >
-        {ADMIN_NAV.map((group) => (
+        {navFor(principal.permissions).map((group) => (
           <div key={group.title} className="mt-4 first:mt-1">
             <p className="px-3 pb-1.5 text-xs font-medium text-(--text-3)">{group.title}</p>
             <ul className="flex flex-col gap-0.5">
@@ -144,9 +218,11 @@ function Navigation({
         </Link>
         <div className="mt-2 flex items-center gap-2 rounded-xl bg-(--surface-2) py-2 ps-3 pe-1.5">
           <div className="min-w-0 flex-1">
-            <p className="text-xs text-(--text-3)">লগইন করা আছে</p>
-            <p className="truncate text-sm text-(--text-1)" title={email}>
-              {email}
+            <p className="truncate text-sm font-medium text-(--text-1)" title={principal.email}>
+              {principal.name}
+            </p>
+            <p className="truncate text-xs text-(--text-3)" title={principal.email}>
+              {principal.categoryName}
             </p>
           </div>
           <IconButton label="লগআউট" onClick={onLogout} disabled={loggingOut}>
@@ -158,7 +234,13 @@ function Navigation({
   );
 }
 
-export function AdminShell({ email, children }: { email: string; children: ReactNode }) {
+export function AdminShell({
+  principal,
+  children,
+}: {
+  principal: PrincipalView;
+  children: ReactNode;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -184,9 +266,9 @@ export function AdminShell({ email, children }: { email: string; children: React
     };
   }, [drawerOpen]);
 
-  const current = ADMIN_NAV.flatMap((group) => group.items).find((item) =>
-    isActive(pathname, item.href),
-  );
+  const current = navFor(principal.permissions)
+    .flatMap((group) => group.items)
+    .find((item) => isActive(pathname, item.href));
 
   async function logout() {
     setLoggingOut(true);
@@ -201,7 +283,7 @@ export function AdminShell({ email, children }: { email: string; children: React
   const navigation = (
     <Navigation
       pathname={pathname}
-      email={email}
+      principal={principal}
       onNavigate={() => setDrawerOpen(false)}
       onLogout={() => void logout()}
       loggingOut={loggingOut}
@@ -255,8 +337,22 @@ export function AdminShell({ email, children }: { email: string; children: React
             </span>
           </header>
 
-          <main className="min-w-0 flex-1 bg-(--bg) px-4 py-5 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-7 lg:rounded-s-3xl lg:px-8">
-            <div className="mx-auto w-full max-w-6xl">{children}</div>
+          <main className="min-w-0 flex-1 bg-(--bg) px-4 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-5 sm:py-6 lg:rounded-s-3xl lg:px-6">
+            <div className="mx-auto w-full max-w-6xl">
+              {principal.mustChangePassword && pathname !== "/admin/account" ? (
+                <Link
+                  href="/admin/account"
+                  className="mb-5 flex items-start gap-2 rounded-xl bg-(--warn-soft) px-4 py-2 text-sm text-(--warn) transition hover:opacity-90"
+                >
+                  <AlertIcon className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>
+                    আপনার অ্যাকাউন্ট অ্যাডমিনের দেওয়া পাসওয়ার্ডে চলছে। নিরাপত্তার জন্য এখনই নিজের
+                    একটি পাসওয়ার্ড সেট করুন।
+                  </span>
+                </Link>
+              ) : null}
+              {children}
+            </div>
           </main>
         </div>
       </div>

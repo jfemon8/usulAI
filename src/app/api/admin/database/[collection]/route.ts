@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 
 type Params = { collection: string };
 
-export const GET = adminRoute<Params>(async (request, _session, params) => {
+export const GET = adminRoute<Params>("database.manage", async (request, _session, params) => {
   const name = assertCollectionName(params.collection);
   const url = new URL(request.url);
   if (url.searchParams.has("row")) {
@@ -39,7 +39,7 @@ const insertSchema = z.object({
   document: z.string().min(2).max(ADMIN_CONFIG.maxJsonDocumentBytes),
 });
 
-export const POST = adminRoute<Params>(async (request, session, params) => {
+export const POST = adminRoute<Params>("database.manage", async (request, session, params) => {
   const name = assertCollectionName(params.collection);
   const body = await readJson(request, insertSchema);
   const result = await insertDocument(name, body.document);
@@ -58,7 +58,7 @@ const bulkSchema = z.object({
   confirmAll: z.boolean().optional(),
 });
 
-export const DELETE = adminRoute<Params>(async (request, session, params) => {
+export const DELETE = adminRoute<Params>("database.manage", async (request, session, params) => {
   const name = assertCollectionName(params.collection);
   const body = await readJson(request, bulkSchema);
   const result = await bulkDelete(name, {

@@ -11,7 +11,7 @@ const urlSchema = assetRefSchema.extend({
   download: z.boolean().default(false),
 });
 
-export const POST = adminRoute(async (request, session) => {
+export const POST = adminRoute("files.manage", async (request, session) => {
   const body = await readJson(request, urlSchema);
   const result = assetUrl(body);
   if (body.type !== "upload") {

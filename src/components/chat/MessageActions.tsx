@@ -2,10 +2,12 @@
 
 import { useState, type ReactNode } from "react";
 import { clsx } from "clsx";
+import { AskScholarDialog } from "@/components/help/AskScholarDialog";
 import {
   CheckIcon,
   CopyIcon,
   FlagIcon,
+  QuestionIcon,
   RetryIcon,
   ThumbDownIcon,
   ThumbUpIcon,
@@ -57,6 +59,7 @@ export function MessageActions({ question, answer, sources, onRetry }: MessageAc
   const [copied, setCopied] = useState(false);
   const [verdict, setVerdict] = useState<Verdict | null>(null);
   const [busy, setBusy] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
 
   async function copy() {
     const references = sources.map((source) => `[${source.index}] ${source.reference}`).join("\n");
@@ -135,6 +138,17 @@ export function MessageActions({ question, answer, sources, onRetry }: MessageAc
         <FlagIcon className="h-4 w-4" />
       </ActionButton>
 
+      <button
+        type="button"
+        onClick={() => setAskOpen(true)}
+        title="আলেমের কাছে প্রশ্ন পাঠান"
+        aria-haspopup="dialog"
+        className="ms-0.5 inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-(--text-3) transition hover:bg-(--surface-2) hover:text-(--text-1)"
+      >
+        <QuestionIcon className="h-4 w-4 shrink-0" />
+        <span>আলেমের কাছে প্রশ্ন পাঠান</span>
+      </button>
+
       {verdict ? (
         <span className="ms-1.5 text-xs text-(--text-3)" role="status">
           {verdict === "helpful"
@@ -142,6 +156,18 @@ export function MessageActions({ question, answer, sources, onRetry }: MessageAc
             : "ধন্যবাদ, এটি পর্যালোচনার জন্য পাঠানো হয়েছে।"}
         </span>
       ) : null}
+
+      <AskScholarDialog
+        open={askOpen}
+        onClose={() => setAskOpen(false)}
+        initialQuestion={question}
+        context={{
+          aiAnswer: answer,
+          references: [...sources]
+            .sort((a, b) => a.index - b.index)
+            .map((source) => source.reference),
+        }}
+      />
     </div>
   );
 }

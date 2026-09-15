@@ -12,11 +12,11 @@ export const dynamic = "force-dynamic";
 
 type Params = { id: string };
 
-export const GET = adminRoute<Params>(async (_request, _session, params) =>
+export const GET = adminRoute<Params>("corpus.manage", async (_request, _session, params) =>
   adminJson(await getCorpusDocument(params.id)),
 );
 
-export const PUT = adminRoute<Params>(async (request, session, params) => {
+export const PUT = adminRoute<Params>("corpus.manage", async (request, session, params) => {
   const input = await readJson(request, corpusEditSchema);
   const { view, stored, previous, contentChanged } = await updateCorpusDocument(params.id, input);
 
@@ -38,7 +38,7 @@ export const PUT = adminRoute<Params>(async (request, session, params) => {
   return adminJson(view);
 });
 
-export const DELETE = adminRoute<Params>(async (_request, session, params) => {
+export const DELETE = adminRoute<Params>("corpus.manage", async (_request, session, params) => {
   const removed = await deleteCorpusDocument(params.id);
 
   await recordAudit(

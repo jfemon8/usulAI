@@ -9,7 +9,7 @@ const checkSchema = z.object({
   sources: z.array(answerSourceInput).min(1).max(ANSWER_LIMITS.maxSources),
 });
 
-export const POST = adminRoute(async (request) => {
+export const POST = adminRoute("answers.manage", async (request) => {
   const { sources } = await readJson(request, checkSchema);
   const { checks, sources: resolved } = await resolveSources(sources);
   return adminJson({ checks, sources: resolved });

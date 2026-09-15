@@ -64,9 +64,16 @@ export interface AnswerOutcome {
   retryable: boolean;
 }
 
+export interface VerifiedInfo {
+  authorName: string;
+  authorCategory: string;
+  path: string | null;
+}
+
 export type UsulDataParts = {
   sources: AnswerSource[];
   outcome: AnswerOutcome;
+  verified: VerifiedInfo;
 };
 
 export type UsulUIMessage = UIMessage<never, UsulDataParts>;

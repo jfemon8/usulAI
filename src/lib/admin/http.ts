@@ -1,17 +1,12 @@
 import { NextResponse } from "next/server";
 import type { z } from "zod";
+import { AdminError } from "@/lib/admin/errors";
+import { can, type Permission } from "@/lib/admin/roles";
 import { getAdminSession, type AdminSession } from "@/lib/admin/sessions";
 import { consumeRateLimit, rateLimitResponse, type RateScope } from "@/lib/security/rateLimit";
 import { logger } from "@/lib/utils/logger";
 
-export class AdminError extends Error {
-  constructor(
-    message: string,
-    readonly status = 400,
-  ) {
-    super(message);
-  }
-}
+export { AdminError };
 
 const NO_STORE = { "cache-control": "no-store" };
 
@@ -81,8 +76,10 @@ export function publicAdminRoute(
 }
 
 export function adminRoute<P extends Params = Params>(
+  permission: Permission | readonly Permission[],
   handler: (request: Request, session: AdminSession, params: P) => Promise<Response>,
 ) {
+  const allowed = typeof permission === "string" ? [permission] : permission;
   return async (request: Request, context: { params: Promise<P> }): Promise<Response> => {
     if (!isSameOrigin(request)) return adminFailure("অনুরোধটি অনুমোদিত নয়।", 403);
     const limit = await consumeRateLimit("admin", request);
@@ -90,6 +87,9 @@ export function adminRoute<P extends Params = Params>(
 
     const session = await getAdminSession();
     if (!session) return adminFailure("লগইন করা নেই বা সেশনের মেয়াদ শেষ হয়েছে।", 401);
+    if (!allowed.some((entry) => can(session.role, entry))) {
+      return adminFailure("এই কাজের অনুমতি আপনার নেই।", 403);
+    }
 
     try {
       return await handler(request, session, await context.params);

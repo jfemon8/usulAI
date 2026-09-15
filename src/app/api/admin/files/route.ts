@@ -40,7 +40,7 @@ function queryOf<T extends z.ZodTypeAny>(url: URL, schema: T): z.infer<T> {
   return parsed.data;
 }
 
-export const GET = adminRoute(async (request) => {
+export const GET = adminRoute("files.manage", async (request) => {
   const url = new URL(request.url);
 
   if (url.searchParams.get("view") === "search") {
@@ -72,7 +72,7 @@ const deleteSchema = z.object({
   items: z.array(assetRefSchema).min(1).max(FILE_LIMITS.maxBulkItems),
 });
 
-export const DELETE = adminRoute(async (request, session) => {
+export const DELETE = adminRoute("files.manage", async (request, session) => {
   const { items } = await readJson(request, deleteSchema);
   const result = await deleteAssets(items);
 

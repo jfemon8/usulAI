@@ -7,7 +7,7 @@ import { destroySession, destroySessions, listSessions } from "@/lib/admin/sessi
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const GET = adminRoute(async (_request, session) => {
+export const GET = adminRoute("panel.use", async (_request, session) => {
   const [account, sessions] = await Promise.all([
     accountSummary(session.email),
     listSessions(session),
@@ -20,7 +20,7 @@ const deleteSchema = z.union([
   z.object({ others: z.literal(true) }),
 ]);
 
-export const DELETE = adminRoute(async (request, session) => {
+export const DELETE = adminRoute("panel.use", async (request, session) => {
   const body = await readJson(request, deleteSchema);
 
   if ("others" in body) {

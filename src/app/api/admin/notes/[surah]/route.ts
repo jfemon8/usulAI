@@ -12,11 +12,11 @@ export const dynamic = "force-dynamic";
 
 type Params = { surah: string };
 
-export const GET = adminRoute<Params>(async (_request, _session, params) =>
+export const GET = adminRoute<Params>("notes.manage", async (_request, _session, params) =>
   adminJson(await loadSurahForEdit(parseSurahNumber(params.surah))),
 );
 
-export const PUT = adminRoute<Params>(async (request, session, params) => {
+export const PUT = adminRoute<Params>("notes.manage", async (request, session, params) => {
   const surah = parseSurahNumber(params.surah);
   const input = await readJson(request, noteChangesInput);
   const { changed, result } = await saveSurahEdits(surah, input);

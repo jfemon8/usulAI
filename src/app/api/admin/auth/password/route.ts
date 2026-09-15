@@ -16,7 +16,7 @@ const schema = z.object({
   signOutOthers: z.boolean().default(true),
 });
 
-export const POST = adminRoute(async (request, session) => {
+export const POST = adminRoute("panel.use", async (request, session) => {
   const { current, password, confirmation, signOutOthers } = await readJson(request, schema);
 
   if (!(await checkPassword(session.email, current))) {

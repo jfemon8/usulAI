@@ -5,7 +5,7 @@ import { adminJson, adminRoute, readJson } from "@/lib/admin/http";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const GET = adminRoute(async (request) => {
+export const GET = adminRoute("answers.manage", async (request) => {
   const url = new URL(request.url);
   const origin = url.searchParams.get("origin");
   return adminJson(
@@ -17,7 +17,7 @@ export const GET = adminRoute(async (request) => {
   );
 });
 
-export const POST = adminRoute(async (request, session) => {
+export const POST = adminRoute("answers.manage", async (request, session) => {
   const input = await readJson(request, answerInput);
   const created = await createAnswer(input, session.email);
   await recordAudit(

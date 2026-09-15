@@ -45,12 +45,12 @@ const homeSchema = z.object({
   }),
 });
 
-export const GET = adminRoute(async () => {
+export const GET = adminRoute("site.manage", async () => {
   const stored = await loadStoredHomeContent();
   return adminJson({ ...stored, defaults: DEFAULT_HOME_CONTENT, limits: SITE_CONTENT_LIMITS });
 });
 
-export const PUT = adminRoute(async (request, session) => {
+export const PUT = adminRoute("site.manage", async (request, session) => {
   const body = await readJson(request, homeSchema);
 
   if (body.announcement.enabled && body.announcement.text.trim().length === 0) {

@@ -47,9 +47,12 @@ export interface AnswerSummary {
   sourceCount: number;
   createdAt: string | null;
   updatedAt: string | null;
+  author: { name: string; category: string } | null;
+  published: boolean;
 }
 
 export interface AnswerDetail extends AnswerSummary {
+  publishedAt: string | null;
   answer: string;
   reviewerNote: string;
   topic: string;
@@ -84,6 +87,8 @@ function summary(row: AdminVerifiedAnswer & { _id: ObjectId }): AnswerSummary {
     sourceCount: Array.isArray(row.sources) ? row.sources.length : 0,
     createdAt: iso(row.createdAt),
     updatedAt: iso(row.updatedAt),
+    author: row.author ? { name: row.author.name, category: row.author.category } : null,
+    published: row.published === true,
   };
 }
 
@@ -164,6 +169,7 @@ export async function getAnswer(id: string): Promise<AnswerDetail> {
   if (!row) throw new AdminError("উত্তরটি পাওয়া যায়নি।", 404);
   return {
     ...summary(row),
+    publishedAt: iso(row.publishedAt),
     answer: row.answer,
     reviewerNote: row.reviewerNote ?? "",
     topic: row.topic ?? topicKey(row.question),
@@ -223,7 +229,7 @@ export async function resolveSources(
   return { sources, checks };
 }
 
-async function validatedSources(inputs: AnswerSourceInput[]): Promise<AnswerSource[]> {
+export async function validatedSources(inputs: AnswerSourceInput[]): Promise<AnswerSource[]> {
   const { sources, checks } = await resolveSources(inputs);
   const missing = checks.filter((check) => !check.found).map((check) => check.reference);
   if (missing.length > 0) {

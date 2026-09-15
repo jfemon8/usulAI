@@ -317,3 +317,36 @@ export const QuranIcon = (props: IconProps) => (
     <path d="M12 6.5C10 5 7 4.5 3.5 5v13.5c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5V20" />
   </Base>
 );
+
+export const InboxIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M3 13l2.6-7.2A2 2 0 0 1 7.5 4.5h9a2 2 0 0 1 1.9 1.3L21 13v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    <path d="M3 13h5l1.5 2.5h5L16 13h5" />
+  </Base>
+);
+
+export const ChartIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M4 20V10M10 20V4M16 20v-7M21 20H3" />
+  </Base>
+);
+
+export const WrenchIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M14.7 6.3a4 4 0 0 0-5.2 5.2L3.5 17.5a2.1 2.1 0 0 0 3 3l6-6a4 4 0 0 0 5.2-5.2l-2.6 2.6-2.4-.6-.6-2.4z" />
+  </Base>
+);
+
+export const UsersIcon = (props: IconProps) => (
+  <Base {...props}>
+    <circle cx="9" cy="8" r="3.5" />
+    <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.6a3.5 3.5 0 0 1 0 6.8M18 14.2a6.5 6.5 0 0 1 3.5 5.8" />
+  </Base>
+);
+
+export const QuestionIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v9a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A2.5 2.5 0 0 1 4 14.5z" />
+    <path d="M9.8 8.2a2.3 2.3 0 1 1 3.2 2.1c-.6.3-1 .8-1 1.5M12 14.2v.01" />
+  </Base>
+);

@@ -10,7 +10,7 @@ import { detectConversationLanguage } from "@/lib/ai/language";
 import { ANSWER_PRIORITY_HEADERS, getModelChain, type TieredModel } from "@/lib/ai/providers";
 import { rewriteQuery, type ConversationTurn } from "@/lib/ai/queryRewriter";
 import { buildSystemPrompt, buildRagPrompt } from "@/lib/ai/prompt";
-import { findVerifiedAnswer } from "@/lib/analytics/verifiedAnswers";
+import { findVerifiedAnswer, masalaPath } from "@/lib/analytics/verifiedAnswers";
 import { loadAiSettings } from "@/lib/site/aiSettings";
 import { retrieveForQuestion } from "@/lib/retrieval/search";
 import { previousSourceReferences } from "@/lib/retrieval/carryForward";
@@ -140,6 +140,17 @@ export async function POST(request: Request) {
         execute: ({ writer }) => {
           const textId = crypto.randomUUID();
           writer.write({ type: "data-sources", id: "sources", data: verified.sources });
+          if (verified.origin === "scholar" && verified.author && verified._id) {
+            writer.write({
+              type: "data-verified",
+              id: "verified",
+              data: {
+                authorName: verified.author.name,
+                authorCategory: verified.author.category,
+                path: verified.published ? masalaPath(verified._id.toHexString()) : null,
+              },
+            });
+          }
           writer.write({ type: "text-start", id: textId });
           writer.write({ type: "text-delta", id: textId, delta: verified.answer });
           writer.write({ type: "text-end", id: textId });

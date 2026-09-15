@@ -1,23 +1,14 @@
 import { randomBytes } from "node:crypto";
 import { cookies } from "next/headers";
-import { ADMIN_CONFIG, DB_CONFIG } from "@/config/site";
-import { isAdminEmail, tokenDigest } from "@/lib/admin/accounts";
-import { getDb } from "@/lib/db/mongoClient";
+import { ADMIN_CONFIG } from "@/config/site";
+import { resolvePrincipal, type Principal } from "@/lib/admin/accounts";
+import { tokenDigest } from "@/lib/admin/identity";
+import type { PrincipalView } from "@/lib/admin/roles";
+import { deleteSessionsByEmail, sessionCollection } from "@/lib/admin/sessionStore";
 import { clientKey } from "@/lib/security/rateLimit";
 
-interface StoredSession {
-  _id: string;
-  email: string;
-  createdAt: Date;
-  lastSeenAt: Date;
-  expiresAt: Date;
-  userAgent: string;
-  client: string;
-}
-
-export interface AdminSession {
+export interface AdminSession extends Principal {
   id: string;
-  email: string;
   createdAt: Date;
 }
 
@@ -31,10 +22,6 @@ export interface SessionSummary {
 
 const DAY_MS = 86_400_000;
 
-async function sessions() {
-  return (await getDb()).collection<StoredSession>(DB_CONFIG.adminSessionCollection);
-}
-
 function cookieOptions(expires: Date) {
   return {
     httpOnly: true,
@@ -45,13 +32,27 @@ function cookieOptions(expires: Date) {
   };
 }
 
+export function principalView(session: AdminSession): PrincipalView {
+  return {
+    kind: session.kind,
+    id: session.principalId,
+    email: session.email,
+    name: session.name,
+    role: session.role,
+    roleLabel: session.roleLabel,
+    categoryName: session.categoryName,
+    mustChangePassword: session.mustChangePassword,
+    permissions: session.permissions,
+  };
+}
+
 export async function createSession(email: string, request: Request): Promise<void> {
   const token = randomBytes(32).toString("base64url");
   const now = new Date();
   const expiresAt = new Date(now.getTime() + ADMIN_CONFIG.sessionDays * DAY_MS);
 
   await (
-    await sessions()
+    await sessionCollection()
   ).insertOne({
     _id: tokenDigest(token),
     email,
@@ -74,15 +75,18 @@ export async function getAdminSession(): Promise<AdminSession | null> {
   if (!token) return null;
 
   try {
-    const collection = await sessions();
+    const collection = await sessionCollection();
     const id = tokenDigest(token);
     const stored = await collection.findOne({ _id: id, expiresAt: { $gt: new Date() } });
-    if (!stored || !isAdminEmail(stored.email)) return null;
+    if (!stored) return null;
+
+    const principal = await resolvePrincipal(stored.email);
+    if (!principal) return null;
 
     if (Date.now() - stored.lastSeenAt.getTime() > ADMIN_CONFIG.sessionTouchMinutes * 60_000) {
       await collection.updateOne({ _id: id }, { $set: { lastSeenAt: new Date() } });
     }
-    return { id, email: stored.email, createdAt: stored.createdAt };
+    return { ...principal, id, createdAt: stored.createdAt };
   } catch {
     return null;
   }
@@ -90,24 +94,21 @@ export async function getAdminSession(): Promise<AdminSession | null> {
 
 export async function destroyCurrentSession(): Promise<void> {
   const token = await currentToken();
-  if (token) await (await sessions()).deleteOne({ _id: tokenDigest(token) });
+  if (token) await (await sessionCollection()).deleteOne({ _id: tokenDigest(token) });
   (await cookies()).delete(ADMIN_CONFIG.sessionCookie);
 }
 
 export async function destroySessions(email: string, keepId?: string): Promise<number> {
-  const result = await (
-    await sessions()
-  ).deleteMany({ email, ...(keepId ? { _id: { $ne: keepId } } : {}) });
-  return result.deletedCount;
+  return deleteSessionsByEmail(email, keepId);
 }
 
 export async function destroySession(email: string, id: string): Promise<boolean> {
-  return (await (await sessions()).deleteOne({ _id: id, email })).deletedCount === 1;
+  return (await (await sessionCollection()).deleteOne({ _id: id, email })).deletedCount === 1;
 }
 
 export async function listSessions(session: AdminSession): Promise<SessionSummary[]> {
   const rows = await (
-    await sessions()
+    await sessionCollection()
   )
     .find({ email: session.email, expiresAt: { $gt: new Date() } })
     .sort({ lastSeenAt: -1 })

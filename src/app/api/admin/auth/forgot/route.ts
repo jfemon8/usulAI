@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ADMIN_CONFIG, EMAIL_CONFIG } from "@/config/site";
-import { createResetToken, isAdminEmail, normalizeEmail } from "@/lib/admin/accounts";
+import { createResetToken, normalizeEmail } from "@/lib/admin/accounts";
 import { recordAudit } from "@/lib/admin/audit";
 import { adminJson, publicAdminRoute, readJson } from "@/lib/admin/http";
 import { isEmailConfigured, sendRenderedEmail } from "@/lib/email/mailer";
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 const schema = z.object({ email: z.string().trim().max(254) });
 
 const SENT_MESSAGE =
-  "ইমেইলটি অ্যাডমিন অ্যাকাউন্ট হলে পাসওয়ার্ড রিসেটের লিংক পাঠানো হয়েছে। ইনবক্স ও স্প্যাম ফোল্ডার দেখুন।";
+  "ইমেইলটি প্যানেলের কোনো অ্যাকাউন্টের হলে পাসওয়ার্ড রিসেটের লিংক পাঠানো হয়েছে। ইনবক্স ও স্প্যাম ফোল্ডার দেখুন।";
 
 function deviceFrom(userAgent: string): string | undefined {
   if (!userAgent) return undefined;
@@ -45,8 +45,6 @@ function deviceFrom(userAgent: string): string | undefined {
 export const POST = publicAdminRoute("adminReset", async (request) => {
   const { email } = await readJson(request, schema);
   const address = normalizeEmail(email);
-  if (!isAdminEmail(address)) return adminJson({ ok: true, message: SENT_MESSAGE });
-
   const token = await createResetToken(address);
   if (!token) {
     logger.warn("Admin password reset throttled", { email: address });

@@ -12,7 +12,7 @@ export default async function ForgotPasswordPage() {
   return (
     <AuthCard
       title="পাসওয়ার্ড রিসেট"
-      description="আপনার অ্যাডমিন ইমেইল দিন। পাসওয়ার্ড রিসেটের একটি লিংক সেই ইমেইলে পাঠানো হবে।"
+      description="অ্যাকাউন্টের ইমেইল দিন। পাসওয়ার্ড রিসেটের একটি লিংক সেই ইমেইলে পাঠানো হবে।"
       footer={
         <Link href={ADMIN_CONFIG.paths.login} className="text-(--accent) hover:underline">
           লগইন পেজে ফিরুন

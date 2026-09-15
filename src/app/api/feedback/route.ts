@@ -38,6 +38,7 @@ export async function POST(request: Request) {
       verdict: parsed.data.verdict,
       question: parsed.data.question,
       answer: parsed.data.answer,
+      ...(parsed.data.note?.trim() ? { note: parsed.data.note.trim() } : {}),
       clientKey: clientKey(request),
       sources: parsed.data.sources.map((source) => ({ ...source, similarity: 0 })),
     });

@@ -13,7 +13,7 @@ import { AdminError, adminJson, adminRoute, readJson } from "@/lib/admin/http";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const GET = adminRoute(async (request) => {
+export const GET = adminRoute("files.manage", async (request) => {
   const url = new URL(request.url);
   const parsed = assetRefSchema.safeParse({
     publicId: url.searchParams.get("publicId") ?? "",
@@ -35,7 +35,7 @@ function label(resourceType: string, type: string, publicId: string): string {
   return `${resourceType}/${type}/${publicId}`;
 }
 
-export const PATCH = adminRoute(async (request, session) => {
+export const PATCH = adminRoute("files.manage", async (request, session) => {
   const body = await readJson(request, patchSchema);
   const renaming = body.toPublicId !== undefined || body.toType !== undefined;
 

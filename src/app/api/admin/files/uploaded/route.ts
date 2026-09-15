@@ -18,7 +18,7 @@ const uploadedSchema = z.object({
     .max(FILE_LIMITS.maxBulkItems),
 });
 
-export const POST = adminRoute(async (request, session) => {
+export const POST = adminRoute("files.manage", async (request, session) => {
   const { items } = await readJson(request, uploadedSchema);
   forgetScans();
 

@@ -19,7 +19,7 @@ const signSchema = z.object({
   overwrite: z.boolean().default(false),
 });
 
-export const POST = adminRoute(async (request) => {
+export const POST = adminRoute("files.manage", async (request) => {
   const body = await readJson(request, signSchema);
   return adminJson(await signUpload(body));
 });

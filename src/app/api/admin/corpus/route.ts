@@ -12,7 +12,7 @@ import { AdminError, adminJson, adminRoute, readJson } from "@/lib/admin/http";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export const GET = adminRoute(async (request) => {
+export const GET = adminRoute("corpus.manage", async (request) => {
   const url = new URL(request.url);
 
   if (url.searchParams.get("stats") === "1") return adminJson(await corpusStats());
@@ -30,7 +30,7 @@ export const GET = adminRoute(async (request) => {
   );
 });
 
-export const POST = adminRoute(async (request, session) => {
+export const POST = adminRoute("corpus.manage", async (request, session) => {
   const input = await readJson(request, corpusEditSchema);
   const { view, stored } = await createCorpusDocument(input);
 

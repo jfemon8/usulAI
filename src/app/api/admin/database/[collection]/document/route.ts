@@ -18,7 +18,7 @@ function idParam(request: Request): string | null {
   return new URL(request.url).searchParams.get("id");
 }
 
-export const GET = adminRoute<Params>(async (request, _session, params) => {
+export const GET = adminRoute<Params>("database.manage", async (request, _session, params) => {
   const name = assertCollectionName(params.collection);
   return adminJson(await readDocument(name, idParam(request)));
 });
@@ -28,7 +28,7 @@ const replaceSchema = z.object({
   revision: z.string().min(1).max(100),
 });
 
-export const PUT = adminRoute<Params>(async (request, session, params) => {
+export const PUT = adminRoute<Params>("database.manage", async (request, session, params) => {
   const name = assertCollectionName(params.collection);
   const body = await readJson(request, replaceSchema);
   const result = await replaceDocument(name, idParam(request), body.document, body.revision);
@@ -41,7 +41,7 @@ export const PUT = adminRoute<Params>(async (request, session, params) => {
   return adminJson({ ok: true, document: result.view, changed: result.changed });
 });
 
-export const DELETE = adminRoute<Params>(async (request, session, params) => {
+export const DELETE = adminRoute<Params>("database.manage", async (request, session, params) => {
   const name = assertCollectionName(params.collection);
   const result = await deleteDocument(name, idParam(request));
   await recordAudit(

@@ -49,7 +49,7 @@ export function ForgotPasswordForm() {
       }}
     >
       {error ? <Notice tone="danger">{error}</Notice> : null}
-      <Field label="অ্যাডমিন ইমেইল">
+      <Field label="অ্যাকাউন্টের ইমেইল">
         {(id) => (
           <Input
             id={id}

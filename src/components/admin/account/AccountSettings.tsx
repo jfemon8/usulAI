@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { adminApi, errorMessage } from "@/components/admin/api";
 import { ConfirmDialog, useToast } from "@/components/admin/Dialog";
@@ -22,6 +23,12 @@ import type { SessionSummary } from "@/lib/admin/sessions";
 interface AccountData {
   account: {
     email: string;
+    name: string;
+    kind: "admin" | "staff";
+    roleLabel: string;
+    categoryName: string;
+    phone: string | null;
+    mustChangePassword: boolean;
     hasPassword: boolean;
     passwordChangedAt: string | null;
     lastLoginAt: string | null;
@@ -57,7 +64,7 @@ function describeDevice(userAgent: string): string {
   return system ? `${browser}, ${system}` : browser;
 }
 
-function ChangePassword() {
+function ChangePassword({ onChanged }: { onChanged: () => void }) {
   const toast = useToast();
   const [current, setCurrent] = useState("");
   const [password, setPassword] = useState("");
@@ -76,6 +83,7 @@ function ChangePassword() {
       setCurrent("");
       setPassword("");
       setConfirmation("");
+      onChanged();
       toast.success(
         result.signedOut > 0
           ? `পাসওয়ার্ড পরিবর্তন হয়েছে, ${result.signedOut}টি অন্য সেশন বন্ধ করা হয়েছে।`
@@ -159,6 +167,7 @@ function ChangePassword() {
 }
 
 export function AccountSettings() {
+  const router = useRouter();
   const toast = useToast();
   const { data, error, loading, reload } = useAdminData<AccountData>("/api/admin/auth/sessions");
   const [revoking, setRevoking] = useState<string | null>(null);
@@ -184,7 +193,11 @@ export function AccountSettings() {
     <>
       <PageHeader
         title="অ্যাকাউন্ট"
-        description="অ্যাডমিন অ্যাকাউন্ট কোডে নির্দিষ্ট, তাই এখান থেকে তৈরি বা মুছে ফেলা যায় না। পাসওয়ার্ড আর লগইন করা ডিভাইস এখান থেকে পরিচালনা করুন।"
+        description={
+          data?.account?.kind === "staff"
+            ? "আপনার অ্যাকাউন্ট অ্যাডমিন তৈরি করেছেন। নাম, ইমেইল বা ক্যাটাগরি বদলাতে অ্যাডমিনের সাথে যোগাযোগ করুন। পাসওয়ার্ড আর লগইন করা ডিভাইস এখান থেকে পরিচালনা করুন।"
+            : "অ্যাডমিন অ্যাকাউন্ট কোডে নির্দিষ্ট, তাই এখান থেকে তৈরি বা মুছে ফেলা যায় না। পাসওয়ার্ড আর লগইন করা ডিভাইস এখান থেকে পরিচালনা করুন।"
+        }
       />
       {error ? (
         <div className="mb-5">
@@ -197,8 +210,21 @@ export function AccountSettings() {
           <Card title="অ্যাকাউন্টের তথ্য">
             {data?.account ? (
               <dl className="grid gap-3 text-sm sm:grid-cols-[auto_1fr] sm:gap-x-6">
+                <dt className="text-(--text-3)">নাম</dt>
+                <dd className="break-words text-(--text-1)">{data.account.name}</dd>
+                <dt className="text-(--text-3)">ভূমিকা</dt>
+                <dd className="text-(--text-1)">
+                  {data.account.categoryName}
+                  {data.account.kind === "staff" ? ` (${data.account.roleLabel})` : ""}
+                </dd>
                 <dt className="text-(--text-3)">ইমেইল</dt>
                 <dd className="break-all text-(--text-1)">{data.account.email}</dd>
+                {data.account.phone ? (
+                  <>
+                    <dt className="text-(--text-3)">ফোন</dt>
+                    <dd className="text-(--text-1)">{data.account.phone}</dd>
+                  </>
+                ) : null}
                 <dt className="text-(--text-3)">শেষ লগইন</dt>
                 <dd className="text-(--text-1)">{formatWhen(data.account.lastLoginAt)}</dd>
                 <dt className="text-(--text-3)">পাসওয়ার্ড বদলানো হয়েছে</dt>
@@ -212,7 +238,18 @@ export function AccountSettings() {
               <Skeleton rows={2} />
             ) : null}
           </Card>
-          <ChangePassword />
+          {data?.account?.mustChangePassword ? (
+            <Notice tone="warn">
+              আপনি এখনো অ্যাডমিনের দেওয়া পাসওয়ার্ড ব্যবহার করছেন। নিচে নিজের একটি নতুন পাসওয়ার্ড
+              সেট করুন।
+            </Notice>
+          ) : null}
+          <ChangePassword
+            onChanged={() => {
+              reload();
+              router.refresh();
+            }}
+          />
         </div>
 
         <Card

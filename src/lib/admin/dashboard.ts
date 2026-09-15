@@ -6,6 +6,7 @@ import { getDb, getDocumentsCollection } from "@/lib/db/mongoClient";
 import { STORAGE_STATE_ID } from "@/lib/maintenance/retention";
 import { storageUsage } from "@/lib/maintenance/storage";
 import { cloudinaryClient } from "@/lib/storage";
+import { can, type BaseRole } from "@/lib/admin/roles";
 import type { SourceType } from "@/types";
 
 const DAY_MS = 86_400_000;
@@ -109,21 +110,40 @@ function modelStats() {
   };
 }
 
-export async function dashboardSnapshot() {
-  const [corpus, storage, activity, feedback, cloudinary, audit] = await Promise.all([
-    settled(corpusStats),
-    settled(storageStats),
+async function queueStats() {
+  const db = await getDb();
+  const [openReviews, openHelp, publishedMasail] = await Promise.all([
+    db.collection(DB_CONFIG.reviewQueueCollection).countDocuments({ status: { $ne: "resolved" } }),
+    db
+      .collection(DB_CONFIG.helpRequestCollection)
+      .countDocuments({ status: { $in: ["open", "claimed"] } }),
+    db
+      .collection(DB_CONFIG.verifiedAnswerCollection)
+      .countDocuments({ origin: "scholar", published: true }),
+  ]);
+  return { openReviews, openHelp, publishedMasail };
+}
+
+export async function dashboardSnapshot(role: BaseRole) {
+  const monitor = can(role, "monitor.view");
+  const skip = Promise.resolve(null);
+  const [corpus, storage, activity, feedback, cloudinary, audit, queues] = await Promise.all([
+    monitor ? settled(corpusStats) : skip,
+    monitor ? settled(storageStats) : skip,
     settled(activityStats),
     settled(feedbackSummary),
-    settled(cloudinaryStats),
-    settled(() => listAudit({ limit: 8 })),
+    monitor ? settled(cloudinaryStats) : skip,
+    can(role, "audit.view") ? settled(() => listAudit({ limit: 8 })) : skip,
+    settled(queueStats),
   ]);
 
   let models: ReturnType<typeof modelStats> | null = null;
-  try {
-    models = modelStats();
-  } catch {
-    models = null;
+  if (monitor) {
+    try {
+      models = modelStats();
+    } catch {
+      models = null;
+    }
   }
 
   return {
@@ -135,6 +155,7 @@ export async function dashboardSnapshot() {
     cloudinary,
     models,
     audit: audit?.items ?? [],
+    queues,
   };
 }
 

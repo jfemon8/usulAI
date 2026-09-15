@@ -9,8 +9,8 @@ export default async function AdminLoginPage() {
   await redirectIfSignedIn();
   return (
     <AuthCard
-      title="অ্যাডমিন লগইন"
-      description="সাইট, AI কনটেন্ট ও রিসোর্স পরিচালনা করতে আপনার অ্যাডমিন অ্যাকাউন্টে লগইন করুন।"
+      title="প্যানেলে লগইন"
+      description="অ্যাডমিন, মডারেটর এবং মুফতি, আলেম, ওলামা, ইমাম ও শায়েখগণ নিজের অ্যাকাউন্টে লগইন করুন। অ্যাকাউন্ট শুধু অ্যাডমিন তৈরি করতে পারেন।"
     >
       <LoginForm />
     </AuthCard>

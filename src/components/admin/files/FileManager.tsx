@@ -127,7 +127,7 @@ function Breadcrumbs({ path, onOpen }: { path: string; onOpen: (path: string) =>
                 onClick={() => onOpen(target)}
                 aria-current={last ? "page" : undefined}
                 className={clsx(
-                  "min-h-10 max-w-[12rem] truncate rounded-lg px-2 transition hover:bg-(--surface-2)",
+                  "min-h-10 max-w-48 truncate rounded-lg px-2 transition hover:bg-(--surface-2)",
                   last ? "font-medium text-(--text-1)" : "text-(--text-2)",
                 )}
                 title={segment}

@@ -18,6 +18,12 @@ const AREA_NAMES: Record<string, string> = {
   ai: "AI সেটিংস",
   files: "ফাইল",
   database: "ডাটাবেস",
+  staff: "স্টাফ অ্যাকাউন্ট",
+  categories: "স্টাফ ক্যাটাগরি",
+  reviews: "উত্তর রিভিউ",
+  masail: "মাসআলা",
+  help: "আলেমের কাছে প্রশ্ন",
+  maintenance: "রক্ষণাবেক্ষণ",
 };
 
 const ACTION_NAMES: Record<string, string> = {
@@ -39,6 +45,28 @@ const ACTION_NAMES: Record<string, string> = {
   tags: "ট্যাগ পরিবর্তন",
   "folder-create": "ফোল্ডার তৈরি",
   "folder-delete": "ফোল্ডার মুছে ফেলা",
+  open: "খোলা",
+  download: "ডাউনলোড",
+  suspend: "স্থগিত",
+  activate: "সক্রিয়",
+  "password-reset": "পাসওয়ার্ড রিসেট",
+  confirm: "সঠিক হিসেবে নিশ্চিত",
+  correct: "সংশোধন",
+  dismiss: "বাতিল",
+  publish: "প্রকাশ",
+  unpublish: "প্রকাশ বন্ধ",
+  claim: "দায়িত্ব নেওয়া",
+  release: "দায়িত্ব ছাড়া",
+  answer: "উত্তর",
+  close: "বন্ধ",
+  reopen: "আবার খোলা",
+  reassign: "দায়িত্ব বদল",
+  run: "চালানো",
+  "dry-run": "পরীক্ষামূলক চালানো",
+  forget: "শেখা তথ্য মুছে ফেলা",
+  clear: "খালি করা",
+  unblock: "ব্লক খোলা",
+  takeover: "অন্যের দায়িত্ব নেওয়া",
 };
 
 export function actionLabel(action: string): string {

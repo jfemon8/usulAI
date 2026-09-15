@@ -9,6 +9,7 @@ import {
   welcomeEmail,
   type EmailLocale,
 } from "@/lib/email/templates";
+import { staffAccountEmail } from "@/lib/email/templates/staffAccount";
 
 const OUTPUT = path.resolve(".email-preview");
 
@@ -38,6 +39,28 @@ async function main() {
         { locale },
       ),
       welcome: welcomeEmail({ email }, { locale }),
+      "staff-created": staffAccountEmail(
+        {
+          kind: "created",
+          email,
+          name: locale === "bn" ? "মাওলানা আব্দুল্লাহ" : "Maulana Abdullah",
+          password: "Preview#Pass42",
+          categoryName: "মুফতি",
+          role: "scholar",
+        },
+        { locale },
+      ),
+      "staff-reset": staffAccountEmail(
+        {
+          kind: "reset",
+          email,
+          name: locale === "bn" ? "আব্দুর রহমান" : "Abdur Rahman",
+          password: "Reset@Pass77",
+          categoryName: "মডারেটর",
+          role: "moderator",
+        },
+        { locale },
+      ),
     };
 
     for (const [name, rendered] of Object.entries(previews)) {

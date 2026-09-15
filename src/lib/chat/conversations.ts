@@ -26,6 +26,10 @@ export function compactMessage(message: UsulUIMessage): UsulUIMessage {
   const parts: UsulUIMessage["parts"] = [];
 
   for (const part of message.parts) {
+    if (part.type === "data-verified") {
+      parts.push({ type: "data-verified", data: part.data });
+      continue;
+    }
     if (part.type !== "data-sources") continue;
     parts.push({
       type: "data-sources",

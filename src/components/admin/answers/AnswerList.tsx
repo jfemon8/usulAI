@@ -31,6 +31,8 @@ export interface AnswerSummary {
   sourceCount: number;
   createdAt: string | null;
   updatedAt: string | null;
+  author: { name: string; category: string } | null;
+  published: boolean;
 }
 
 interface ListResponse {
@@ -155,6 +157,23 @@ export function AnswerList() {
       label: "ধরন",
       width: "8.5rem",
       render: (row) => <OriginBadge origin={row.origin} />,
+    },
+    {
+      key: "author",
+      label: "লেখক",
+      width: "8.5rem",
+      className: "break-words",
+      render: (row) =>
+        row.author ? (
+          <span className="flex flex-col gap-1">
+            <span>
+              {row.author.category} {row.author.name}
+            </span>
+            {row.published ? <Badge tone="accent">প্রকাশিত</Badge> : null}
+          </span>
+        ) : (
+          <span className="text-(--text-3)">নেই</span>
+        ),
     },
     {
       key: "served",

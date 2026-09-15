@@ -10,13 +10,14 @@ import { Composer } from "@/components/chat/Composer";
 import { MessageActions } from "@/components/chat/MessageActions";
 import { SourceCitationList } from "@/components/chat/SourceCitation";
 import { UsageModal } from "@/components/chat/UsageModal";
+import { VerifiedBadge } from "@/components/chat/VerifiedBadge";
 import { ArrowDownIcon, RetryIcon } from "@/components/ui/Icons";
 import { LogoMark } from "@/components/ui/Logo";
 import { ADMIN_CONFIG } from "@/config/site";
 import { messageText } from "@/lib/chat/conversations";
 import { DEFAULT_HOME_CONTENT, type HomeContent } from "@/lib/site/contentShape";
 import { readableChatError } from "@/lib/utils/chatError";
-import type { AnswerSource, UsulUIMessage } from "@/types";
+import type { AnswerSource, UsulUIMessage, VerifiedInfo } from "@/types";
 
 interface ChatWindowProps {
   chatId: string;
@@ -53,6 +54,13 @@ function useSuggestions(questionPool: readonly string[]): string[] {
 function messageSources(message: UsulUIMessage): AnswerSource[] | null {
   for (const part of message.parts) {
     if (part.type === "data-sources") return part.data;
+  }
+  return null;
+}
+
+function messageVerified(message: UsulUIMessage): VerifiedInfo | null {
+  for (const part of message.parts) {
+    if (part.type === "data-verified") return part.data;
   }
   return null;
 }
@@ -345,6 +353,7 @@ export function ChatWindow({
 
             const text = messageText(message);
             const sources = messageSources(message);
+            const verified = messageVerified(message);
             const streaming = isLast && isLoading;
 
             if (text.length === 0) {
@@ -357,6 +366,7 @@ export function ChatWindow({
               <article key={message.id} className="flex gap-4">
                 <AssistantAvatar />
                 <div className="min-w-0 flex-1">
+                  {verified ? <VerifiedBadge info={verified} /> : null}
                   <AnswerMarkdown text={text} streaming={streaming} />
                   {!streaming && sources !== null ? <SourceCitationList sources={sources} /> : null}
                   {!streaming && isLast && isRetryable(message) ? (
