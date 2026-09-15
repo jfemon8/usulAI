@@ -6,6 +6,7 @@ import { parsePdfPages } from "@/lib/ingestion/parsers/pdfParser";
 import { parseDocxHtml } from "@/lib/ingestion/parsers/docxParser";
 import { parsePlainText } from "@/lib/ingestion/parsers/textParser";
 import { chunkText } from "@/lib/ingestion/chunker";
+import { stripDirectionalMarkCharacters } from "@/lib/ingestion/translations";
 import {
   formatBookReference,
   sectionsFromHtml,
@@ -236,7 +237,7 @@ export async function loadFileDocuments({
 
         documents.push({
           sourceType,
-          content: chunk,
+          content: stripDirectionalMarkCharacters(chunk),
           citation,
           metadata: {
             fileName: file,

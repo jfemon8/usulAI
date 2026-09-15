@@ -17,10 +17,13 @@ import {
   normalizeCitationDigits,
   referenceEchoStart,
   referenceLinePossible,
+  splitSentences,
   stripReferenceEchoes,
 } from "@/lib/ai/answerText";
 import type { QuestionLanguage } from "@/lib/ai/language";
 import { transliterateArabic } from "@/lib/ai/transliterate";
+import { composeNukta } from "@/lib/utils/bangla";
+import type { SourceType } from "@/types";
 
 export interface EnrichmentSource {
   index: number;
@@ -30,17 +33,31 @@ export interface EnrichmentSource {
   english?: string;
   machineTranslated?: boolean;
   segments?: { arabic: string; bangla?: string; english?: string }[];
+  sourceType?: SourceType;
+  url?: string;
 }
+
+export type ResolvedQuote = Omit<EnrichmentSource, "index"> & {
+  reference: string;
+  segment: string;
+};
 
 export interface EnricherOptions {
   sources: EnrichmentSource[];
   language: QuestionLanguage;
   strict?: boolean;
+  resolveQuote?: (run: string) => ResolvedQuote | null;
+}
+
+export interface CleanerHooks {
+  onDropped?: () => void;
+  onResolved?: (source: EnrichmentSource) => void;
 }
 
 export interface QuoteEnricher {
   push(text: string): string;
   flush(): string;
+  addedSources(): EnrichmentSource[];
 }
 
 interface SourceToken {
@@ -348,11 +365,6 @@ function evidenceAppendix(seen: string, quoted: Set<number>, options: EnricherOp
     .join("\n\n");
 }
 
-const UNGROUNDED_QUOTE_NOTE = {
-  bn: "*(দেওয়া দলিলে পাওয়া যায়নি এমন একটি আরবি উদ্ধৃতি এখানে দেখানো হয়নি)*",
-  en: "*(An Arabic quotation that is not in the cited sources was left out here)*",
-};
-
 function groundingTexts(options: EnricherOptions): string[] {
   return options.sources.flatMap((source) => [
     source.arabic,
@@ -369,14 +381,33 @@ function lineKey(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
-export function createAnswerCleaner(options: EnricherOptions): (text: string) => string {
+function resolveUngrounded(
+  run: string,
+  options: EnricherOptions,
+  hooks: CleanerHooks,
+): string | null {
+  const resolved = options.resolveQuote?.(run);
+  if (!resolved) return null;
+
+  const { segment, ...fields } = resolved;
+  if (!options.sources.some((source) => source.reference === fields.reference)) {
+    const source: EnrichmentSource = { ...fields, index: options.sources.length + 1 };
+    options.sources.push(source);
+    hooks.onResolved?.(source);
+  }
+  return segment;
+}
+
+export function createAnswerCleaner(
+  options: EnricherOptions,
+  hooks: CleanerHooks = {},
+): (text: string) => string {
   if (!options.strict) return (text) => text;
 
-  const haystack = groundingHaystack(groundingTexts(options));
-  const count = options.sources.length;
-  const note = options.language === "other" ? UNGROUNDED_QUOTE_NOTE.en : UNGROUNDED_QUOTE_NOTE.bn;
+  let haystack = groundingHaystack(groundingTexts(options));
 
   return (text) => {
+    const count = options.sources.length;
     let cleaned = dropUnsupportedClaims(
       stripReferenceEchoes(text)
         .replace(FOREIGN_SCRIPT_CHARACTER, "")
@@ -387,11 +418,34 @@ export function createAnswerCleaner(options: EnricherOptions): (text: string) =>
 
     for (const run of quoteRuns(cleaned)) {
       if (isArabicRunGrounded(run, haystack)) continue;
-      cleaned = cleaned.replace(run, note);
+
+      const segment = resolveUngrounded(run, options, hooks);
+      if (segment !== null) {
+        haystack = groundingHaystack(groundingTexts(options));
+        if (!isArabicRunGrounded(run, haystack)) cleaned = cleaned.replace(run, segment);
+        continue;
+      }
+
+      cleaned = cleaned.replace(run, "");
+      hooks.onDropped?.();
     }
 
     return cleaned;
   };
+}
+
+const INTRO_LINE = /[:ঃ]\s*[*_]*\s*$/u;
+const REFERS_TO_QUOTE = new RegExp(
+  composeNukta(
+    String.raw`^\s*[*_]*\s*(?:(?:এই|এ|উক্ত|উপরের|ওই)\s*(?:আয়াত|হাদিস|হাদীস|বাণী|উদ্ধৃতি)|আয়াতটি|হাদিসটি|হাদীসটি|(?:this|that|the above)\s+(?:verse|ayah|hadith|quote|narration))`,
+  ),
+  "iu",
+);
+
+export function dropSentenceAboutRemovedQuote(text: string): string {
+  const [first, ...rest] = splitSentences(text);
+  if (first === undefined || !REFERS_TO_QUOTE.test(composeNukta(first))) return text;
+  return rest.join("").replace(/^\s+/, "");
 }
 
 function heldBackFrom(text: string, strict: boolean, references: readonly string[]): number {
@@ -414,21 +468,51 @@ function heldBackFrom(text: string, strict: boolean, references: readonly string
   return trailingSpace >= 0 ? trailingSpace : end;
 }
 
-export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
-  const clean = createAnswerCleaner(options);
+export function createQuoteEnricher(input: EnricherOptions): QuoteEnricher {
+  const options: EnricherOptions = { ...input, sources: [...input.sources] };
+  const initialSources = options.sources.length;
   const strict = options.strict === true;
   let line = "";
   let state: "undecided" | "prose" | "label" = "undecided";
   let lineEmitted = 0;
+  let lineNumber = 0;
   let pending: string[] = [];
   let output = "";
   let tail = "";
   let seen = "";
+  let staged: string | null = null;
+  let stagedLine = -1;
+  let droppedInLine = false;
+  let skipLine = false;
+  let aboutRemovedQuote = false;
   const quoted = new Set<number>();
   const longLines = new Set<string>();
   const references = options.sources.flatMap((source) =>
     source.reference ? [source.reference] : [],
   );
+
+  const translationsOf = (source: EnrichmentSource) => ({
+    index: source.index,
+    texts: [
+      source.bangla ?? "",
+      source.english ?? "",
+      ...(source.segments ?? []).flatMap((segment) => [
+        segment.bangla ?? "",
+        segment.english ?? "",
+      ]),
+    ],
+  });
+  const translations = options.sources.map(translationsOf);
+
+  const clean = createAnswerCleaner(options, {
+    onDropped: () => {
+      droppedInLine = true;
+    },
+    onResolved: (source) => {
+      if (source.reference) references.push(source.reference);
+      translations.push(translationsOf(source));
+    },
+  });
 
   const repeatsEarlierLine = (text: string, complete: boolean) => {
     if (!strict) return false;
@@ -439,10 +523,23 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
     return false;
   };
 
-  const emit = (text: string) => {
+  const write = (text: string) => {
     if (text.length === 0) return;
     output += text;
     tail = (tail + text).slice(-2);
+  };
+
+  const emit = (text: string) => {
+    if (text.length === 0) return;
+    if (staged !== null) staged += text;
+    else write(text);
+  };
+
+  const release = () => {
+    if (staged === null) return;
+    const text = staged;
+    staged = null;
+    write(text);
   };
 
   const flushPending = () => {
@@ -455,18 +552,6 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
     if (!tail.endsWith("\n\n")) emit(tail.endsWith("\n") ? "\n" : "\n\n");
     emit(`${block}\n\n`);
   };
-
-  const translations = options.sources.map((source) => ({
-    index: source.index,
-    texts: [
-      source.bangla ?? "",
-      source.english ?? "",
-      ...(source.segments ?? []).flatMap((segment) => [
-        segment.bangla ?? "",
-        segment.english ?? "",
-      ]),
-    ],
-  }));
 
   const dropRepeatedMeanings = (text: string) =>
     strict
@@ -483,7 +568,26 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
         ? 0
         : Math.max(lineEmitted, heldBackFrom(line, strict, references));
     if (end <= lineEmitted) return;
-    emit(dropRepeatedMeanings(clean(line.slice(lineEmitted, end))));
+
+    droppedInLine = false;
+    let text = dropRepeatedMeanings(clean(line.slice(lineEmitted, end)));
+    const hasWords = /\p{L}/u.test(text);
+
+    if (droppedInLine && !hasWords) {
+      if (stagedLine !== lineNumber) staged = null;
+      skipLine = true;
+      aboutRemovedQuote = true;
+      lineEmitted = end;
+      return;
+    }
+
+    if (aboutRemovedQuote && lineEmitted === 0 && hasWords && !startsWithArabic(text)) {
+      text = dropSentenceAboutRemovedQuote(text);
+      aboutRemovedQuote = false;
+    }
+    if (staged !== null && stagedLine !== lineNumber && /\p{L}/u.test(text)) release();
+
+    emit(text);
     lineEmitted = end;
   };
 
@@ -504,16 +608,15 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
     else if (!labelStillPossible(line)) startProse();
   };
 
+  const dropsWholeLine = () =>
+    strict &&
+    lineEmitted === 0 &&
+    (isReferenceListLine(line, references) ||
+      isSourceSectionHeading(line) ||
+      repeatsEarlierLine(line, true));
+
   const endLine = () => {
-    if (
-      strict &&
-      lineEmitted === 0 &&
-      (isReferenceListLine(line, references) ||
-        isSourceSectionHeading(line) ||
-        repeatsEarlierLine(line, true))
-    ) {
-      state = "label";
-    }
+    if (dropsWholeLine()) state = "label";
     if (state === "undecided") {
       if (stripDecoration(line).length === 0) {
         state = "prose";
@@ -523,9 +626,20 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
         startProse();
       }
     }
+
+    if (
+      strict &&
+      state === "prose" &&
+      staged === null &&
+      INTRO_LINE.test(line) &&
+      !startsWithArabic(line)
+    ) {
+      staged = "";
+      stagedLine = lineNumber;
+    }
     if (state === "prose") emitLine(true);
 
-    if (state !== "label") {
+    if (state !== "label" && !skipLine) {
       emit("\n");
       rememberQuote();
       const key = lineKey(line);
@@ -535,6 +649,8 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
     line = "";
     state = "undecided";
     lineEmitted = 0;
+    skipLine = false;
+    lineNumber += 1;
   };
 
   return {
@@ -559,25 +675,19 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
     flush() {
       output = "";
       if (line.length > 0) {
-        if (
-          strict &&
-          lineEmitted === 0 &&
-          (isReferenceListLine(line, references) ||
-            isSourceSectionHeading(line) ||
-            repeatsEarlierLine(line, true))
-        ) {
-          state = "label";
-        }
+        if (dropsWholeLine()) state = "label";
         if (state === "undecided") {
           if (isLabelLine(line)) state = "label";
           else startProse();
         }
         if (state === "prose") emitLine(true);
-        if (state !== "label") rememberQuote();
+        if (state !== "label" && !skipLine) rememberQuote();
         line = "";
         state = "undecided";
         lineEmitted = 0;
+        skipLine = false;
       }
+      release();
       flushPending();
 
       const appendix = evidenceAppendix(seen + output, quoted, options);
@@ -587,6 +697,9 @@ export function createQuoteEnricher(options: EnricherOptions): QuoteEnricher {
       }
 
       return output;
+    },
+    addedSources() {
+      return options.sources.slice(initialSources);
     },
   };
 }

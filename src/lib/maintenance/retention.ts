@@ -1,4 +1,5 @@
 import { DB_CONFIG, RETENTION_CONFIG, STORAGE_BUDGET } from "@/config/site";
+import { hydrateReference } from "@/lib/db/documentShape";
 import { pretranslateFrequentPassages } from "@/lib/learning/pretranslate";
 import { normalizeQuestion } from "@/lib/analytics/verifiedAnswers";
 import { getDb, getDocumentsCollection } from "@/lib/db/mongoClient";
@@ -190,9 +191,10 @@ async function evictUnusedEmbeddings(usage: StorageUsage, dryRun: boolean): Prom
   const candidates: unknown[] = [];
   for await (const doc of documents.find(
     { embeddingModel: { $exists: true } },
-    { projection: { "citation.reference": 1 } },
+    { projection: { "citation.reference": 1, "metadata.fileName": 1, "metadata.restricted": 1 } },
   )) {
-    if (!keep.has(doc.citation.reference)) candidates.push(doc._id);
+    const reference = hydrateReference(doc.citation.reference, doc.metadata ?? {});
+    if (!keep.has(reference)) candidates.push(doc._id);
     if (candidates.length >= limit) break;
   }
 

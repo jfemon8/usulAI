@@ -1,4 +1,5 @@
 import "./loadEnv";
+import { encodeGrades } from "@/lib/db/documentShape";
 import { HADITH_BOOKS, STORAGE_CONFIG } from "@/config/site";
 import { getDocumentsCollection, getMongoClient } from "@/lib/db/mongoClient";
 import type { HadithGrade } from "@/lib/ai/hadithGrade";
@@ -80,9 +81,9 @@ async function main() {
           sourceType: "hadith" as const,
           "metadata.collection": book.slug,
           "metadata.hadithNumber": hadithNumber,
-          "metadata.grades": { $ne: entries },
+          "metadata.grades": { $ne: encodeGrades(entries) },
         },
-        update: { $set: { "metadata.grades": entries } },
+        update: { $set: { "metadata.grades": encodeGrades(entries) } },
       },
     }));
 

@@ -57,10 +57,17 @@ export function sanitizeSourceContent(content: string): string {
     .join("\n\n");
 }
 
+export const DIRECTIONAL_MARK_PATTERN = "[\u200E\u200F]";
+const DIRECTIONAL_MARKS = new RegExp(DIRECTIONAL_MARK_PATTERN, "g");
+
+export function stripDirectionalMarkCharacters(text: string): string {
+  return text.replace(DIRECTIONAL_MARKS, "");
+}
+
 export function buildSourceContent(arabic: string, bangla: string, english: string): string {
-  const blocks = [normalizeText(arabic)];
-  const banglaText = normalizeText(bangla);
-  const englishText = normalizeText(english);
+  const blocks = [stripDirectionalMarkCharacters(normalizeText(arabic))];
+  const banglaText = stripDirectionalMarkCharacters(normalizeText(bangla));
+  const englishText = stripDirectionalMarkCharacters(normalizeText(english));
 
   if (banglaText) blocks.push(`${TRANSLATION_LABELS.bangla}: ${banglaText}`);
   if (englishText) blocks.push(`${TRANSLATION_LABELS.english}: ${englishText}`);

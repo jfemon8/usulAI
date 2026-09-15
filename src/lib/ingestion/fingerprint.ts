@@ -50,9 +50,9 @@ function describedChanged(incoming: IngestionDocument, stored: StoredFingerprint
   const citation = storedCitation(incoming.citation, incoming.sourceType, incoming.metadata);
   if (canonical(citation) !== canonical(stored.citation)) return true;
 
-  return Object.entries(storedMetadata(incoming.metadata ?? {}, incoming.sourceType)).some(
-    ([key, value]) => canonical(value) !== canonical(stored.metadata[key]),
-  );
+  return Object.entries(
+    storedMetadata(incoming.metadata ?? {}, incoming.sourceType, incoming.citation.reference),
+  ).some(([key, value]) => canonical(value) !== canonical(stored.metadata[key]));
 }
 
 export function planIngestion(

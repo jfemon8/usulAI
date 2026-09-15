@@ -8,6 +8,7 @@ export interface GateInput {
   references: string[];
   question: string;
   language: QuestionLanguage;
+  isVerifiedQuote?: (run: string) => boolean;
 }
 
 export interface GateVerdict {
@@ -69,9 +70,13 @@ export function isArabicRunGrounded(run: string, haystack: string): boolean {
   return windows === 0 || found / windows >= minArabicMatchRatio;
 }
 
-function checkArabic(answer: string, haystack: string): string[] {
+function checkArabic(
+  answer: string,
+  haystack: string,
+  isVerifiedQuote: (run: string) => boolean = () => false,
+): string[] {
   return arabicRuns(answer)
-    .filter((run) => !isArabicRunGrounded(run, haystack))
+    .filter((run) => !isArabicRunGrounded(run, haystack) && !isVerifiedQuote(run))
     .map((run) => `arabic-not-verbatim: ${normalizeArabic(run).slice(0, 48)}`);
 }
 
@@ -139,7 +144,11 @@ export function validateAnswer(answer: string, input: GateInput): GateVerdict {
   const contextJoined = input.contextTexts.join("\n\n");
 
   const reasons = [
-    ...checkArabic(answer, groundingHaystack([contextJoined, ...input.references])),
+    ...checkArabic(
+      answer,
+      groundingHaystack([contextJoined, ...input.references]),
+      input.isVerifiedQuote,
+    ),
     ...checkCitations(answer, input.contextTexts.length),
     ...(findLoopStart(answer, normalizeForLoopCheck(contextJoined), "all") === null
       ? []

@@ -1,5 +1,5 @@
 import type { ObjectId } from "mongodb";
-import { hydrateCitation } from "@/lib/db/documentShape";
+import { hydrateCitation, hydrateMetadata, referenceFilters } from "@/lib/db/documentShape";
 import {
   ARABIC_TEXT_SOURCES,
   OPENITI_CONFIG,
@@ -109,6 +109,15 @@ function scriptureView(row: DocumentRow): SourceView {
   };
 }
 
+function hydrateRow(row: DocumentRow): DocumentRow {
+  const metadata = hydrateMetadata(row.metadata, row.citation.reference) as DocumentRow["metadata"];
+  return {
+    ...row,
+    metadata,
+    citation: hydrateCitation(row.citation, row.sourceType, row.metadata),
+  };
+}
+
 async function pageRows(row: DocumentRow): Promise<DocumentRow[]> {
   const { fileName, page, volume, restricted } = row.metadata ?? {};
   if (restricted || !fileName || page === undefined) return [row];
@@ -127,7 +136,8 @@ async function pageRows(row: DocumentRow): Promise<DocumentRow[]> {
     .sort({ _id: 1 })
     .toArray()) as unknown as DocumentRow[];
 
-  return rows.some((candidate) => candidate._id.equals(row._id)) ? rows : [row];
+  const hydratedRows = rows.map(hydrateRow);
+  return hydratedRows.some((candidate) => candidate._id.equals(row._id)) ? hydratedRows : [row];
 }
 
 async function within<T>(job: Promise<T>, waitMs: number): Promise<T | undefined> {
@@ -268,15 +278,12 @@ export async function loadSourceView(
 ): Promise<SourceView | null> {
   const collection = await getDocumentsCollection();
   const row = (await collection.findOne(
-    { sourceType: { $in: [...SOURCE_PRIORITY] }, "citation.reference": reference },
+    { sourceType: { $in: [...SOURCE_PRIORITY] }, $or: referenceFilters([reference]) } as never,
     { projection: { content: 1, citation: 1, sourceType: 1, metadata: 1 } },
   )) as unknown as DocumentRow | null;
 
   if (!row) return null;
-  const hydrated: DocumentRow = {
-    ...row,
-    citation: hydrateCitation(row.citation, row.sourceType, row.metadata),
-  };
+  const hydrated = hydrateRow(row);
   return ARABIC_TEXT_SOURCES.includes(row.sourceType)
     ? bookView(hydrated, options)
     : scriptureView(hydrated);

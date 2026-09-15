@@ -32,7 +32,12 @@ import {
 } from "@/lib/ai/modelHealth";
 import { preferredGrade } from "@/lib/ai/hadithGrade";
 import { sanitizeSourceContent, splitSourceBlocks } from "@/lib/ingestion/translations";
-import { createQuoteEnricher, enrichAnswer, type EnricherOptions } from "@/lib/ai/quoteEnricher";
+import {
+  createQuoteEnricher,
+  type EnricherOptions,
+  type EnrichmentSource,
+} from "@/lib/ai/quoteEnricher";
+import { findQuranVerse, quranVerseIndex } from "@/lib/retrieval/quranVerseIndex";
 import { learnFromFollowUp } from "@/lib/learning/implicitFeedback";
 import { preferReliable, recordModelOutcome, refreshModelStats } from "@/lib/learning/modelStats";
 import { clientKey, consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
@@ -66,6 +71,16 @@ function toHistory(messages: UsulUIMessage[]): ConversationTurn[] {
       text: extractText(message),
     }))
     .filter((turn) => turn.text.trim().length > 0);
+}
+
+function toAnswerSource(source: EnrichmentSource): AnswerSource {
+  return {
+    index: source.index,
+    sourceType: source.sourceType ?? "quran",
+    reference: source.reference ?? "",
+    ...(source.url ? { url: source.url } : {}),
+    similarity: 0,
+  };
 }
 
 function jsonError(message: string, status: number): Response {
@@ -104,6 +119,7 @@ export async function POST(request: Request) {
       413,
     );
   }
+  quranVerseIndex();
   const history = toHistory(messages);
   if (history.length > 0) void learnFromFollowUp(messages, clientKey(request));
   const language = detectConversationLanguage(
@@ -166,8 +182,27 @@ export async function POST(request: Request) {
     references: context.map((chunk) => chunk.citation.reference),
     question,
     language,
+    isVerifiedQuote: (run) => {
+      const index = quranVerseIndex();
+      return index !== null && findQuranVerse(index, run) !== null;
+    },
   };
   const contextText = gateInput.contextTexts.join("\n\n");
+  const resolveQuranQuote: EnricherOptions["resolveQuote"] = (run) => {
+    const index = quranVerseIndex();
+    const match = index ? findQuranVerse(index, run) : null;
+    if (!match) return null;
+    const { verse } = match;
+    return {
+      reference: verse.reference,
+      arabic: verse.arabic,
+      ...(verse.bangla ? { bangla: verse.bangla } : {}),
+      ...(verse.english ? { english: verse.english } : {}),
+      sourceType: "quran",
+      url: `https://quran.com/${verse.surah}/${verse.ayah}`,
+      segment: match.segment,
+    };
+  };
   const enrichmentFor = (chunks: RetrievedChunk[]): EnricherOptions => ({
     sources: chunks.map((chunk, index) => ({
       index: index + 1,
@@ -179,6 +214,7 @@ export async function POST(request: Request) {
     })),
     language: gateInput.language,
     strict: true,
+    resolveQuote: resolveQuranQuote,
   });
   let enrichmentOptions = enrichmentFor(context);
 
@@ -268,6 +304,7 @@ export async function POST(request: Request) {
           let stall: ReturnType<typeof setTimeout> | undefined;
 
           const gated = !ANSWER_GATE_CONFIG.trustedModels.includes(modelId);
+          let addedSources: EnrichmentSource[] = [];
           let streamError: unknown;
           const pacer = createWordPacer({
             write: (chunk) => writer.write({ type: "text-delta", id: textId, delta: chunk }),
@@ -335,7 +372,9 @@ export async function POST(request: Request) {
                   continue;
                 }
 
-                send(enrichAnswer(full, enrichmentOptions));
+                const enricher = createQuoteEnricher(enrichmentOptions);
+                send(enricher.push(full) + enricher.flush());
+                addedSources = enricher.addedSources();
               }
             } else {
               const enricher = createQuoteEnricher(enrichmentOptions);
@@ -401,12 +440,26 @@ export async function POST(request: Request) {
                 });
               }
               send(enricher.flush());
+              addedSources = enricher.addedSources();
             }
 
             if (emitted) {
               recordModelSuccess(modelId);
               recordModelOutcome(modelId, "answered");
               await pacer.finish();
+              if (addedSources.length > 0) {
+                writer.write({
+                  type: "data-sources",
+                  id: "sources",
+                  data: [...sources, ...addedSources.map(toAnswerSource)],
+                });
+                logger.info(
+                  "Verified a Quran quotation outside the context and added it as a source",
+                  {
+                    references: addedSources.map((source) => source.reference).join(", "),
+                  },
+                );
+              }
               writer.write({ type: "text-end", id: textId });
               void logQuery({
                 question,

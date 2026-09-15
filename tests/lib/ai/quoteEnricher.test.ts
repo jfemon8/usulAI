@@ -357,11 +357,13 @@ ${invented}
 
 এই আয়াতটি অনুমতি নেওয়ার কথা বলে [2]। আরেকটি নির্দেশ আছে [3]।`;
 
-  it("leaves out an Arabic quotation that no source contains, with its pronunciation", () => {
+  it("leaves out a quotation no source contains, with its intro line, sentence and pronunciation", () => {
     const output = enrichAnswer(screenshot, strictOptions);
 
     expect(output).not.toContain("تَدْخُلُوا");
-    expect(output).toContain("দেওয়া দলিলে পাওয়া যায়নি এমন একটি আরবি উদ্ধৃতি");
+    expect(output).not.toContain("আরেকটি আয়াতে বলা হয়েছে");
+    expect(output).not.toContain("এই আয়াতটি");
+    expect(output).not.toContain("দেখানো হয়নি");
     expect(output.match(/বাংলা উচ্চারণঃ/g)).toHaveLength(1);
     expect(output).toContain(`**বাংলা অর্থঃ** ${quran.bangla} [1]`);
   });
@@ -369,7 +371,6 @@ ${invented}
   it("removes citation numbers that point past the sources", () => {
     const output = enrichAnswer(screenshot, strictOptions);
 
-    expect(output).toContain("অনুমতি নেওয়ার কথা বলে।");
     expect(output).toContain("আরেকটি নির্দেশ আছে।");
     expect(output).not.toMatch(/\[[23]\]/);
     expect(output).toContain("নিষিদ্ধ [1]।");
@@ -489,5 +490,61 @@ ${ayah}
 
   it("streams word by word to exactly the same text", () => {
     expect(streamWords(retold, options)).toBe(enrichAnswer(retold, options));
+  });
+});
+
+describe("a Quran quotation the model remembered but the context did not contain", () => {
+  const yusuf = "إِذْ قَالَ يُوسُفُ لِأَبِيهِ يَٰٓأَبَتِ إِنِّى رَأَيْتُ أَحَدَ عَشَرَ كَوْكَبًا";
+  const answer = `স্বপ্নের ব্যাখ্যার উদাহরণ কুরআনে আছে। আল্লাহ তা'আলা বলেন:
+
+${yusuf}
+
+এই আয়াত থেকে বোঝা যায় যে নবীদের স্বপ্ন ওহী। স্বপ্ন নিয়ে তাড়াহুড়া করা উচিত নয় [1]।`;
+
+  const resolveQuote = (run: string) =>
+    run.includes("يُوسُفُ")
+      ? {
+          reference: "Yusuf 12:4",
+          arabic: yusuf,
+          bangla: "যখন ইউসুফ পিতাকে বললঃ পিতা, আমি স্বপ্নে দেখেছি এগারটি নক্ষত্রকে।",
+          english: "When Joseph said to his father, O my father, I saw eleven stars.",
+          sourceType: "quran" as const,
+          segment: yusuf,
+        }
+      : null;
+
+  it("shows the real ayah with its meaning and adds it as a new source", () => {
+    const enricher = createQuoteEnricher({
+      sources: [quran],
+      language: "bangla",
+      strict: true,
+      resolveQuote,
+    });
+    const output = enricher.push(answer) + enricher.flush();
+
+    expect(output).toContain("আল্লাহ তা'আলা বলেন:");
+    expect(output).toContain(yusuf);
+    expect(output).toContain("এগারটি নক্ষত্রকে। [2]");
+    expect(output).toContain("এই আয়াত থেকে বোঝা যায়");
+    expect(enricher.addedSources().map((source) => source.reference)).toEqual(["Yusuf 12:4"]);
+  });
+
+  it("drops the quote, its intro and the sentence about it when no ayah matches", () => {
+    const output = enrichAnswer(answer, { sources: [quran], language: "bangla", strict: true });
+
+    expect(output).toContain("স্বপ্নের ব্যাখ্যার উদাহরণ কুরআনে আছে।");
+    expect(output).not.toContain("আল্লাহ তা'আলা বলেন");
+    expect(output).not.toContain("يُوسُفُ");
+    expect(output).not.toContain("এই আয়াত থেকে");
+    expect(output).toContain("স্বপ্ন নিয়ে তাড়াহুড়া করা উচিত নয় [1]।");
+  });
+
+  it("keeps an intro whose quote is grounded, and streams to the same text", () => {
+    const grounded = `আল্লাহ বলেন:\n\n${ayah}\n\nএই আয়াত সুদের বিষয়ে [1]।`;
+    const options: EnricherOptions = { sources: [quran], language: "bangla", strict: true };
+
+    expect(enrichAnswer(grounded, options)).toContain("আল্লাহ বলেন:");
+    expect(enrichAnswer(grounded, options)).toContain("এই আয়াত সুদের বিষয়ে [1]।");
+    expect(streamWords(answer, options)).toBe(enrichAnswer(answer, options));
   });
 });

@@ -213,6 +213,15 @@ export const QURANENC_CONFIG = {
   notesCacheSurahs: 16,
 } as const;
 
+export const QURAN_VERSE_LOOKUP_CONFIG = {
+  minQuoteWords: 3,
+  minMatchRatio: 0.7,
+  minMatchLetters: 12,
+  shingleLetters: 4,
+  candidates: 25,
+  readyWaitMs: 8_000,
+} as const;
+
 export const QUOTE_ENRICHMENT_CONFIG = {
   minQuoteWords: 3,
   minMatchRatio: 0.5,

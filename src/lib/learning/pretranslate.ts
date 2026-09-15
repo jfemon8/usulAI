@@ -6,6 +6,7 @@ import {
   translatePassageOnDemand,
   type PassageKind,
 } from "@/lib/ai/sourceTranslation";
+import { hydrateReference, referenceFilters } from "@/lib/db/documentShape";
 import { getDb } from "@/lib/db/mongoClient";
 import { logger } from "@/lib/utils/logger";
 
@@ -42,11 +43,18 @@ async function untranslatedCandidates(references: string[]): Promise<Candidate[]
     .collection<{
       content: string;
       citation: { reference: string };
-      metadata?: { restricted?: boolean };
+      metadata?: { restricted?: boolean; fileName?: string };
     }>(DB_CONFIG.collection)
     .find(
-      { sourceType: { $in: [...ARABIC_TEXT_SOURCES] }, "citation.reference": { $in: references } },
-      { projection: { content: 1, "citation.reference": 1, "metadata.restricted": 1 } },
+      { sourceType: { $in: [...ARABIC_TEXT_SOURCES] }, $or: referenceFilters(references) } as never,
+      {
+        projection: {
+          content: 1,
+          "citation.reference": 1,
+          "metadata.restricted": 1,
+          "metadata.fileName": 1,
+        },
+      },
     )
     .toArray();
 
@@ -58,7 +66,7 @@ async function untranslatedCandidates(references: string[]): Promise<Candidate[]
       if (!kind) return [];
       return [
         {
-          reference: row.citation.reference,
+          reference: hydrateReference(row.citation.reference, row.metadata),
           content: row.content,
           kind,
           key: passageTranslationKey(row.content, kind),

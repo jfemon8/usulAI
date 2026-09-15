@@ -1,4 +1,5 @@
 import "./loadEnv";
+import { hydrateReference } from "@/lib/db/documentShape";
 import { ARABIC_TEXT_SOURCES, OPENITI_CONFIG, SOURCE_TRANSLATION_CONFIG } from "@/config/site";
 import { getDocumentsCollection, getMongoClient } from "@/lib/db/mongoClient";
 import { loadTranslations, translateSource, translationKey } from "@/lib/ai/sourceTranslation";
@@ -61,7 +62,11 @@ async function main() {
 
   for (const row of pending.slice(0, limit)) {
     const started = Date.now();
-    const translation = await translateSource(row.content, row.citation.reference, models);
+    const translation = await translateSource(
+      row.content,
+      hydrateReference(row.citation.reference, row.metadata),
+      models,
+    );
 
     if (translation) {
       done += 1;
@@ -72,7 +77,7 @@ async function main() {
     }
 
     logger.info(
-      `${translation ? "translated" : "FAILED"} ${row.citation.reference} in ${Math.round((Date.now() - started) / 1000)}s${translation ? `, ${translation.segments.length} segments, ${translation.segments.filter((segment) => segment.vocalized).length} vocalised` : ""}`,
+      `${translation ? "translated" : "FAILED"} ${hydrateReference(row.citation.reference, row.metadata)} in ${Math.round((Date.now() - started) / 1000)}s${translation ? `, ${translation.segments.length} segments, ${translation.segments.filter((segment) => segment.vocalized).length} vocalised` : ""}`,
     );
 
     if (streak >= SOURCE_TRANSLATION_CONFIG.maxConsecutiveFailures) {

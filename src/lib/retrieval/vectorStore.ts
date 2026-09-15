@@ -16,7 +16,10 @@ import {
 } from "@/lib/ingestion/fingerprint";
 import {
   HYDRATION_PROJECTION,
+  decodeGrades,
   hydrateCitation,
+  hydrateReference,
+  referenceFilters,
   storedCitation,
   storedMetadata,
   type StoredCitation,
@@ -26,7 +29,7 @@ import { fuseRankings } from "@/lib/retrieval/fusion";
 import { searchQuranNotes } from "@/lib/retrieval/quranNoteIndex";
 import { topicQuery } from "@/lib/retrieval/questionFiller";
 import { expandQueryTerms } from "@/lib/retrieval/synonyms";
-import type { HadithGrade, RetrievedChunk, SourceType } from "@/types";
+import type { RetrievedChunk, SourceType } from "@/types";
 
 interface SearchRow {
   _id: unknown;
@@ -34,7 +37,7 @@ interface SearchRow {
   citation: StoredCitation;
   metadata?: Record<string, unknown>;
   score: number;
-  grades?: HadithGrade[];
+  grades?: unknown;
 }
 
 export function storedContentHash(content: string): Binary {
@@ -61,7 +64,7 @@ function toChunk(
     citation: hydrateCitation(row.citation, sourceType, row.metadata),
     similarity: row.score,
     retrievedBy,
-    ...(row.grades && row.grades.length > 0 ? { grades: row.grades } : {}),
+    ...(decodeGrades(row.grades) ? { grades: decodeGrades(row.grades) } : {}),
   };
 }
 
@@ -261,7 +264,7 @@ export async function loadFingerprints(sourceType: SourceType): Promise<StoredFi
 
   return rows.map((row) => ({
     id: String(row._id),
-    reference: row.citation.reference,
+    reference: hydrateReference(row.citation.reference, row.metadata),
     hash: row.contentHash ? hashHex(row.contentHash) : contentHash(row.content ?? ""),
     embedded: row.embedded,
     citation: row.citation,
@@ -296,7 +299,11 @@ export async function applyIngestionPlan(
         content: document.content,
         contentHash: storedContentHash(document.content),
         citation: storedCitation(document.citation, document.sourceType, document.metadata),
-        metadata: storedMetadata(document.metadata ?? {}, document.sourceType),
+        metadata: storedMetadata(
+          document.metadata ?? {},
+          document.sourceType,
+          document.citation.reference,
+        ),
       })),
     );
   }
@@ -310,7 +317,13 @@ export async function applyIngestionPlan(
             content: document.content,
             contentHash: storedContentHash(document.content),
             citation: storedCitation(document.citation, document.sourceType, document.metadata),
-            ...metadataSet(storedMetadata(document.metadata ?? {}, document.sourceType)),
+            ...metadataSet(
+              storedMetadata(
+                document.metadata ?? {},
+                document.sourceType,
+                document.citation.reference,
+              ),
+            ),
           },
           $unset: { embedding: "", embeddingModel: "" },
         },
@@ -322,7 +335,13 @@ export async function applyIngestionPlan(
         update: {
           $set: {
             citation: storedCitation(document.citation, document.sourceType, document.metadata),
-            ...metadataSet(storedMetadata(document.metadata ?? {}, document.sourceType)),
+            ...metadataSet(
+              storedMetadata(
+                document.metadata ?? {},
+                document.sourceType,
+                document.citation.reference,
+              ),
+            ),
           },
         },
       },
@@ -399,7 +418,7 @@ export async function findChunksByReferences(references: string[]): Promise<Retr
   const collection = await getDocumentsCollection();
   const rows = await collection
     .find(
-      { sourceType: { $in: [...SOURCE_PRIORITY] }, "citation.reference": { $in: references } },
+      { sourceType: { $in: [...SOURCE_PRIORITY] }, $or: referenceFilters(references) } as never,
       {
         projection: {
           content: 1,
@@ -413,11 +432,17 @@ export async function findChunksByReferences(references: string[]): Promise<Retr
     .toArray();
 
   return references.flatMap((reference) => {
-    const row = rows.find((candidate) => candidate.citation.reference === reference);
+    const row = rows.find(
+      (candidate) =>
+        hydrateReference(
+          candidate.citation.reference,
+          candidate.metadata as Record<string, unknown>,
+        ) === reference,
+    );
     if (!row) return [];
 
     const metadata = row.metadata as Record<string, unknown> | undefined;
-    const grades = metadata?.grades as HadithGrade[] | undefined;
+    const grades = metadata?.grades;
     return [
       toChunk(
         { _id: row._id, content: row.content, citation: row.citation, metadata, score: 0, grades },
