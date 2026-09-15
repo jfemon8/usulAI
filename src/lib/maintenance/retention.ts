@@ -1,4 +1,5 @@
 import { DB_CONFIG, RETENTION_CONFIG, STORAGE_BUDGET } from "@/config/site";
+import { pretranslateFrequentPassages } from "@/lib/learning/pretranslate";
 import { normalizeQuestion } from "@/lib/analytics/verifiedAnswers";
 import { getDb, getDocumentsCollection } from "@/lib/db/mongoClient";
 import { bytesToFree, storageUsage, type StorageUsage } from "@/lib/maintenance/storage";
@@ -214,6 +215,7 @@ export interface MaintenanceReport {
   feedbackPruned: number;
   signalsPruned: number;
   embeddingsEvicted: number;
+  passagesPretranslated: number;
   dryRun: boolean;
 }
 
@@ -230,6 +232,7 @@ export async function runMaintenance(
   const pressure = dryRun ? before : await storageUsage();
   const embeddingsEvicted = await evictUnusedEmbeddings(pressure, dryRun);
 
+  const passagesPretranslated = await pretranslateFrequentPassages(dryRun);
   const after = dryRun ? before : await storageUsage();
 
   if (!dryRun) {
@@ -252,6 +255,7 @@ export async function runMaintenance(
     feedbackPruned,
     signalsPruned,
     embeddingsEvicted,
+    passagesPretranslated,
     dryRun,
   };
 }

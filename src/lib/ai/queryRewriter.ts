@@ -1,6 +1,8 @@
 import { AUXILIARY_CONFIG } from "@/config/site";
 import { detectQuestionLanguage } from "@/lib/ai/language";
 import { generateWithChain } from "@/lib/ai/auxiliaryModel";
+import { recall, remember } from "@/lib/learning/memory";
+import { topicKey } from "@/lib/learning/topicKey";
 import { logger } from "@/lib/utils/logger";
 import { createLru, normalizeCacheKey } from "@/lib/utils/lru";
 
@@ -36,7 +38,11 @@ export function needsRewrite(question: string, history: ConversationTurn[]): boo
   );
 }
 
-const rewriteCache = createLru<string>(AUXILIARY_CONFIG.rewriteCacheSize);
+const rewriteCache = createLru<{ query: string; topic: string }>(AUXILIARY_CONFIG.rewriteCacheSize);
+
+export function forgetRewrites(topic: string): number {
+  return rewriteCache.deleteWhere((entry) => entry.topic === topic);
+}
 
 export async function rewriteQuery(
   question: string,
@@ -48,8 +54,11 @@ export async function rewriteQuery(
   const key = normalizeCacheKey(question);
 
   if (cacheable) {
-    const cached = rewriteCache.get(key);
-    if (cached) return { query: cached, rewritten: cached !== question };
+    const cached = rewriteCache.get(key)?.query ?? (await recall<string>("rewrite", key));
+    if (cached) {
+      rewriteCache.set(key, { query: cached, topic: topicKey(question) });
+      return { query: cached, rewritten: cached !== question };
+    }
   }
 
   const transcript =
@@ -82,7 +91,10 @@ export async function rewriteQuery(
       logger.info("Rewrote question into search query", { from: question, to: query });
     }
 
-    if (cacheable) rewriteCache.set(key, query);
+    if (cacheable) {
+      rewriteCache.set(key, { query, topic: topicKey(question) });
+      void remember("rewrite", key, query, topicKey(question));
+    }
 
     return { query, rewritten: query !== question };
   } catch (error) {

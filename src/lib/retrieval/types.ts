@@ -8,4 +8,5 @@ export interface SearchOptions {
   rerank?: boolean;
   expandSynonyms?: boolean;
   carried?: RetrievedChunk[];
+  learningQuestion?: string;
 }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { SOURCE_PRIORITY } from "@/config/site";
 import { listReviewQueue, recordFeedback, resolveReview } from "@/lib/analytics/feedback";
-import { consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
+import { clientKey, consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
 import { getAppEnv } from "@/lib/utils/env";
 import { logger } from "@/lib/utils/logger";
 
@@ -51,6 +51,7 @@ export async function POST(request: Request) {
       question: parsed.data.question,
       answer: parsed.data.answer,
       note: parsed.data.note,
+      clientKey: clientKey(request),
       sources: parsed.data.sources.map((source) => ({ ...source, similarity: 0 })),
     });
 

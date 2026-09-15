@@ -1,5 +1,7 @@
 import { AUXILIARY_CONFIG, RERANK_CONFIG } from "@/config/site";
 import { generateWithChainFrom } from "@/lib/ai/auxiliaryModel";
+import { recall, remember } from "@/lib/learning/memory";
+import { topicKey } from "@/lib/learning/topicKey";
 import { TRANSLATION_LABELS, sanitizeSourceContent } from "@/lib/ingestion/translations";
 import { arabicQueryTerms } from "@/lib/retrieval/arabicTerms";
 import { isFiller } from "@/lib/retrieval/questionFiller";
@@ -104,7 +106,11 @@ export function parseKeepList(text: string, total: number): number[] | null {
   return [...new Set(numbers)];
 }
 
-const verdictCache = createLru<string[]>(AUXILIARY_CONFIG.rerankCacheSize);
+const verdictCache = createLru<{ ids: string[]; topic: string }>(AUXILIARY_CONFIG.rerankCacheSize);
+
+export function forgetVerdicts(topic: string): number {
+  return verdictCache.deleteWhere((entry) => entry.topic === topic);
+}
 
 function verdictKey(question: string, group: RetrievedChunk[]): string {
   return `${normalizeCacheKey(question)}::${group
@@ -117,13 +123,15 @@ async function rerankGroup(
   question: string,
   group: RetrievedChunk[],
   signal: AbortSignal,
+  topic: string,
 ): Promise<RetrievedChunk[]> {
   if (group.length < RERANK_CONFIG.minCandidates) return group;
 
   const key = verdictKey(question, group);
-  const cached = verdictCache.get(key);
+  const cached = verdictCache.get(key)?.ids ?? (await recall<string[]>("verdict", key));
 
   if (cached) {
+    verdictCache.set(key, { ids: cached, topic });
     const keptIds = new Set(cached);
     return group.filter((chunk) => keptIds.has(chunk.id));
   }
@@ -168,10 +176,9 @@ async function rerankGroup(
       .map((position) => group[position - 1])
       .filter((chunk): chunk is RetrievedChunk => Boolean(chunk));
 
-    verdictCache.set(
-      key,
-      kept.map((chunk) => chunk.id),
-    );
+    const keptIds = kept.map((chunk) => chunk.id);
+    verdictCache.set(key, { ids: keptIds, topic });
+    void remember("verdict", key, keptIds, topic);
 
     return kept;
   } catch (error) {
@@ -197,19 +204,21 @@ function groupBySource(context: RetrievedChunk[]): RetrievedChunk[][] {
 export async function rerankContext(
   question: string,
   context: RetrievedChunk[],
+  learningQuestion: string = question,
 ): Promise<RetrievedChunk[]> {
   if (context.length < RERANK_CONFIG.minCandidates) return context;
 
   const groups = groupBySource(context);
   const kept: RetrievedChunk[][] = new Array(groups.length);
   const signal = AbortSignal.timeout(RERANK_CONFIG.budgetMs);
+  const topic = topicKey(learningQuestion);
   let next = 0;
   const worker = async () => {
     while (next < groups.length) {
       const index = next;
       next += 1;
       const group = groups[index] as RetrievedChunk[];
-      kept[index] = signal.aborted ? group : await rerankGroup(question, group, signal);
+      kept[index] = signal.aborted ? group : await rerankGroup(question, group, signal, topic);
     }
   };
   await Promise.all(

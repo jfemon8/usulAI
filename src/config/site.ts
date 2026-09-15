@@ -153,6 +153,7 @@ export const DB_CONFIG = {
   maintenanceCollection: "maintenance_state",
   rateLimitCollection: "rate_limits",
   sourceTranslationCollection: "source_translations",
+  learningCollection: "learned_memory",
   vectorIndex: "documents_embedding_idx",
   textIndex: "documents_text_idx",
   embeddingPath: "embedding",
@@ -292,6 +293,21 @@ export const AUXILIARY_CONFIG = {
 export const VERIFIED_ANSWER_CONFIG = {
   enabled: true,
   autoVerifyAfterPositives: 3,
+  matchByTopic: true,
+} as const;
+
+export const SELF_LEARNING_CONFIG = {
+  enabled: true,
+  memoryDays: 120,
+  implicitWeight: 0.5,
+  complaintMaxWords: 8,
+  complaintWindowChars: 24,
+  modelStatsRefreshMs: 300_000,
+  modelMinAttempts: 8,
+  modelDemoteBelowSuccess: 0.25,
+  pretranslateLookbackDays: 30,
+  pretranslatePerRun: 6,
+  pretranslateBudgetMs: 180_000,
 } as const;
 
 export const FEEDBACK_LEARNING_CONFIG = {

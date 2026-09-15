@@ -113,8 +113,10 @@ export async function retrieveAnswerContext(
     candidates.length + carried.length,
   );
 
-  const tuned = await applyRankingSignals(question, merged);
-  const relevant = judging ? await rerankContext(question, tuned) : tuned;
+  const tuned = await applyRankingSignals(options.learningQuestion ?? question, merged);
+  const relevant = judging
+    ? await rerankContext(question, tuned, options.learningQuestion ?? question)
+    : tuned;
   const context = capPerSource(relevant, new Set(carried.map((chunk) => chunk.id)), sources).slice(
     0,
     maxChunks,
@@ -133,10 +135,11 @@ export async function retrieveForQuestion(
   options: SearchOptions = {},
 ): Promise<{ context: RetrievedChunk[]; scopedTo: SourceType[] | null }> {
   const scopedTo = options.sources ? null : detectSourceIntent(question);
+  const learning = { ...options, learningQuestion: options.learningQuestion ?? question };
 
   if (scopedTo) {
     const scoped = await retrieveAnswerContext(stripSourceMarkers(query, scopedTo), {
-      ...options,
+      ...learning,
       sources: scopedTo,
     });
     if (scoped.length > 0) return { context: scoped, scopedTo };
@@ -145,7 +148,7 @@ export async function retrieveForQuestion(
     );
   }
 
-  return { context: await retrieveAnswerContext(query, options), scopedTo: null };
+  return { context: await retrieveAnswerContext(query, learning), scopedTo: null };
 }
 
 async function backfillEmbeddings(candidates: RetrievedChunk[]): Promise<void> {

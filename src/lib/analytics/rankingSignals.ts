@@ -1,19 +1,26 @@
-import { DB_CONFIG, FEEDBACK_LEARNING_CONFIG } from "@/config/site";
+import { DB_CONFIG, FEEDBACK_LEARNING_CONFIG, SELF_LEARNING_CONFIG } from "@/config/site";
 import { getDb } from "@/lib/db/mongoClient";
-import { normalizeQuestion } from "@/lib/analytics/verifiedAnswers";
+import { topicKey } from "@/lib/learning/topicKey";
 import { logger } from "@/lib/utils/logger";
-import type { AnswerSource, RetrievedChunk } from "@/types";
+import type { RetrievedChunk } from "@/types";
 
 export interface RankingSignal {
   topic: string;
   reference: string;
   positive: number;
   negative: number;
+  implicitPositive?: number;
+  implicitNegative?: number;
   updatedAt: Date;
 }
 
-function topicKey(question: string): string {
-  return normalizeQuestion(question).split(" ").slice(0, 6).join(" ");
+export function netSignal(signal: Partial<RankingSignal>): number {
+  return (
+    (signal.positive ?? 0) -
+    (signal.negative ?? 0) +
+    SELF_LEARNING_CONFIG.implicitWeight *
+      ((signal.implicitPositive ?? 0) - (signal.implicitNegative ?? 0))
+  );
 }
 
 async function collection() {
@@ -23,15 +30,22 @@ async function collection() {
 
 export async function recordRankingFeedback(
   question: string,
-  sources: AnswerSource[],
+  sources: readonly { reference: string }[],
   positive: boolean,
+  implicit = false,
 ): Promise<void> {
-  if (!FEEDBACK_LEARNING_CONFIG.enabled || sources.length === 0) return;
+  const topic = topicKey(question);
+  if (!FEEDBACK_LEARNING_CONFIG.enabled || sources.length === 0 || !topic) return;
 
   try {
     const signals = await collection();
-    const topic = topicKey(question);
-    const field = positive ? "positive" : "negative";
+    const field = implicit
+      ? positive
+        ? "implicitPositive"
+        : "implicitNegative"
+      : positive
+        ? "positive"
+        : "negative";
 
     await signals.bulkWrite(
       sources.map((source) => ({
@@ -74,7 +88,7 @@ export async function applyRankingSignals(
         const signal = byReference.get(chunk.citation.reference);
         if (!signal) return { chunk, net: 0, adjusted: chunk.similarity };
 
-        const net = (signal.positive ?? 0) - (signal.negative ?? 0);
+        const net = netSignal(signal);
         const delta = net >= 0 ? net * boostPerPositive : net * penaltyPerNegative;
 
         return { chunk, net, adjusted: chunk.similarity + delta };

@@ -1,5 +1,5 @@
 import type { Collection, Db, Document, IndexSpecification } from "mongodb";
-import { DB_CONFIG, RETENTION_CONFIG } from "@/config/site";
+import { DB_CONFIG, RETENTION_CONFIG, SELF_LEARNING_CONFIG } from "@/config/site";
 import { logger } from "@/lib/utils/logger";
 
 const REDUNDANT_DOCUMENT_INDEXES = [
@@ -31,7 +31,7 @@ async function ensureTtl(
   seconds: number,
 ): Promise<void> {
   const key: IndexSpecification = { [field]: 1 };
-  const current = (await collection.indexes()).find(
+  const current = (await collection.indexes().catch(() => [])).find(
     (index) => Object.keys(index.key).length === 1 && index.key[field] === 1,
   );
 
@@ -87,6 +87,13 @@ export async function ensureStorageIndexes(db: Db): Promise<{ dropped: string[] 
     "lastUsedAt",
     RETENTION_CONFIG.queryEmbeddingDays * DAY_SECONDS,
   );
+  await ensureTtl(
+    db.collection(DB_CONFIG.learningCollection),
+    "lastUsedAt",
+    SELF_LEARNING_CONFIG.memoryDays * DAY_SECONDS,
+  );
+  await db.collection(DB_CONFIG.learningCollection).createIndex({ topic: 1 }, { sparse: true });
+  await db.collection(DB_CONFIG.feedbackCollection).createIndex({ topic: 1 }, { sparse: true });
   await db.collection(DB_CONFIG.queryInsightsCollection).createIndex({ lastAskedAt: 1 });
   await db
     .collection(DB_CONFIG.rateLimitCollection)

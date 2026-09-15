@@ -1,12 +1,15 @@
 import { ObjectId } from "mongodb";
 import { DB_CONFIG, VERIFIED_ANSWER_CONFIG } from "@/config/site";
 import { getDb } from "@/lib/db/mongoClient";
-import { saveVerifiedAnswer } from "@/lib/analytics/verifiedAnswers";
+import { saveVerifiedAnswer, withdrawAutoVerified } from "@/lib/analytics/verifiedAnswers";
 import { recordRankingFeedback } from "@/lib/analytics/rankingSignals";
+import { forgetLearnedTopic } from "@/lib/learning/forget";
+import { topicKey } from "@/lib/learning/topicKey";
 import type { AnswerSource, SourceType } from "@/types";
 
 export type FeedbackVerdict = "helpful" | "unhelpful" | "wrong-citation";
 export type ReviewStatus = "pending" | "approved" | "rejected";
+export type FeedbackOrigin = "explicit" | "implicit";
 
 export interface FeedbackRecord {
   verdict: FeedbackVerdict;
@@ -17,6 +20,9 @@ export interface FeedbackRecord {
   sourcesUsed: SourceType[];
   note?: string;
   status: ReviewStatus;
+  origin?: FeedbackOrigin;
+  clientKey?: string;
+  topic?: string;
   createdAt: Date;
   reviewedAt?: Date;
   reviewerNote?: string;
@@ -28,6 +34,8 @@ export interface FeedbackInput {
   answer: string;
   sources: AnswerSource[];
   note?: string;
+  clientKey?: string;
+  origin?: FeedbackOrigin;
 }
 
 async function collection() {
@@ -39,7 +47,9 @@ export async function recordFeedback(input: FeedbackInput): Promise<string> {
   const feedback = await collection();
 
   const positive = input.verdict === "helpful";
-  await recordRankingFeedback(input.question, input.sources, positive);
+  const origin = input.origin ?? "explicit";
+  const topic = topicKey(input.question);
+  await recordRankingFeedback(input.question, input.sources, positive, origin === "implicit");
 
   const result = await feedback.insertOne({
     verdict: input.verdict,
@@ -50,30 +60,50 @@ export async function recordFeedback(input: FeedbackInput): Promise<string> {
     sourcesUsed: [...new Set(input.sources.map((source) => source.sourceType))],
     note: input.note?.slice(0, 2000),
     status: input.verdict === "helpful" ? "approved" : "pending",
+    origin,
+    ...(input.clientKey ? { clientKey: input.clientKey } : {}),
+    ...(topic ? { topic } : {}),
     createdAt: new Date(),
   });
 
-  if (positive) await autoVerifyIfTrusted(input);
+  if (positive && origin === "explicit") await autoVerifyIfTrusted(input);
+  if (!positive) await selfCorrect(input.question);
 
   return String(result.insertedId);
 }
 
+async function selfCorrect(question: string): Promise<void> {
+  await withdrawAutoVerified(question);
+  await forgetLearnedTopic(topicKey(question));
+}
+
+export function distinctSupporters(rows: { clientKey?: string; _id?: unknown }[]): number {
+  return new Set(rows.map((row) => row.clientKey ?? String(row._id))).size;
+}
+
 async function autoVerifyIfTrusted(input: FeedbackInput): Promise<void> {
   const feedback = await collection();
-  const normalized = input.question.trim();
+  const question = input.question.trim();
+  const topic = topicKey(question);
+  const sameQuestion = topic ? { $or: [{ question }, { topic }] } : { question };
 
-  const [positives, negatives] = await Promise.all([
-    feedback.countDocuments({ question: normalized, verdict: "helpful" }),
-    feedback.countDocuments({ question: normalized, verdict: { $ne: "helpful" } }),
+  const [helpful, negatives] = await Promise.all([
+    feedback
+      .find({ ...sameQuestion, verdict: "helpful", origin: { $ne: "implicit" } })
+      .project<{ clientKey?: string; _id: unknown }>({ clientKey: 1 })
+      .toArray(),
+    feedback.countDocuments({ ...sameQuestion, verdict: { $ne: "helpful" } }),
   ]);
 
-  if (negatives > 0 || positives < VERIFIED_ANSWER_CONFIG.autoVerifyAfterPositives) return;
+  const supporters = distinctSupporters(helpful);
+  if (negatives > 0 || supporters < VERIFIED_ANSWER_CONFIG.autoVerifyAfterPositives) return;
 
   await saveVerifiedAnswer({
     question: input.question,
     answer: input.answer,
     sources: input.sources,
-    reviewerNote: `স্বয়ংক্রিয়ভাবে যাচাইকৃত (${positives} জন ইউজার সহায়ক বলেছেন)`,
+    origin: "auto",
+    reviewerNote: `স্বয়ংক্রিয়ভাবে যাচাইকৃত (${supporters} জন ইউজার সহায়ক বলেছেন)`,
   });
 }
 
@@ -107,6 +137,7 @@ export async function resolveReview(
 
   if (status === "rejected") {
     await recordRankingFeedback(record.question, record.sources ?? [], false);
+    await selfCorrect(record.question);
   }
 
   if (status === "approved") {
@@ -116,6 +147,7 @@ export async function resolveReview(
       sources: record.sources ?? [],
       reviewerNote,
       feedbackId: id,
+      origin: "scholar",
     });
   }
 

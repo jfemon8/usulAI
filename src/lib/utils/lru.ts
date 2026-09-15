@@ -1,6 +1,7 @@
 export interface Lru<T> {
   get(key: string): T | undefined;
   set(key: string, value: T): void;
+  deleteWhere(predicate: (value: T, key: string) => boolean): number;
   stats(): { size: number; hits: number };
 }
 
@@ -27,6 +28,15 @@ export function createLru<T>(limit: number): Lru<T> {
         if (oldest === undefined) break;
         entries.delete(oldest);
       }
+    },
+    deleteWhere(predicate) {
+      let removed = 0;
+      for (const [key, value] of [...entries]) {
+        if (!predicate(value, key)) continue;
+        entries.delete(key);
+        removed += 1;
+      }
+      return removed;
     },
     stats() {
       return { size: entries.size, hits };

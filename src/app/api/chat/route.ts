@@ -33,7 +33,9 @@ import {
 import { preferredGrade } from "@/lib/ai/hadithGrade";
 import { sanitizeSourceContent, splitSourceBlocks } from "@/lib/ingestion/translations";
 import { createQuoteEnricher, enrichAnswer, type EnricherOptions } from "@/lib/ai/quoteEnricher";
-import { consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
+import { learnFromFollowUp } from "@/lib/learning/implicitFeedback";
+import { preferReliable, recordModelOutcome, refreshModelStats } from "@/lib/learning/modelStats";
+import { clientKey, consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
 import { runAfterResponse } from "@/lib/utils/afterResponse";
 import { logger } from "@/lib/utils/logger";
 import type { AnswerSource, RetrievedChunk, UsulUIMessage } from "@/types";
@@ -103,6 +105,7 @@ export async function POST(request: Request) {
     );
   }
   const history = toHistory(messages);
+  if (history.length > 0) void learnFromFollowUp(messages, clientKey(request));
   const language = detectConversationLanguage(
     question,
     history.filter((turn) => turn.role === "user").map((turn) => turn.text),
@@ -197,7 +200,8 @@ export async function POST(request: Request) {
   const answerChain = fullChain.filter(
     (entry) => !ANSWER_GATE_CONFIG.excludedAnswerModels.includes(entry.modelId),
   );
-  const chain = answerOrder(answerChain.length > 0 ? answerChain : fullChain);
+  await refreshModelStats();
+  const chain = preferReliable(answerOrder(answerChain.length > 0 ? answerChain : fullChain));
 
   const sources: AnswerSource[] = context.map((chunk, index) => ({
     index: index + 1,
@@ -315,7 +319,9 @@ export async function POST(request: Request) {
                 const verdict = validateAnswer(full, gateInput);
 
                 if (!verdict.ok) {
+                  recordModelOutcome(modelId, "rejected");
                   gateRejections.push({ modelId, reasons: verdict.reasons });
+                  recordModelOutcome(modelId, "rejected");
                   lastError = new Error(`${provider}/${modelId} rejected by the answer gate`);
                   logger.warn(
                     `Attempt ${attempt + 1}/${chain.length} rejected by the answer gate`,
@@ -399,6 +405,7 @@ export async function POST(request: Request) {
 
             if (emitted) {
               recordModelSuccess(modelId);
+              recordModelOutcome(modelId, "answered");
               await pacer.finish();
               writer.write({ type: "text-end", id: textId });
               void logQuery({
