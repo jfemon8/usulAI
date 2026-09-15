@@ -613,7 +613,7 @@ export function UsageModal({ open, onClose, messages, persistent }: UsageModalPr
             {data ? `সর্বশেষ হালনাগাদ ${formatClock(state.fetchedAt)}। ` : ""}
             যেকোনো সময় Chat Box-এ{" "}
             <code className="rounded bg-(--surface-2) px-1 font-mono">/usage</code> লিখে এই হিসাব
-            দেখতে পারেন।
+            দেখতে পারবেন।
           </p>
         </div>
       </div>
