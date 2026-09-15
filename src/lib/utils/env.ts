@@ -50,12 +50,24 @@ const sourcesShape = {
   SUNNAH_API_KEY: blank(z.string().min(1).optional()),
 };
 
+const emailShape = {
+  MAILTRAP_API_TOKEN: blank(z.string().min(1).optional()),
+  EMAIL_FROM: blank(z.string().email("EMAIL_FROM must be an email address").optional()),
+  EMAIL_FROM_NAME: blank(z.string().min(1).optional()),
+  SUPPORT_EMAIL: blank(z.string().email("SUPPORT_EMAIL must be an email address").optional()),
+  EMAIL_LOGO_URL: blank(z.string().url().optional()),
+  REVIEW_NOTIFY_EMAIL: blank(
+    z.string().email("REVIEW_NOTIFY_EMAIL must be an email address").optional(),
+  ),
+};
+
 const appSchema = z.object(appShape);
 const aiSchema = z.object(aiShape);
 const embeddingSchema = z.object(embeddingShape);
 const dbSchema = z.object(dbShape);
 const storageSchema = z.object(storageShape);
 const sourcesSchema = z.object(sourcesShape);
+const emailSchema = z.object(emailShape);
 
 const envSchema = z.object({
   ...appShape,
@@ -63,6 +75,7 @@ const envSchema = z.object({
   ...dbShape,
   ...storageShape,
   ...sourcesShape,
+  ...emailShape,
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -84,4 +97,5 @@ export const getEmbeddingEnv = scoped(embeddingSchema);
 export const getDbEnv = scoped(dbSchema);
 export const getStorageEnv = scoped(storageSchema);
 export const getSourcesEnv = scoped(sourcesSchema);
+export const getEmailEnv = scoped(emailSchema);
 export const getEnv = scoped(envSchema);

@@ -12,7 +12,7 @@ const BASE_SECURITY_HEADERS = [
 ];
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["mongodb", "pdfkit"],
+  serverExternalPackages: ["mongodb", "pdfkit", "mailtrap"],
   outputFileTracingIncludes: {
     "/api/source-view": ["./src/assets/fonts/*.ttf"],
   },

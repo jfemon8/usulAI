@@ -305,6 +305,56 @@ export const VERIFIED_ANSWER_CONFIG = {
   matchByTopic: true,
 } as const;
 
+export const EMAIL_CONFIG = {
+  sender: { email: "usulai@demomailtrap.co", name: SITE_NAME },
+  categories: {
+    test: "Integration Test",
+    reviewQueue: "Review Queue",
+    passwordReset: "Password Reset",
+    welcome: "Welcome",
+  },
+  maxQuoteChars: 1_500,
+  defaultLocale: "bn",
+  timeZone: "Asia/Dhaka",
+  logoPath: "/pwa/icon-192.png",
+  links: {
+    passwordReset: "/reset-password",
+    verifyEmail: "/verify-email",
+    start: "/",
+  },
+  passwordResetMinutes: 60,
+  verifyEmailHours: 24,
+  brand: {
+    tagline: { bn: "দলিলভিত্তিক ইসলামিক প্রশ্নোত্তর", en: "Evidence-based Islamic Q&A" },
+    summary: {
+      bn: "কুরআন, হাদিস, ইজমা, কিয়াস, সীরাত ও ফিকহের নির্ভরযোগ্য কিতাব থেকে দলিল ও সূত্রসহ আপনার প্রশ্নের উত্তর খুঁজে দেয়।",
+      en: "finds answers to your questions with evidence and references from trusted books of Quran, Hadith, Ijma, Qiyas, Sirah and Fiqh.",
+    },
+    tips: {
+      bn: [
+        "যেকোনো মাসআলা বাংলা, ইংরেজি বা বাংলিশে জিজ্ঞেস করুন।",
+        "উত্তরের নিচের সূত্রে ক্লিক করে মূল দলিল পড়ুন।",
+        "উত্তর ভুল মনে হলে জানিয়ে দিন; এতে উত্তর আরও নির্ভুল হয়।",
+      ],
+      en: [
+        "Ask any question in Bangla, English or Banglish.",
+        "Open the references under each answer to read the original evidence.",
+        "Tell us when an answer looks wrong; it helps answers get more accurate.",
+      ],
+    },
+  },
+  colors: {
+    background: "#f3f6fa",
+    card: "#ffffff",
+    border: "#dbe3ee",
+    text: "#0d1622",
+    muted: "#5b6878",
+    button: "#2f5a87",
+    buttonText: "#ffffff",
+    notice: "#eef4fb",
+  },
+} as const;
+
 export const SELF_LEARNING_CONFIG = {
   enabled: true,
   memoryDays: 120,

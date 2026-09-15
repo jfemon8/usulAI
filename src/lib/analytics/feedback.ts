@@ -3,6 +3,7 @@ import { DB_CONFIG, VERIFIED_ANSWER_CONFIG } from "@/config/site";
 import { getDb } from "@/lib/db/mongoClient";
 import { saveVerifiedAnswer, withdrawAutoVerified } from "@/lib/analytics/verifiedAnswers";
 import { recordRankingFeedback } from "@/lib/analytics/rankingSignals";
+import { notifyReviewQueue } from "@/lib/email/reviewNotification";
 import { forgetLearnedTopic } from "@/lib/learning/forget";
 import { topicKey } from "@/lib/learning/topicKey";
 import type { AnswerSource, SourceType } from "@/types";
@@ -67,7 +68,17 @@ export async function recordFeedback(input: FeedbackInput): Promise<string> {
   });
 
   if (positive && origin === "explicit") await autoVerifyIfTrusted(input);
-  if (!positive) await selfCorrect(input.question);
+  if (!positive) {
+    await selfCorrect(input.question);
+    void notifyReviewQueue({
+      verdict: input.verdict === "wrong-citation" ? "wrong-citation" : "unhelpful",
+      origin,
+      question: input.question,
+      answer: input.answer,
+      sources: input.sources,
+      ...(input.note ? { note: input.note } : {}),
+    });
+  }
 
   return String(result.insertedId);
 }
