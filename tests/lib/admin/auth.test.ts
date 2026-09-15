@@ -67,12 +67,16 @@ describe("chat commands", () => {
     expect(matchCommand("/usage")).toBe("/usage");
     expect(matchCommand("/admin please")).toBeNull();
     expect(commandSuggestions("/").map((entry) => entry.command)).toEqual([
+      "/new",
+      "/masail",
+      "/ask",
+      "/help",
       "/usage",
-      "/admin",
       "/login",
     ]);
+    expect(commandSuggestions("/admin")).toEqual([]);
     expect(matchCommand("/LOGIN")).toBe("/login");
-    expect(commandSuggestions("/ad").map((entry) => entry.command)).toEqual(["/admin"]);
+    expect(commandSuggestions("/ma").map((entry) => entry.command)).toEqual(["/masail"]);
     expect(commandSuggestions("admin")).toEqual([]);
   });
 });

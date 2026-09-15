@@ -99,7 +99,7 @@ function Summary({ summary }: { summary: MonitorSummary }) {
           }
         />
         <Stat
-          label="গেটে বাতিল উত্তর (৭ দিন)"
+          label="বাতিল উত্তর (৭ দিন)"
           value={formatCount(summary.gateRejected7d)}
           hint={`মোট ${formatCount(summary.gateRejections7d)}টি প্রত্যাখ্যান`}
         />
@@ -140,10 +140,7 @@ function Summary({ summary }: { summary: MonitorSummary }) {
           )}
         </Card>
 
-        <Card
-          title="বারবার আসা প্রশ্ন"
-          description="রক্ষণাবেক্ষণ চালানোর সময় লগ থেকে জমা হওয়া হিসাব"
-        >
+        <Card title="বারবার আসা প্রশ্ন">
           {summary.topQuestions.length === 0 ? (
             <EmptyState title="এখনো কোনো পুনরাবৃত্ত প্রশ্ন জমা হয়নি" />
           ) : (

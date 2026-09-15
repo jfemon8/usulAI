@@ -9,6 +9,7 @@ import {
   findStaffByEmail,
   recordStaffLogin,
   setStaffPasswordByEmail,
+  updateOwnStaffProfile,
   type StaffAccount,
 } from "@/lib/admin/staff";
 import { isEmailConfigured, senderAddress } from "@/lib/email/mailer";
@@ -18,10 +19,10 @@ export { isAdminEmail, normalizeEmail, tokenDigest } from "@/lib/admin/identity"
 
 export interface AdminAccount {
   _id: string;
+  name?: string;
+  phone?: string;
   passwordHash: string | null;
   passwordChangedAt?: Date;
-  failedLogins: number;
-  lockedUntil?: Date | null;
   lastLoginAt?: Date;
   createdAt: Date;
 }
@@ -68,8 +69,6 @@ export async function ensureAccount(email: string): Promise<AdminAccount | null>
     {
       $setOnInsert: {
         passwordHash: initial ? await hashPassword(initial) : null,
-        failedLogins: 0,
-        lockedUntil: null,
         createdAt: now,
         ...(initial ? { passwordChangedAt: now } : {}),
       },
@@ -89,11 +88,12 @@ async function activeStaff(email: string) {
 export async function resolvePrincipal(email: string): Promise<Principal | null> {
   const address = normalizeEmail(email);
   if (isAdminEmail(address)) {
+    const account = await ensureAccount(address);
     return {
       kind: "admin",
       principalId: address,
       email: address,
-      name: address.split("@")[0] ?? address,
+      name: account?.name?.trim() || (address.split("@")[0] ?? address),
       role: "admin",
       roleLabel: ROLE_LABELS.admin,
       categoryName: ROLE_LABELS.admin,
@@ -117,20 +117,11 @@ export async function resolvePrincipal(email: string): Promise<Principal | null>
   };
 }
 
-export type LoginResult =
-  | { ok: true; email: string }
-  | { ok: false; reason: "invalid" }
-  | { ok: false; reason: "locked"; minutes: number };
+export type LoginResult = { ok: true; email: string } | { ok: false; reason: "invalid" };
 
 interface LoginTarget {
   passwordHash: string | null;
-  failedLogins: number;
-  lockedUntil?: Date | null;
-  save: (update: {
-    failedLogins: number;
-    lockedUntil: Date | null;
-    success: boolean;
-  }) => Promise<void>;
+  recordLogin: () => Promise<void>;
 }
 
 async function loginTarget(email: string): Promise<LoginTarget | null> {
@@ -139,18 +130,10 @@ async function loginTarget(email: string): Promise<LoginTarget | null> {
     const collection = await accounts();
     return {
       passwordHash: admin.passwordHash,
-      failedLogins: admin.failedLogins,
-      lockedUntil: admin.lockedUntil ?? null,
-      save: async (update) => {
+      recordLogin: async () => {
         await collection.updateOne(
           { _id: admin._id },
-          {
-            $set: {
-              failedLogins: update.failedLogins,
-              lockedUntil: update.lockedUntil,
-              ...(update.success ? { lastLoginAt: new Date() } : {}),
-            },
-          },
+          { $set: { lastLoginAt: new Date() }, $unset: { failedLogins: "", lockedUntil: "" } },
         );
       },
     };
@@ -161,9 +144,7 @@ async function loginTarget(email: string): Promise<LoginTarget | null> {
   const account: StaffAccount = staff.account;
   return {
     passwordHash: account.passwordHash,
-    failedLogins: account.failedLogins,
-    lockedUntil: account.lockedUntil ?? null,
-    save: (update) => recordStaffLogin(account, update),
+    recordLogin: () => recordStaffLogin(account),
   };
 }
 
@@ -175,30 +156,11 @@ export async function authenticate(email: string, password: string): Promise<Log
     return { ok: false, reason: "invalid" };
   }
 
-  const now = Date.now();
-  if (target.lockedUntil && target.lockedUntil.getTime() > now) {
-    return {
-      ok: false,
-      reason: "locked",
-      minutes: Math.ceil((target.lockedUntil.getTime() - now) / 60_000),
-    };
-  }
-
   if (await verifyPassword(password, target.passwordHash)) {
-    await target.save({ failedLogins: 0, lockedUntil: null, success: true });
+    await target.recordLogin();
     return { ok: true, email: address };
   }
-
-  const failures = (target.lockedUntil ? 0 : target.failedLogins) + 1;
-  const locked = failures >= ADMIN_CONFIG.maxFailedLogins;
-  await target.save({
-    failedLogins: locked ? 0 : failures,
-    lockedUntil: locked ? new Date(now + ADMIN_CONFIG.lockoutMinutes * 60_000) : null,
-    success: false,
-  });
-  return locked
-    ? { ok: false, reason: "locked", minutes: ADMIN_CONFIG.lockoutMinutes }
-    : { ok: false, reason: "invalid" };
+  return { ok: false, reason: "invalid" };
 }
 
 export async function setPassword(email: string, password: string): Promise<void> {
@@ -207,10 +169,7 @@ export async function setPassword(email: string, password: string): Promise<void
   if (isAdminEmail(address)) {
     await (
       await accounts()
-    ).updateOne(
-      { _id: address },
-      { $set: { passwordHash, passwordChangedAt: new Date(), failedLogins: 0, lockedUntil: null } },
-    );
+    ).updateOne({ _id: address }, { $set: { passwordHash, passwordChangedAt: new Date() } });
     return;
   }
   await setStaffPasswordByEmail(address, passwordHash, false);
@@ -235,6 +194,7 @@ export async function accountSummary(email: string) {
     passwordChangedAt = account?.passwordChangedAt;
     lastLoginAt = account?.lastLoginAt;
     hasPassword = Boolean(account?.passwordHash);
+    phone = account?.phone ?? null;
   } else {
     const account = await findStaffByEmail(address);
     passwordChangedAt = account?.passwordChangedAt;
@@ -243,6 +203,7 @@ export async function accountSummary(email: string) {
   }
 
   const sender = senderAddress().email;
+  const isAdmin = principal.kind === "admin";
   return {
     email: principal.email,
     name: principal.name,
@@ -255,10 +216,36 @@ export async function accountSummary(email: string) {
     hasPassword,
     passwordChangedAt: passwordChangedAt?.toISOString() ?? null,
     lastLoginAt: lastLoginAt?.toISOString() ?? null,
-    emailConfigured: isEmailConfigured(),
-    emailSender: sender,
-    demoSender: sender.endsWith("@demomailtrap.co"),
+    ...(isAdmin
+      ? {
+          emailConfigured: isEmailConfigured(),
+          emailSender: sender,
+          demoSender: sender.endsWith("@demomailtrap.co"),
+        }
+      : {}),
   };
+}
+
+export async function updateOwnProfile(
+  email: string,
+  input: { name: string; phone?: string | null },
+): Promise<void> {
+  const address = normalizeEmail(email);
+  if (!isAdminEmail(address)) {
+    await updateOwnStaffProfile(address, input);
+    return;
+  }
+  await ensureAccount(address);
+  const phone = input.phone?.trim();
+  await (
+    await accounts()
+  ).updateOne(
+    { _id: address },
+    {
+      $set: { name: input.name.replace(/\s+/g, " ").trim(), ...(phone ? { phone } : {}) },
+      ...(phone ? {} : { $unset: { phone: "" } }),
+    },
+  );
 }
 
 async function isKnownAccount(email: string): Promise<boolean> {

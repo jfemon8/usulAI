@@ -22,6 +22,7 @@ import {
 } from "@/components/admin/ui";
 import { useAdminData } from "@/components/admin/useAdminData";
 import { AnswerMarkdown } from "@/components/chat/AnswerMarkdown";
+import { RichContent } from "@/components/editor/RichContent";
 import { SourceCitationList } from "@/components/chat/SourceCitation";
 import {
   BadgeCheckIcon,
@@ -447,7 +448,7 @@ export function HelpDetailView({ id }: { id: string }) {
               </p>
             ) : null}
             <div className="min-w-0">
-              <AnswerMarkdown text={detail.answer} />
+              <RichContent text={detail.answer} />
             </div>
             {detail.sources.length > 0 ? <SourceCitationList sources={detail.sources} /> : null}
           </Card>

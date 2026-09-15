@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { RATE_LIMIT_CONFIG } from "@/config/site";
 import { AdminError } from "@/lib/admin/errors";
+import { markdownExcerpt } from "@/lib/editor/plainText";
 import { ANSWER_LIMITS, answerSourceInput, validatedSources } from "@/lib/admin/answers";
 import {
   deleteVerifiedAnswerById,
@@ -74,11 +75,7 @@ function iso(value: Date | undefined): string | null {
 }
 
 function excerpt(answer: string | undefined): string {
-  const plain = (answer ?? "")
-    .replace(/[#>*_`[\]()|]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return plain.length > 200 ? `${plain.slice(0, 200).trimEnd()}…` : plain;
+  return markdownExcerpt(answer ?? "", 200);
 }
 
 export function toWorkspaceMasala(row: StoredVerifiedAnswer, reviewer: Reviewer): WorkspaceMasala {

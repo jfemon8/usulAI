@@ -11,13 +11,14 @@ import {
   Card,
   Field,
   formatWhen,
+  Input,
   LoadError,
   Notice,
   PageHeader,
   Skeleton,
 } from "@/components/admin/ui";
 import { useAdminData } from "@/components/admin/useAdminData";
-import { ADMIN_CONFIG } from "@/config/site";
+import { ADMIN_CONFIG, STAFF_CONFIG } from "@/config/site";
 import type { SessionSummary } from "@/lib/admin/sessions";
 
 interface AccountData {
@@ -32,9 +33,9 @@ interface AccountData {
     hasPassword: boolean;
     passwordChangedAt: string | null;
     lastLoginAt: string | null;
-    emailConfigured: boolean;
-    emailSender: string;
-    demoSender: boolean;
+    emailConfigured?: boolean;
+    emailSender?: string;
+    demoSender?: boolean;
   } | null;
   sessions: SessionSummary[];
 }
@@ -166,6 +167,147 @@ function ChangePassword({ onChanged }: { onChanged: () => void }) {
   );
 }
 
+type Account = NonNullable<AccountData["account"]>;
+
+function ProfileCard({ account, onSaved }: { account: Account; onSaved: () => void }) {
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(account.name);
+  const [phone, setPhone] = useState(account.phone ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function startEditing() {
+    setName(account.name);
+    setPhone(account.phone ?? "");
+    setError(null);
+    setEditing(true);
+  }
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      await adminApi("/api/admin/auth/profile", {
+        method: "PATCH",
+        body: { name, phone: phone.trim() ? phone.trim() : null },
+      });
+      toast.success("আপনার তথ্য হালনাগাদ হয়েছে।");
+      setEditing(false);
+      onSaved();
+    } catch (failure) {
+      setError(errorMessage(failure));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Card
+      title="অ্যাকাউন্টের তথ্য"
+      actions={
+        editing ? null : (
+          <Button size="sm" onClick={startEditing}>
+            সম্পাদনা
+          </Button>
+        )
+      }
+    >
+      {editing ? (
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
+          {error ? <Notice tone="danger">{error}</Notice> : null}
+          <Field label="নাম">
+            {(id) => (
+              <Input
+                id={id}
+                required
+                maxLength={STAFF_CONFIG.maxNameChars}
+                autoComplete="name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+              />
+            )}
+          </Field>
+          <Field label="ফোন" hint="ঐচ্ছিক। খালি রাখলে মুছে যাবে।">
+            {(id) => (
+              <Input
+                id={id}
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                maxLength={STAFF_CONFIG.maxPhoneChars}
+                value={phone}
+                onChange={(event) => setPhone(event.target.value)}
+              />
+            )}
+          </Field>
+          <Field
+            label="ইমেইল"
+            hint={
+              account.kind === "admin"
+                ? "অ্যাডমিনের ইমেইল কোডে নির্দিষ্ট, বদলানো যায় না।"
+                : "ইমেইল বদলাতে অ্যাডমিনের সাথে যোগাযোগ করুন।"
+            }
+          >
+            {(id) => <Input id={id} type="email" value={account.email} readOnly disabled />}
+          </Field>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <Button onClick={() => setEditing(false)} disabled={busy} className="w-full sm:w-auto">
+              বাতিল
+            </Button>
+            <Button type="submit" tone="primary" loading={busy} className="w-full sm:w-auto">
+              সংরক্ষণ করুন
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <dl className="grid gap-3 text-sm sm:grid-cols-[auto_1fr] sm:gap-x-6">
+            <dt className="text-(--text-3)">নাম</dt>
+            <dd className="break-words text-(--text-1)">{account.name}</dd>
+            <dt className="text-(--text-3)">ভূমিকা</dt>
+            <dd className="text-(--text-1)">
+              {account.categoryName}
+              {account.kind === "staff" ? ` (${account.roleLabel})` : ""}
+            </dd>
+            <dt className="text-(--text-3)">ইমেইল</dt>
+            <dd className="break-all text-(--text-1)">{account.email}</dd>
+            <dt className="text-(--text-3)">ফোন</dt>
+            <dd className="text-(--text-1)">{account.phone ?? "দেওয়া হয়নি"}</dd>
+            <dt className="text-(--text-3)">শেষ লগইন</dt>
+            <dd className="text-(--text-1)">{formatWhen(account.lastLoginAt)}</dd>
+            <dt className="text-(--text-3)">পাসওয়ার্ড বদলানো হয়েছে</dt>
+            <dd className="text-(--text-1)">{formatWhen(account.passwordChangedAt)}</dd>
+            {account.kind === "admin" ? (
+              <>
+                <dt className="text-(--text-3)">রিসেট ইমেইল পাঠানো হয়</dt>
+                <dd className="break-all text-(--text-1)">
+                  {account.emailConfigured ? account.emailSender : "কনফিগার করা নেই"}
+                </dd>
+              </>
+            ) : null}
+          </dl>
+          {account.kind === "admin" && (!account.emailConfigured || account.demoSender) ? (
+            <div className="mt-4">
+              <Notice tone="warn">
+                {account.emailConfigured
+                  ? "প্রেরকের ঠিকানা Mailtrap-এর demo domain, তাই রিসেট ও অ্যাকাউন্টের ইমেইল শুধু Mailtrap অ্যাকাউন্টের মালিকের ঠিকানায় যাবে। Mailtrap-এ নিজের domain যাচাই করে EMAIL_FROM সেট করুন।"
+                  : "MAILTRAP_API_TOKEN সেট করা নেই, তাই কোনো ইমেইল যাবে না।"}
+              </Notice>
+            </div>
+          ) : null}
+        </>
+      )}
+    </Card>
+  );
+}
+
 export function AccountSettings() {
   const router = useRouter();
   const toast = useToast();
@@ -195,8 +337,8 @@ export function AccountSettings() {
         title="অ্যাকাউন্ট"
         description={
           data?.account?.kind === "staff"
-            ? "আপনার অ্যাকাউন্ট অ্যাডমিন তৈরি করেছেন। নাম, ইমেইল বা ক্যাটাগরি বদলাতে অ্যাডমিনের সাথে যোগাযোগ করুন। পাসওয়ার্ড আর লগইন করা ডিভাইস এখান থেকে পরিচালনা করুন।"
-            : "অ্যাডমিন অ্যাকাউন্ট কোডে নির্দিষ্ট, তাই এখান থেকে তৈরি বা মুছে ফেলা যায় না। পাসওয়ার্ড আর লগইন করা ডিভাইস এখান থেকে পরিচালনা করুন।"
+            ? "নিজের নাম, ফোন, পাসওয়ার্ড আর লগইন করা ডিভাইস এখান থেকে পরিচালনা করুন। ইমেইল বা ক্যাটাগরি বদলাতে অ্যাডমিনের সাথে যোগাযোগ করুন।"
+            : "নিজের নাম, ফোন, পাসওয়ার্ড আর লগইন করা ডিভাইস এখান থেকে পরিচালনা করুন। অ্যাডমিন অ্যাকাউন্টের ইমেইল কোডে নির্দিষ্ট, তাই বদলানো বা মুছে ফেলা যায় না।"
         }
       />
       {error ? (
@@ -207,37 +349,19 @@ export function AccountSettings() {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-5">
-          <Card title="অ্যাকাউন্টের তথ্য">
-            {data?.account ? (
-              <dl className="grid gap-3 text-sm sm:grid-cols-[auto_1fr] sm:gap-x-6">
-                <dt className="text-(--text-3)">নাম</dt>
-                <dd className="break-words text-(--text-1)">{data.account.name}</dd>
-                <dt className="text-(--text-3)">ভূমিকা</dt>
-                <dd className="text-(--text-1)">
-                  {data.account.categoryName}
-                  {data.account.kind === "staff" ? ` (${data.account.roleLabel})` : ""}
-                </dd>
-                <dt className="text-(--text-3)">ইমেইল</dt>
-                <dd className="break-all text-(--text-1)">{data.account.email}</dd>
-                {data.account.phone ? (
-                  <>
-                    <dt className="text-(--text-3)">ফোন</dt>
-                    <dd className="text-(--text-1)">{data.account.phone}</dd>
-                  </>
-                ) : null}
-                <dt className="text-(--text-3)">শেষ লগইন</dt>
-                <dd className="text-(--text-1)">{formatWhen(data.account.lastLoginAt)}</dd>
-                <dt className="text-(--text-3)">পাসওয়ার্ড বদলানো হয়েছে</dt>
-                <dd className="text-(--text-1)">{formatWhen(data.account.passwordChangedAt)}</dd>
-                <dt className="text-(--text-3)">রিসেট ইমেইল পাঠানো হয়</dt>
-                <dd className="break-all text-(--text-1)">
-                  {data.account.emailConfigured ? data.account.emailSender : "কনফিগার করা নেই"}
-                </dd>
-              </dl>
-            ) : loading ? (
+          {data?.account ? (
+            <ProfileCard
+              account={data.account}
+              onSaved={() => {
+                reload();
+                router.refresh();
+              }}
+            />
+          ) : loading ? (
+            <Card title="অ্যাকাউন্টের তথ্য">
               <Skeleton rows={2} />
-            ) : null}
-          </Card>
+            </Card>
+          ) : null}
           {data?.account?.mustChangePassword ? (
             <Notice tone="warn">
               আপনি এখনো অ্যাডমিনের দেওয়া পাসওয়ার্ড ব্যবহার করছেন। নিচে নিজের একটি নতুন পাসওয়ার্ড

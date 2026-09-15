@@ -6,6 +6,7 @@ import {
   saveVerifiedAnswer,
   withdrawAutoVerified,
 } from "@/lib/analytics/verifiedAnswers";
+import { claimFeedbackVote } from "@/lib/analytics/feedbackVotes";
 import { recordRankingFeedback } from "@/lib/analytics/rankingSignals";
 import { forgetLearnedTopic } from "@/lib/learning/forget";
 import { topicKey } from "@/lib/learning/topicKey";
@@ -107,7 +108,20 @@ export async function tallyFeedback(input: TallyInput): Promise<FeedbackTally | 
   );
 }
 
-export async function recordFeedback(input: FeedbackInput): Promise<void> {
+export type FeedbackOutcome =
+  { recorded: true; verdict: FeedbackVerdict } | { recorded: false; verdict: FeedbackVerdict };
+
+export async function recordFeedback(input: FeedbackInput): Promise<FeedbackOutcome> {
+  if (input.clientKey) {
+    const claim = await claimFeedbackVote(
+      input.clientKey,
+      input.question,
+      input.answer,
+      input.verdict,
+    );
+    if (!claim.claimed) return { recorded: false, verdict: claim.verdict };
+  }
+  const outcome: FeedbackOutcome = { recorded: true, verdict: input.verdict };
   const positive = input.verdict === "helpful";
   const origin = input.origin ?? "explicit";
 
@@ -134,7 +148,7 @@ export async function recordFeedback(input: FeedbackInput): Promise<void> {
   if (!positive) {
     await withdrawAutoVerified(input.question);
     await forgetLearnedTopic(topicKey(input.question));
-    return;
+    return outcome;
   }
 
   if (origin === "explicit" && tally && isTrusted(tally)) {
@@ -146,6 +160,7 @@ export async function recordFeedback(input: FeedbackInput): Promise<void> {
       reviewerNote: `স্বয়ংক্রিয়ভাবে যাচাইকৃত (${tally.supporters?.length ?? 0} জন ইউজার সহায়ক বলেছেন)`,
     });
   }
+  return outcome;
 }
 
 export async function feedbackSummary() {

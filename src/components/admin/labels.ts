@@ -32,6 +32,7 @@ const ACTION_NAMES: Record<string, string> = {
   "auth.reset-requested": "পাসওয়ার্ড রিসেটের অনুরোধ",
   "auth.password-reset": "রিসেট লিংকে পাসওয়ার্ড সেট",
   "auth.password-changed": "পাসওয়ার্ড পরিবর্তন",
+  "auth.profile-updated": "নিজের তথ্য হালনাগাদ",
   "auth.sessions-revoked": "অন্য সব সেশন বন্ধ",
   "auth.session-revoked": "একটি সেশন বন্ধ",
   create: "তৈরি",
@@ -65,7 +66,7 @@ const ACTION_NAMES: Record<string, string> = {
   "dry-run": "পরীক্ষামূলক চালানো",
   forget: "শেখা তথ্য মুছে ফেলা",
   clear: "খালি করা",
-  unblock: "ব্লক খোলা",
+  unblock: "সীমার হিসাব শূন্য করা",
   takeover: "অন্যের দায়িত্ব নেওয়া",
 };
 

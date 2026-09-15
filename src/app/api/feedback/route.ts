@@ -34,7 +34,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    await recordFeedback({
+    const outcome = await recordFeedback({
       verdict: parsed.data.verdict,
       question: parsed.data.question,
       answer: parsed.data.answer,
@@ -43,7 +43,13 @@ export async function POST(request: Request) {
       sources: parsed.data.sources.map((source) => ({ ...source, similarity: 0 })),
     });
 
-    return NextResponse.json({ status: "ok" });
+    if (!outcome.recorded) {
+      return NextResponse.json(
+        { error: "এই উত্তরে আপনি আগেই মতামত দিয়েছেন।", verdict: outcome.verdict },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ status: "ok", verdict: outcome.verdict });
   } catch (error) {
     logger.error("Feedback write failed", { error: String(error) });
     return NextResponse.json({ error: "Could not record feedback" }, { status: 500 });

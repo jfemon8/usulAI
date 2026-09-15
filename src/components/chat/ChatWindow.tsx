@@ -13,7 +13,7 @@ import { UsageModal } from "@/components/chat/UsageModal";
 import { VerifiedBadge } from "@/components/chat/VerifiedBadge";
 import { ArrowDownIcon, RetryIcon } from "@/components/ui/Icons";
 import { LogoMark } from "@/components/ui/Logo";
-import { ADMIN_CONFIG } from "@/config/site";
+import { commandEntry } from "@/lib/chat/commands";
 import { messageText } from "@/lib/chat/conversations";
 import { DEFAULT_HOME_CONTENT, type HomeContent } from "@/lib/site/contentShape";
 import { readableChatError } from "@/lib/utils/chatError";
@@ -25,6 +25,7 @@ interface ChatWindowProps {
   onMessagesSettled?: (messages: UsulUIMessage[]) => void;
   compact?: boolean;
   homeContent?: HomeContent;
+  onNewChat?: () => void;
 }
 
 const NO_SUGGESTIONS: string[] = [];
@@ -186,6 +187,7 @@ export function ChatWindow({
   onMessagesSettled,
   compact = false,
   homeContent = DEFAULT_HOME_CONTENT,
+  onNewChat,
 }: ChatWindowProps) {
   const [input, setInput] = useState("");
   const router = useRouter();
@@ -275,15 +277,21 @@ export function ChatWindow({
       onSubmit={() => send(input)}
       onCommand={(command) => {
         setInput("");
-        if (command === "/usage") {
+        const entry = commandEntry(command);
+        if (entry.kind === "usage") {
           setUsageOpen(true);
           return;
         }
-        if (compact || window.self !== window.top) {
-          window.open(ADMIN_CONFIG.paths.dashboard, "_blank", "noopener");
+        if (entry.kind === "new-chat") {
+          onNewChat?.();
           return;
         }
-        router.push(ADMIN_CONFIG.paths.dashboard);
+        const href = entry.href ?? "/";
+        if (compact || window.self !== window.top) {
+          window.open(href, "_blank", "noopener");
+          return;
+        }
+        router.push(href);
       }}
       onStop={() => void stop()}
       busy={isLoading}
@@ -367,7 +375,7 @@ export function ChatWindow({
                 <AssistantAvatar />
                 <div className="min-w-0 flex-1">
                   {verified ? <VerifiedBadge info={verified} /> : null}
-                  <AnswerMarkdown text={text} streaming={streaming} />
+                  <AnswerMarkdown text={text} streaming={streaming} authored={verified !== null} />
                   {!streaming && sources !== null ? <SourceCitationList sources={sources} /> : null}
                   {!streaming && isLast && isRetryable(message) ? (
                     <button

@@ -270,7 +270,7 @@ export function MasailFeed({
               ? "এই শব্দে কোনো মাসআলা পাওয়া যায়নি"
               : "এখনো কোনো মাসআলা প্রকাশিত হয়নি"}
           </p>
-          <p className="mx-auto mt-1.5 max-w-md text-sm leading-6 text-(--text-2)">
+          <p className="mx-auto mt-1.5 text-sm leading-6 text-(--text-2)">
             {state.searched
               ? "অন্য শব্দে খুঁজে দেখুন, অথবা আপনার প্রশ্ন আলেমের কাছে পাঠান।"
               : "আলেমরা উত্তর প্রকাশ করলে এখানে দেখা যাবে। ততক্ষণ আপনার প্রশ্ন আলেমের কাছে পাঠাতে পারেন।"}

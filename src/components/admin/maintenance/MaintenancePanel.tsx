@@ -194,7 +194,7 @@ function RunCard({
   return (
     <Card
       title="রক্ষণাবেক্ষণ চালান"
-      description="প্রতিদিন নিজে থেকে যা চলে, তা এখনই চালানো: লগের হিসাব জমা, পুরনো ক্যাশ ও সংকেত মোছা, জায়গা কম থাকলে এমবেডিং সরানো এবং বেশি উদ্ধৃত অনুচ্ছেদের আগাম অনুবাদ।"
+      description="পুরনো এমবেডিং, নিরপেক্ষ সংকেত ও হিসাব মুছে ফেলে ডাটাবেসের জায়গা খালি করে।"
     >
       <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-2 sm:flex-row">

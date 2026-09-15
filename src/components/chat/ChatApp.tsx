@@ -250,6 +250,7 @@ export function ChatApp({
     <ChatWindow
       key={active.id}
       chatId={active.id}
+      onNewChat={startNew}
       initialMessages={active.messages}
       onMessagesSettled={handleSettled}
       compact={compact}

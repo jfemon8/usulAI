@@ -34,8 +34,8 @@ import {
   formatWhen,
 } from "@/components/admin/ui";
 import { useAdminData } from "@/components/admin/useAdminData";
-import { AnswerMarkdown } from "@/components/chat/AnswerMarkdown";
 import { SourceCitationList } from "@/components/chat/SourceCitation";
+import { RichContent } from "@/components/editor/RichContent";
 import { ChevronLeftIcon, ExternalLinkIcon, TrashIcon } from "@/components/ui/Icons";
 import { RATE_LIMIT_CONFIG } from "@/config/site";
 import type { PrincipalView } from "@/lib/admin/roles";
@@ -173,7 +173,7 @@ export function MasalaEditor({ id, principal }: { id?: string; principal: Princi
             </p>
           </Card>
           <Card title="উত্তর">
-            <AnswerMarkdown text={data.answer} />
+            <RichContent text={data.answer} />
             <SourceCitationList sources={data.sources} />
           </Card>
         </div>

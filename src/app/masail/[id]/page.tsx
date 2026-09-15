@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { cache } from "react";
-import { AnswerMarkdown } from "@/components/chat/AnswerMarkdown";
+import { RichContent } from "@/components/editor/RichContent";
 import { SourceCitationList } from "@/components/chat/SourceCitation";
 import { authorLabel, MasailShell, publishedLabel } from "@/components/masail/MasailChrome";
 import { AlertIcon, BookIcon, PenIcon, QuestionIcon } from "@/components/ui/Icons";
@@ -131,7 +131,7 @@ export default async function MasalaPage({ params }: { params: Promise<Params> }
         </header>
 
         <div className="pt-5">
-          <AnswerMarkdown text={masala.answer} />
+          <RichContent text={masala.answer} />
           <SourceCitationList sources={masala.sources} />
         </div>
       </article>

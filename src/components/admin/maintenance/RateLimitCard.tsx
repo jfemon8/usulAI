@@ -78,7 +78,7 @@ export function RateLimitCard() {
   return (
     <Card
       title="অনুরোধের সীমা"
-      description="আজ কোন ক্লায়েন্ট কোন কাজে সবচেয়ে বেশি অনুরোধ করেছে। ক্লায়েন্ট মানে IP-এর লবণযুক্ত হ্যাশ, IP কোথাও জমা থাকে না। সীমা পার হওয়া কাউকে ভুল করে আটকানো হলে ব্লক খুলে দিতে পারেন।"
+      description="আজ কোন ক্লায়েন্ট কোন কাজে সবচেয়ে বেশি অনুরোধ করেছে। কাউকে স্থায়ীভাবে আটকানো হয় না: সীমা পার হলে শুধু সেই সময়ের অতিরিক্ত অনুরোধ ফিরিয়ে দেওয়া হয়, সময় পেরোলে নিজে থেকেই আবার চলে। জরুরি হলে হিসাব আগেই শূন্য করে দিতে পারেন।"
       actions={
         <Button
           size="sm"
@@ -118,7 +118,7 @@ export function RateLimitCard() {
                       <span className="font-mono text-xs break-all text-(--text-2)">
                         {client.client}
                       </span>
-                      {client.blocked ? <Badge tone="danger">আটকানো</Badge> : null}
+                      {client.blocked ? <Badge tone="warn">সীমা পূর্ণ</Badge> : null}
                     </div>
                     <dl className="grid flex-1 grid-cols-3 gap-2 text-xs">
                       <div>
@@ -155,7 +155,7 @@ export function RateLimitCard() {
                       onClick={() => setTarget({ scope: scope.scope, client })}
                       className="self-end sm:self-auto"
                     >
-                      {client.shared ? "হিসাব শূন্য করুন" : "ব্লক খুলুন"}
+                      হিসাব শূন্য করুন
                     </Button>
                   </li>
                 ))}
@@ -188,7 +188,7 @@ export function RateLimitCard() {
             </>
           ) : null
         }
-        confirmLabel={target?.client.shared ? "শূন্য করুন" : "ব্লক খুলুন"}
+        confirmLabel="শূন্য করুন"
         tone="primary"
         busy={busy}
         onConfirm={() => void unblock()}

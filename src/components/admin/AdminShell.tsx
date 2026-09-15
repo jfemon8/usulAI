@@ -173,7 +173,7 @@ function Navigation({
   loggingOut: boolean;
 }) {
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex min-h-0 flex-1 flex-col">
       <nav
         className="thin-scroll min-h-0 flex-1 overflow-y-auto px-3 pb-3"
         aria-label="অ্যাডমিন মেনু"

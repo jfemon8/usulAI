@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { clsx } from "clsx";
-import { AnswerMarkdown } from "@/components/chat/AnswerMarkdown";
+import { RichContent } from "@/components/editor/RichContent";
 import { SourceCitationList } from "@/components/chat/SourceCitation";
 import { HelpStatusBadge } from "@/components/help/HelpStatusBadge";
 import {
@@ -271,7 +271,7 @@ export function HelpTracker({ token }: { token: string }) {
                 </p>
               ) : null}
               <div className="min-w-0">
-                <AnswerMarkdown text={state.view.answer} />
+                <RichContent text={state.view.answer} />
               </div>
               {state.view.sources.length > 0 ? (
                 <SourceCitationList sources={state.view.sources} />

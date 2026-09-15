@@ -7,6 +7,7 @@ import rehypeKatex from "rehype-katex";
 import rehypeSanitize from "rehype-sanitize";
 import { isValidElement, memo, useMemo } from "react";
 import { clsx } from "clsx";
+import type { ElementContent, Element as HastElement } from "hast";
 import { isArabicDominant, prepareAnswer, splitMarkdownBlocks } from "@/lib/ai/answerText";
 
 function childrenToText(children: unknown): string {
@@ -82,13 +83,115 @@ const COMPONENTS: Components = {
   ),
 };
 
-const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
+const NESTED_BLOCKS = new Set(["ul", "ol", "table", "pre", "blockquote"]);
+
+function ownText(node: HastElement | ElementContent | undefined): string {
+  if (!node) return "";
+  if (node.type === "text") return node.value;
+  if (node.type !== "element") return "";
+  return node.children
+    .map((child) =>
+      child.type === "element" && NESTED_BLOCKS.has(child.tagName) ? "" : ownText(child),
+    )
+    .join("");
+}
+
+function arabicClass(node: HastElement | undefined): string | undefined {
+  return isArabicDominant(ownText(node)) ? "arabic" : undefined;
+}
+
+function isInternalHref(href: string | undefined): boolean {
+  return Boolean(
+    href && (href.startsWith("#") || (href.startsWith("/") && !href.startsWith("//"))),
+  );
+}
+
+const AUTHORED_COMPONENTS: Components = {
+  ...COMPONENTS,
+  p: ({ node, children }) => (
+    <p className={clsx("my-3 first:mt-0 last:mb-0", arabicClass(node))}>{children}</p>
+  ),
+  h1: ({ node, children }) => (
+    <h3 className={clsx("mt-6 mb-3 text-xl font-semibold first:mt-0", arabicClass(node))}>
+      {children}
+    </h3>
+  ),
+  h2: ({ node, children }) => (
+    <h3 className={clsx("mt-6 mb-3 text-lg font-semibold first:mt-0", arabicClass(node))}>
+      {children}
+    </h3>
+  ),
+  h3: ({ node, children }) => (
+    <h4 className={clsx("mt-5 mb-2 text-base font-semibold first:mt-0", arabicClass(node))}>
+      {children}
+    </h4>
+  ),
+  h4: ({ node, children }) => (
+    <h5 className={clsx("mt-4 mb-2 text-base font-semibold first:mt-0", arabicClass(node))}>
+      {children}
+    </h5>
+  ),
+  h5: ({ node, children }) => (
+    <h6 className={clsx("mt-4 mb-2 text-sm font-semibold first:mt-0", arabicClass(node))}>
+      {children}
+    </h6>
+  ),
+  h6: ({ node, children }) => (
+    <h6
+      className={clsx(
+        "mt-4 mb-2 text-sm font-semibold text-(--text-2) first:mt-0",
+        arabicClass(node),
+      )}
+    >
+      {children}
+    </h6>
+  ),
+  li: ({ node, children }) => <li className={clsx("ps-1", arabicClass(node))}>{children}</li>,
+  a: ({ href, children }) =>
+    isInternalHref(href) ? (
+      <a href={href} className="text-(--accent) underline underline-offset-2">
+        {children}
+      </a>
+    ) : (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-(--accent) underline underline-offset-2"
+      >
+        {children}
+      </a>
+    ),
+  th: ({ node, children }) => (
+    <th
+      className={clsx(
+        "border-b border-(--border) bg-(--surface-2) px-3 py-2 text-start font-semibold",
+        arabicClass(node),
+      )}
+    >
+      {children}
+    </th>
+  ),
+  td: ({ node, children }) => (
+    <td className={clsx("border-b border-(--border) px-3 py-2 align-top", arabicClass(node))}>
+      {children}
+    </td>
+  ),
+};
+
+const MarkdownBlock = memo(function MarkdownBlock({
+  text,
+  authored,
+}: {
+  text: string;
+  authored: boolean;
+}) {
   return (
     <div className="answer-block">
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeSanitize, rehypeKatex]}
-        components={COMPONENTS}
+        components={authored ? AUTHORED_COMPONENTS : COMPONENTS}
       >
         {text}
       </ReactMarkdown>
@@ -96,8 +199,19 @@ const MarkdownBlock = memo(function MarkdownBlock({ text }: { text: string }) {
   );
 });
 
-export function AnswerMarkdown({ text, streaming = false }: { text: string; streaming?: boolean }) {
-  const blocks = useMemo(() => splitMarkdownBlocks(prepareAnswer(text)), [text]);
+export function AnswerMarkdown({
+  text,
+  streaming = false,
+  authored = false,
+}: {
+  text: string;
+  streaming?: boolean;
+  authored?: boolean;
+}) {
+  const blocks = useMemo(
+    () => (authored ? [text] : splitMarkdownBlocks(prepareAnswer(text))),
+    [text, authored],
+  );
 
   return (
     <div
@@ -107,7 +221,7 @@ export function AnswerMarkdown({ text, streaming = false }: { text: string; stre
       )}
     >
       {blocks.map((block, index) => (
-        <MarkdownBlock key={index} text={block} />
+        <MarkdownBlock key={index} text={block} authored={authored} />
       ))}
     </div>
   );

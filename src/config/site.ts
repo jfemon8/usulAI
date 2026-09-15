@@ -150,6 +150,7 @@ export const DB_CONFIG = {
   queryLogCollection: "query_logs",
   feedbackCollection: "answer_feedback",
   feedbackTallyCollection: "feedback_tallies",
+  feedbackVoteCollection: "feedback_votes",
   verifiedAnswerCollection: "verified_answers",
   rankingSignalCollection: "ranking_signals",
   queryEmbeddingCollection: "query_embeddings",
@@ -1152,10 +1153,8 @@ export const ADMIN_CONFIG = {
   sessionTouchMinutes: 10,
   resetMinutes: 60,
   maxResetRequestsPerHour: 3,
-  minPasswordChars: 8,
+  minPasswordChars: 6,
   maxPasswordChars: 128,
-  maxFailedLogins: 5,
-  lockoutMinutes: 15,
   auditDays: 365,
   pageSize: 25,
   databasePageSize: 20,
@@ -1187,6 +1186,13 @@ export const STAFF_CONFIG = {
   categoryCacheMs: 30_000,
 } as const;
 
+export const FEEDBACK_VOTE_CONFIG = {
+  retentionDays: 365,
+  maxAnswerChars: 8_000,
+  storageKey: "usul-ai:feedback:v1",
+  maxStoredVotes: 1_000,
+} as const;
+
 export const REVIEW_CONFIG = {
   maxOpenItems: 5_000,
   maxQuestionChars: 2_000,
@@ -1214,11 +1220,44 @@ export const MASAIL_CONFIG = {
   maxSearchChars: 200,
 } as const;
 
+export interface ChatCommandEntry {
+  command: string;
+  description: string;
+  kind: "usage" | "new-chat" | "link";
+  href?: string;
+  hidden?: boolean;
+}
+
 export const CHAT_COMMANDS = [
-  { command: "/usage", description: "ব্যবহার এবং সংরক্ষিত তথ্যের হিসাব দেখুন" },
-  { command: "/admin", description: "অ্যাডমিন প্যানেলে যান" },
-  { command: "/login", description: "মডারেটর ও আলেমদের লগইন" },
-] as const;
+  { command: "/new", description: "নতুন চ্যাট শুরু করুন", kind: "new-chat" },
+  {
+    command: "/masail",
+    description: "আলেমদের প্রকাশিত মাসআলা দেখুন",
+    kind: "link",
+    href: "/masail",
+  },
+  {
+    command: "/ask",
+    description: "আলেমের কাছে নতুন প্রশ্ন পাঠান",
+    kind: "link",
+    href: "/help?ask=1",
+  },
+  {
+    command: "/help",
+    description: "আলেমের কাছে পাঠানো আমার প্রশ্ন ও উত্তর",
+    kind: "link",
+    href: "/help",
+  },
+  { command: "/usage", description: "ব্যবহার এবং সংরক্ষিত তথ্যের হিসাব দেখুন", kind: "usage" },
+  { command: "/login", description: "মডারেটর ও আলেমদের লগইন", kind: "link", href: "/admin/login" },
+  {
+    command: "/admin",
+    description: "অ্যাডমিন প্যানেল",
+    kind: "link",
+    href: "/admin",
+    hidden: true,
+  },
+] as const satisfies readonly ChatCommandEntry[];
 
 export const USAGE_CONFIG = {
   command: "/usage",

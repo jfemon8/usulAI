@@ -1,6 +1,7 @@
 import { ObjectId, type Filter } from "mongodb";
 import { DB_CONFIG, MASAIL_CONFIG, VERIFIED_ANSWER_CONFIG } from "@/config/site";
 import { getDb } from "@/lib/db/mongoClient";
+import { markdownExcerpt } from "@/lib/editor/plainText";
 import { topicKey } from "@/lib/learning/topicKey";
 import { logger } from "@/lib/utils/logger";
 import type { AnswerSource } from "@/types";
@@ -381,11 +382,7 @@ export async function listScholarAuthors(): Promise<ScholarAuthorCount[]> {
 }
 
 function excerpt(answer: string): string {
-  const plain = answer
-    .replace(/[#>*_`[\]()]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return plain.length > 220 ? `${plain.slice(0, 220).trimEnd()}…` : plain;
+  return markdownExcerpt(answer, 220);
 }
 
 function toSummary(row: VerifiedAnswer & { _id: ObjectId }): MasalaSummary {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { clsx } from "clsx";
 import { AskScholarDialog } from "@/components/help/AskScholarDialog";
 import {
@@ -13,6 +13,7 @@ import {
   ThumbUpIcon,
 } from "@/components/ui/Icons";
 import { prepareAnswer } from "@/lib/ai/answerText";
+import { answerKey, feedbackStore } from "@/lib/chat/feedbackStore";
 import type { AnswerSource } from "@/types";
 
 type Verdict = "helpful" | "unhelpful" | "wrong-citation";
@@ -47,7 +48,7 @@ function ActionButton({
       aria-pressed={active}
       className={clsx(
         "flex h-8 w-8 items-center justify-center rounded-lg transition hover:bg-(--surface-2) hover:text-(--text-1) disabled:pointer-events-none",
-        active ? "text-(--accent)" : "text-(--text-3)",
+        active ? "text-(--accent)" : "text-(--text-3) disabled:opacity-40",
       )}
     >
       {children}
@@ -57,8 +58,15 @@ function ActionButton({
 
 export function MessageActions({ question, answer, sources, onRetry }: MessageActionsProps) {
   const [copied, setCopied] = useState(false);
-  const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const votes = useSyncExternalStore(
+    feedbackStore.subscribe,
+    feedbackStore.getSnapshot,
+    feedbackStore.getServerSnapshot,
+  );
+  const key = answerKey(question, answer);
+  const verdict: Verdict | null = votes[key]?.verdict ?? null;
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [askOpen, setAskOpen] = useState(false);
 
   async function copy() {
@@ -79,6 +87,7 @@ export function MessageActions({ question, answer, sources, onRetry }: MessageAc
   async function sendFeedback(next: Verdict) {
     if (busy || verdict) return;
     setBusy(true);
+    setNotice(null);
 
     try {
       const response = await fetch("/api/feedback", {
@@ -95,7 +104,17 @@ export function MessageActions({ question, answer, sources, onRetry }: MessageAc
           })),
         }),
       });
-      if (response.ok) setVerdict(next);
+      if (response.ok) {
+        feedbackStore.save(key, next);
+      } else if (response.status === 409) {
+        const payload = (await response.json().catch(() => null)) as { verdict?: Verdict } | null;
+        feedbackStore.save(key, payload?.verdict ?? next);
+        setNotice("এই উত্তরে আপনি আগেই মতামত দিয়েছেন।");
+      } else {
+        setNotice("মতামত পাঠানো যায়নি, একটু পরে আবার চেষ্টা করুন।");
+      }
+    } catch {
+      setNotice("মতামত পাঠানো যায়নি, একটু পরে আবার চেষ্টা করুন।");
     } finally {
       setBusy(false);
     }
@@ -117,7 +136,7 @@ export function MessageActions({ question, answer, sources, onRetry }: MessageAc
         label="সহায়ক"
         onClick={() => sendFeedback("helpful")}
         active={verdict === "helpful"}
-        disabled={busy || (verdict !== null && verdict !== "helpful")}
+        disabled={busy || verdict !== null}
       >
         <ThumbUpIcon className="h-4 w-4" />
       </ActionButton>
@@ -125,7 +144,7 @@ export function MessageActions({ question, answer, sources, onRetry }: MessageAc
         label="সহায়ক নয়"
         onClick={() => sendFeedback("unhelpful")}
         active={verdict === "unhelpful"}
-        disabled={busy || (verdict !== null && verdict !== "unhelpful")}
+        disabled={busy || verdict !== null}
       >
         <ThumbDownIcon className="h-4 w-4" />
       </ActionButton>
@@ -133,28 +152,40 @@ export function MessageActions({ question, answer, sources, onRetry }: MessageAc
         label="সূত্র ভুল"
         onClick={() => sendFeedback("wrong-citation")}
         active={verdict === "wrong-citation"}
-        disabled={busy || (verdict !== null && verdict !== "wrong-citation")}
+        disabled={busy || verdict !== null}
       >
         <FlagIcon className="h-4 w-4" />
       </ActionButton>
 
-      <button
-        type="button"
-        onClick={() => setAskOpen(true)}
-        title="আলেমের কাছে প্রশ্ন পাঠান"
-        aria-haspopup="dialog"
-        className="ms-0.5 inline-flex h-8 items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-(--text-3) transition hover:bg-(--surface-2) hover:text-(--text-1)"
-      >
-        <QuestionIcon className="h-4 w-4 shrink-0" />
-        <span>আলেমের কাছে প্রশ্ন পাঠান</span>
-      </button>
-
-      {verdict ? (
+      {notice ? (
         <span className="ms-1.5 text-xs text-(--text-3)" role="status">
-          {verdict === "helpful"
-            ? "ধন্যবাদ, আপনার মতামত রাখা হলো।"
-            : "ধন্যবাদ, এটি পর্যালোচনার জন্য পাঠানো হয়েছে।"}
+          {notice}
         </span>
+      ) : verdict === "helpful" ? (
+        <span className="ms-1.5 text-xs text-(--text-3)" role="status">
+          ধন্যবাদ, আপনার মতামত রাখা হলো।
+        </span>
+      ) : null}
+
+      {verdict === "unhelpful" || verdict === "wrong-citation" ? (
+        <div
+          role="status"
+          className="rise-in mt-1.5 flex w-full flex-col gap-2 rounded-xl border border-(--border) bg-(--surface-2) px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <p className="text-xs leading-5 text-(--text-2)">
+            ধন্যবাদ, উত্তরটি আলেমদের পর্যালোচনায় পাঠানো হয়েছে। নিজের প্রশ্নের নির্ভরযোগ্য উত্তর
+            চাইলে সরাসরি আলেমের কাছে পাঠাতে পারেন।
+          </p>
+          <button
+            type="button"
+            onClick={() => setAskOpen(true)}
+            aria-haspopup="dialog"
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-(--accent) px-3 text-xs font-medium text-(--accent-contrast) transition hover:bg-(--accent-strong)"
+          >
+            <QuestionIcon className="h-4 w-4 shrink-0" />
+            আলেমের কাছে প্রশ্ন পাঠান
+          </button>
+        </div>
       ) : null}
 
       <AskScholarDialog

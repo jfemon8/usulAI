@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { AskScholarDialog } from "@/components/help/AskScholarDialog";
 import { HelpStatusBadge } from "@/components/help/HelpStatusBadge";
@@ -93,7 +94,8 @@ function RequestRow({
   );
 }
 
-export function MyHelpRequests() {
+export function MyHelpRequests({ initialAsk = false }: { initialAsk?: boolean }) {
+  const router = useRouter();
   const stored = useSyncExternalStore(
     helpRequestStore.subscribe,
     helpRequestStore.getSnapshot,
@@ -104,7 +106,7 @@ export function MyHelpRequests() {
     () => true,
     () => false,
   );
-  const [askOpen, setAskOpen] = useState(false);
+  const [askOpen, setAskOpen] = useState(initialAsk);
   const [version, setVersion] = useState(0);
   const [state, setState] = useState<StatusState>({
     key: null,
@@ -145,10 +147,6 @@ export function MyHelpRequests() {
           <h1 className="text-xl font-semibold tracking-tight text-balance sm:text-2xl">
             আমার প্রশ্নগুলো
           </h1>
-          <p className="mt-1 max-w-xl text-sm leading-6 text-(--text-3)">
-            আলেমদের কাছে পাঠানো যে প্রশ্নগুলো এই ব্রাউজারে সংরক্ষিত আছে। অন্য ডিভাইস থেকে দেখতে
-            ট্র্যাকিং লিংকটি সেখানে খুলুন।
-          </p>
         </div>
         <div className="flex shrink-0 gap-2">
           {tokens.length > 0 ? (
@@ -199,7 +197,7 @@ export function MyHelpRequests() {
           <span className="flex h-12 w-12 items-center justify-center rounded-full bg-(--surface-2) text-(--text-3)">
             <QuestionIcon className="h-6 w-6" />
           </span>
-          <p className="font-medium">এই ব্রাউজারে কোনো প্রশ্ন নেই</p>
+          <p className="font-medium">আপনার কোনো প্রশ্ন নেই</p>
           <p className="max-w-sm text-sm leading-6 text-(--text-3)">
             চ্যাটে যেকোনো উত্তরের নিচে &quot;আলেমের কাছে প্রশ্ন পাঠান&quot; চাপুন, অথবা এখান থেকে
             সরাসরি নতুন প্রশ্ন পাঠান।
@@ -218,12 +216,13 @@ export function MyHelpRequests() {
         </ul>
       )}
 
-      <p className="mt-8 text-xs leading-5 text-(--text-3)">
-        সর্বোচ্চ {HELP_CONFIG.maxStoredRequests.toLocaleString("bn-BD")}টি প্রশ্ন এই ব্রাউজারে মনে
-        রাখা হয়। ব্রাউজারের ডেটা মুছে ফেললে তালিকাটিও মুছে যাবে, তবে লিংক থাকলে প্রশ্ন দেখা যাবে।
-      </p>
-
-      <AskScholarDialog open={askOpen} onClose={() => setAskOpen(false)} />
+      <AskScholarDialog
+        open={askOpen}
+        onClose={() => {
+          setAskOpen(false);
+          if (initialAsk) router.replace(HELP_CONFIG.path, { scroll: false });
+        }}
+      />
     </>
   );
 }

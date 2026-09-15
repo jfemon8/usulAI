@@ -5,19 +5,16 @@ import { clsx } from "clsx";
 import { adminApi, errorMessage } from "@/components/admin/api";
 import { useToast } from "@/components/admin/Dialog";
 import { SOURCE_NAMES } from "@/components/admin/labels";
-import { CharCount } from "@/components/admin/site/FormBits";
 import {
   Button,
   Card,
-  Field,
   IconButton,
   Input,
   Select,
   Spinner,
-  Textarea,
   formatCount,
 } from "@/components/admin/ui";
-import { AnswerMarkdown } from "@/components/chat/AnswerMarkdown";
+import { RichTextField } from "@/components/editor/RichTextField";
 import { AlertIcon, CheckIcon, PlusIcon, TrashIcon } from "@/components/ui/Icons";
 import { SOURCE_PRIORITY } from "@/config/site";
 import type { AnswerSource, SourceType } from "@/types";
@@ -137,86 +134,43 @@ export function AnswerWriter({
   sources,
   title = "উত্তর",
   rows = 16,
+  inDialog = false,
 }: {
   value: string;
   onChange: (value: string) => void;
   sources: readonly SourceRow[];
   title?: string;
   rows?: number;
+  inDialog?: boolean;
 }) {
-  const [tab, setTab] = useState<"write" | "preview">("write");
   const error =
     value.trim().length > MASALA_LIMITS.answerChars
       ? `সর্বোচ্চ ${formatCount(MASALA_LIMITS.answerChars)} অক্ষর।`
       : null;
-  const previewSources = sources.filter((row) => row.reference.trim());
+  const editorSources = sources
+    .filter((row) => row.reference.trim())
+    .map((row, index) => ({
+      index: index + 1,
+      reference: `${SOURCE_NAMES[row.sourceType]}: ${row.reference.trim()}`,
+    }));
 
   return (
     <Card
       title={title}
-      description="মার্কডাউন চলবে। সূত্রের নম্বর [1], [2] নিচের তালিকার ক্রম অনুযায়ী।"
-      actions={
-        <div
-          role="tablist"
-          aria-label="উত্তরের দৃশ্য"
-          className="flex rounded-xl bg-(--surface-2) p-1"
-        >
-          {(["write", "preview"] as const).map((entry) => (
-            <button
-              key={entry}
-              type="button"
-              role="tab"
-              aria-selected={tab === entry}
-              onClick={() => setTab(entry)}
-              className={clsx(
-                "h-8 rounded-lg px-3 text-sm transition",
-                tab === entry
-                  ? "bg-(--bg) font-medium text-(--text-1) shadow-sm"
-                  : "text-(--text-2) hover:text-(--text-1)",
-              )}
-            >
-              {entry === "write" ? "লিখুন" : "প্রিভিউ"}
-            </button>
-          ))}
-        </div>
-      }
+      description="টুলবার দিয়ে বিন্যাস করুন। সূত্রের নম্বর [1], [2] নিচের তালিকার ক্রম অনুযায়ী, টুলবারের সূত্র বোতাম থেকেও বসানো যায়।"
     >
-      {tab === "write" ? (
-        <Field
-          label="উত্তরের লেখা"
-          hint={<CharCount value={value} max={MASALA_LIMITS.answerChars} />}
-          error={error}
-        >
-          {(fieldId) => (
-            <Textarea
-              id={fieldId}
-              rows={rows}
-              dir="auto"
-              className="min-h-72 font-[inherit]"
-              value={value}
-              onChange={(event) => onChange(event.target.value)}
-            />
-          )}
-        </Field>
-      ) : value.trim() ? (
-        <div className="min-w-0">
-          <AnswerMarkdown text={value} />
-          {previewSources.length > 0 ? (
-            <ol className="mt-5 flex flex-wrap gap-2 border-t border-(--border) pt-4">
-              {previewSources.map((row, index) => (
-                <li
-                  key={row.id}
-                  className="max-w-full rounded-full border border-(--border) px-3 py-1 text-xs break-words text-(--text-2)"
-                >
-                  [{index + 1}] {SOURCE_NAMES[row.sourceType]}: {row.reference}
-                </li>
-              ))}
-            </ol>
-          ) : null}
-        </div>
-      ) : (
-        <p className="py-8 text-center text-sm text-(--text-3)">প্রিভিউ দেখানোর মতো লেখা নেই।</p>
-      )}
+      <RichTextField
+        value={value}
+        onChange={onChange}
+        label="উত্তরের লেখা"
+        placeholder="উত্তর লিখুন…"
+        minHeight={Math.max(200, rows * 24)}
+        maxLength={MASALA_LIMITS.answerChars}
+        invalid={Boolean(error)}
+        sources={editorSources}
+        toolbarOffset={inDialog ? "none" : "header"}
+      />
+      {error ? <p className="mt-2 text-xs leading-5 text-(--danger)">{error}</p> : null}
     </Card>
   );
 }

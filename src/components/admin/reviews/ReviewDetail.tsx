@@ -518,6 +518,7 @@ export function ReviewDetail({ id, principal }: { id: string; principal: Princip
             <AnswerWriter
               value={correction.answer}
               rows={12}
+              inDialog
               title="সংশোধিত উত্তর"
               onChange={(answer) =>
                 setCorrection((previous) => (previous ? { ...previous, answer } : previous))

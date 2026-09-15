@@ -5,7 +5,7 @@ import { clsx } from "clsx";
 import { AdminApiError, adminApi, errorMessage } from "@/components/admin/api";
 import { useToast } from "@/components/admin/Dialog";
 import { SOURCE_NAMES } from "@/components/admin/labels";
-import { CharCount, Toggle } from "@/components/admin/site/FormBits";
+import { Toggle } from "@/components/admin/site/FormBits";
 import {
   Button,
   Card,
@@ -14,10 +14,9 @@ import {
   Input,
   Select,
   Spinner,
-  Textarea,
   formatCount,
 } from "@/components/admin/ui";
-import { AnswerMarkdown } from "@/components/chat/AnswerMarkdown";
+import { RichTextField } from "@/components/editor/RichTextField";
 import { AlertIcon, CheckIcon, PlusIcon, TrashIcon } from "@/components/ui/Icons";
 import { HELP_CONFIG, SOURCE_PRIORITY } from "@/config/site";
 import type { HelpActionResponse, HelpContextSource, HelpDetail } from "@/lib/help/types";
@@ -75,7 +74,6 @@ export function HelpAnswerEditor({
   );
   const [publish, setPublish] = useState(detail.published);
   const [masalaQuestion, setMasalaQuestion] = useState(detail.question);
-  const [tab, setTab] = useState<"write" | "preview">("write");
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -188,73 +186,32 @@ export function HelpAnswerEditor({
     }
   }
 
+  const editorSources = sources.map((source, index) => ({
+    index: index + 1,
+    reference: `${SOURCE_NAMES[source.sourceType]}: ${source.reference}`,
+  }));
+
   return (
     <Card
       title={editing ? "উত্তর সম্পাদনা" : "উত্তর লিখুন"}
-      description="মার্কডাউন চলবে। সূত্রের নম্বর [1], [2] নিচের তালিকার ক্রম অনুযায়ী।"
-      actions={
-        <div
-          role="tablist"
-          aria-label="উত্তরের দৃশ্য"
-          className="flex rounded-xl bg-(--surface-2) p-1"
-        >
-          {(["write", "preview"] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              role="tab"
-              aria-selected={tab === value}
-              onClick={() => setTab(value)}
-              className={clsx(
-                "h-8 rounded-lg px-3 text-sm transition",
-                tab === value
-                  ? "bg-(--bg) font-medium text-(--text-1) shadow-sm"
-                  : "text-(--text-2) hover:text-(--text-1)",
-              )}
-            >
-              {value === "write" ? "লিখুন" : "প্রিভিউ"}
-            </button>
-          ))}
-        </div>
-      }
+      description="টুলবার দিয়ে বিন্যাস করুন। সূত্রের নম্বর [1], [2] নিচের তালিকার ক্রম অনুযায়ী, টুলবারের সূত্র বোতাম থেকেও বসানো যায়।"
     >
       <div className="flex flex-col gap-5">
-        {tab === "write" ? (
-          <Field
+        <div>
+          <RichTextField
+            value={answer}
+            onChange={setAnswer}
             label="উত্তরের লেখা"
-            hint={<CharCount value={answer} max={HELP_CONFIG.maxAnswerChars} />}
-            error={answerError}
-          >
-            {(fieldId) => (
-              <Textarea
-                id={fieldId}
-                dir="auto"
-                rows={14}
-                className="min-h-64"
-                value={answer}
-                onChange={(event) => setAnswer(event.target.value)}
-              />
-            )}
-          </Field>
-        ) : answer.trim() ? (
-          <div className="min-w-0 rounded-xl border border-(--border) p-4">
-            <AnswerMarkdown text={answer} />
-            {sources.length > 0 ? (
-              <ol className="mt-5 flex flex-wrap gap-2 border-t border-(--border) pt-4">
-                {sources.map((source, index) => (
-                  <li
-                    key={`${source.sourceType}|${source.reference}|${index}`}
-                    className="max-w-full rounded-full border border-(--border) px-3 py-1 text-xs break-words text-(--text-2)"
-                  >
-                    [{index + 1}] {SOURCE_NAMES[source.sourceType]}: {source.reference}
-                  </li>
-                ))}
-              </ol>
-            ) : null}
-          </div>
-        ) : (
-          <p className="py-8 text-center text-sm text-(--text-3)">প্রিভিউ দেখানোর মতো লেখা নেই।</p>
-        )}
+            placeholder="প্রশ্নকারীর জন্য উত্তর লিখুন…"
+            minHeight={256}
+            maxLength={HELP_CONFIG.maxAnswerChars}
+            invalid={Boolean(answerError)}
+            sources={editorSources}
+          />
+          {answerError ? (
+            <p className="mt-2 text-xs leading-5 text-(--danger)">{answerError}</p>
+          ) : null}
+        </div>
 
         <div className="flex flex-col gap-3 border-t border-(--border) pt-4">
           <div className="flex flex-wrap items-start justify-between gap-2">

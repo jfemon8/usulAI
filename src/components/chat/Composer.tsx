@@ -56,7 +56,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
         <div
           role="listbox"
           aria-label="কমান্ড"
-          className="absolute inset-x-2 bottom-full mb-2 overflow-hidden rounded-2xl border border-(--border) bg-(--bg) shadow-(--composer-shadow)"
+          className="thin-scroll absolute inset-x-2 bottom-full mb-2 max-h-[min(22rem,55dvh)] overflow-y-auto overscroll-contain rounded-2xl border border-(--border) bg-(--bg) shadow-(--composer-shadow)"
         >
           {suggestions.map((entry) => (
             <button
@@ -65,7 +65,7 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
               role="option"
               aria-selected={entry.command === command}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => onCommand(entry.command)}
+              onClick={() => onCommand(entry.command as ChatCommand)}
               className="flex w-full items-center gap-3 border-b border-(--border) px-4 py-3 text-left transition last:border-b-0 hover:bg-(--surface-2)"
             >
               <code className="rounded-md bg-(--surface-2) px-2 py-0.5 font-mono text-sm text-(--text-1)">

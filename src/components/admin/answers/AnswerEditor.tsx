@@ -18,14 +18,13 @@ import {
   Select,
   Skeleton,
   Spinner,
-  Textarea,
   formatCount,
   formatWhen,
 } from "@/components/admin/ui";
 import { useAdminData } from "@/components/admin/useAdminData";
 import { OriginBadge } from "@/components/admin/answers/AnswerList";
 import { CharCount, SaveBar, useUnsavedWarning } from "@/components/admin/site/FormBits";
-import { AnswerMarkdown } from "@/components/chat/AnswerMarkdown";
+import { RichTextField } from "@/components/editor/RichTextField";
 import { AlertIcon, CheckIcon, ChevronLeftIcon, PlusIcon, TrashIcon } from "@/components/ui/Icons";
 import { RATE_LIMIT_CONFIG, SOURCE_PRIORITY } from "@/config/site";
 import type { AnswerSource, SourceType } from "@/types";
@@ -117,7 +116,6 @@ export function AnswerEditor({ id }: { id?: string }) {
   const [source, setSource] = useState<AnswerDetail | null>(null);
   const [form, setForm] = useState<FormState>(() => toForm(null));
   const [baseline, setBaseline] = useState(() => JSON.stringify(payload(toForm(null))));
-  const [tab, setTab] = useState<"write" | "preview">("write");
   const [checks, setChecks] = useState<Map<string, ReferenceCheck>>(new Map());
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -268,7 +266,12 @@ export function AnswerEditor({ id }: { id?: string }) {
     }
   }
 
-  const previewSources = form.sources.filter((row) => row.reference.trim());
+  const editorSources = form.sources
+    .filter((row) => row.reference.trim())
+    .map((row, index) => ({
+      index: index + 1,
+      reference: `${SOURCE_NAMES[row.sourceType]}: ${row.reference.trim()}`,
+    }));
 
   return (
     <>
@@ -369,70 +372,21 @@ export function AnswerEditor({ id }: { id?: string }) {
 
         <Card
           title="উত্তর"
-          description="মার্কডাউন চলবে। সূত্রের নম্বর [1], [2] নিচের তালিকার ক্রম অনুযায়ী।"
-          actions={
-            <div
-              role="tablist"
-              aria-label="উত্তরের দৃশ্য"
-              className="flex rounded-xl bg-(--surface-2) p-1"
-            >
-              {(["write", "preview"] as const).map((value) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="tab"
-                  aria-selected={tab === value}
-                  onClick={() => setTab(value)}
-                  className={clsx(
-                    "h-8 rounded-lg px-3 text-sm transition",
-                    tab === value
-                      ? "bg-(--bg) font-medium text-(--text-1) shadow-sm"
-                      : "text-(--text-2) hover:text-(--text-1)",
-                  )}
-                >
-                  {value === "write" ? "লিখুন" : "প্রিভিউ"}
-                </button>
-              ))}
-            </div>
-          }
+          description="টুলবার দিয়ে বিন্যাস করুন। সূত্রের নম্বর [1], [2] নিচের তালিকার ক্রম অনুযায়ী, টুলবারের সূত্র বোতাম থেকেও বসানো যায়।"
         >
-          {tab === "write" ? (
-            <Field
-              label="উত্তরের লেখা"
-              hint={<CharCount value={form.answer} max={ANSWER_CHARS} />}
-              error={answerError}
-            >
-              {(fieldId) => (
-                <Textarea
-                  id={fieldId}
-                  rows={16}
-                  className="min-h-72 font-[inherit]"
-                  value={form.answer}
-                  onChange={(event) => patch({ answer: event.target.value })}
-                />
-              )}
-            </Field>
-          ) : form.answer.trim() ? (
-            <div className="min-w-0">
-              <AnswerMarkdown text={form.answer} />
-              {previewSources.length > 0 ? (
-                <ol className="mt-5 flex flex-wrap gap-2 border-t border-(--border) pt-4">
-                  {previewSources.map((row, index) => (
-                    <li
-                      key={row.id}
-                      className="rounded-full border border-(--border) px-3 py-1 text-xs text-(--text-2)"
-                    >
-                      [{index + 1}] {SOURCE_NAMES[row.sourceType]}: {row.reference}
-                    </li>
-                  ))}
-                </ol>
-              ) : null}
-            </div>
-          ) : (
-            <p className="py-8 text-center text-sm text-(--text-3)">
-              প্রিভিউ দেখানোর মতো লেখা নেই।
-            </p>
-          )}
+          <RichTextField
+            value={form.answer}
+            onChange={(answer) => patch({ answer })}
+            label="উত্তরের লেখা"
+            placeholder="উত্তর লিখুন…"
+            minHeight={384}
+            maxLength={ANSWER_CHARS}
+            invalid={Boolean(answerError)}
+            sources={editorSources}
+          />
+          {answerError ? (
+            <p className="mt-2 text-xs leading-5 text-(--danger)">{answerError}</p>
+          ) : null}
         </Card>
 
         <Card

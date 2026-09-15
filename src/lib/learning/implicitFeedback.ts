@@ -1,5 +1,6 @@
 import { SELF_LEARNING_CONFIG } from "@/config/site";
 import { recordFeedback } from "@/lib/analytics/feedback";
+import { claimFeedbackVote } from "@/lib/analytics/feedbackVotes";
 import { recordRankingFeedback } from "@/lib/analytics/rankingSignals";
 import { composeNukta } from "@/lib/utils/bangla";
 import { logger } from "@/lib/utils/logger";
@@ -206,7 +207,12 @@ export async function learnFromFollowUp(
         ...(clientKey ? { clientKey } : {}),
       });
     } else {
-      await recordRankingFeedback(exchange.question, exchange.sources, true, true);
+      const claim = clientKey
+        ? await claimFeedbackVote(clientKey, exchange.question, exchange.answer, "helpful")
+        : { claimed: true as const };
+      if (claim.claimed) {
+        await recordRankingFeedback(exchange.question, exchange.sources, true, true);
+      }
     }
     logger.info("Learned from a follow-up message", {
       signal,

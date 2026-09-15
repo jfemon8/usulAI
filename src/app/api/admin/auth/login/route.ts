@@ -17,15 +17,7 @@ export const POST = publicAdminRoute("adminLogin", async (request) => {
   const { email, password } = await readJson(request, schema);
   const result = await authenticate(email, password);
 
-  if (!result.ok) {
-    if (result.reason === "locked") {
-      return adminFailure(
-        `অনেকবার ভুল পাসওয়ার্ড দেওয়া হয়েছে। নিরাপত্তার জন্য ${result.minutes} মিনিট পর আবার চেষ্টা করুন।`,
-        423,
-      );
-    }
-    return adminFailure("ইমেইল বা পাসওয়ার্ড সঠিক নয়।", 401);
-  }
+  if (!result.ok) return adminFailure("ইমেইল বা পাসওয়ার্ড সঠিক নয়।", 401);
 
   await createSession(result.email, request);
   await recordAudit(result.email, "auth.login");

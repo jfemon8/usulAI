@@ -35,8 +35,6 @@ export interface StaffAccount {
   passwordHash: string;
   mustChangePassword: boolean;
   status: StaffStatus;
-  failedLogins: number;
-  lockedUntil?: Date | null;
   lastLoginAt?: Date;
   passwordChangedAt?: Date;
   createdAt: Date;
@@ -140,6 +138,31 @@ export const staffUpdateInput = z
   });
 
 export const staffPasswordInput = z.object({ password: passwordField });
+
+export const profileInput = z.object({
+  name: nameField,
+  phone: phoneField.nullable().optional(),
+});
+
+export type ProfileInput = z.infer<typeof profileInput>;
+
+export async function updateOwnStaffProfile(email: string, input: ProfileInput): Promise<void> {
+  const phone = input.phone?.trim();
+  await (
+    await accountCollection()
+  ).updateOne(
+    { email: normalizeEmail(email) },
+    {
+      $set: {
+        name: input.name.replace(/\s+/g, " ").trim(),
+        ...(phone ? { phone } : {}),
+        updatedAt: new Date(),
+        updatedBy: normalizeEmail(email),
+      },
+      ...(phone ? {} : { $unset: { phone: "" } }),
+    },
+  );
+}
 
 const categoryNameField = z
   .string()
@@ -542,8 +565,6 @@ export async function createStaff(
       passwordHash: await hashPassword(input.password),
       mustChangePassword: true,
       status: "active",
-      failedLogins: 0,
-      lockedUntil: null,
       createdAt: now,
       createdBy: actor,
       updatedAt: now,
@@ -590,7 +611,6 @@ export async function updateStaff(
           ...(input.name !== undefined ? { name: cleanText(input.name) } : {}),
           ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
           ...(input.status !== undefined ? { status: input.status } : {}),
-          ...(input.status === "active" ? { failedLogins: 0, lockedUntil: null } : {}),
           ...(phone ? { phone } : {}),
           updatedAt: new Date(),
           updatedBy: actor,
@@ -628,8 +648,6 @@ export async function resetStaffPassword(
       $set: {
         passwordHash: await hashPassword(password),
         mustChangePassword: true,
-        failedLogins: 0,
-        lockedUntil: null,
         updatedAt: new Date(),
         updatedBy: actor,
       },
@@ -652,21 +670,12 @@ export async function findStaffByEmail(email: string): Promise<StaffAccount | nu
   return (await accountCollection()).findOne({ email: normalizeEmail(email) });
 }
 
-export async function recordStaffLogin(
-  account: StaffAccount,
-  update: { failedLogins: number; lockedUntil: Date | null; success: boolean },
-): Promise<void> {
+export async function recordStaffLogin(account: StaffAccount): Promise<void> {
   await (
     await accountCollection()
   ).updateOne(
     { _id: account._id },
-    {
-      $set: {
-        failedLogins: update.failedLogins,
-        lockedUntil: update.lockedUntil,
-        ...(update.success ? { lastLoginAt: new Date() } : {}),
-      },
-    },
+    { $set: { lastLoginAt: new Date() }, $unset: { failedLogins: "", lockedUntil: "" } },
   );
 }
 
@@ -684,8 +693,6 @@ export async function setStaffPasswordByEmail(
         passwordHash,
         mustChangePassword,
         passwordChangedAt: new Date(),
-        failedLogins: 0,
-        lockedUntil: null,
       },
     },
   );
