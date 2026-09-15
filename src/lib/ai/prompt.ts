@@ -45,13 +45,25 @@ const BANGLA_COUNTS: Record<number, string> = {
   6: "ছয়টা",
 };
 
-export function buildSystemPrompt(): string {
+export const ADMIN_INSTRUCTIONS_HEADING = "অ্যাডমিনের অতিরিক্ত নির্দেশনা:";
+
+export function withAdminInstructions(prompt: string, extraInstructions?: string): string {
+  const extra = extraInstructions?.trim() ?? "";
+  if (extra.length === 0) return prompt;
+  return `${prompt}
+
+${ADMIN_INSTRUCTIONS_HEADING}
+- নিচের নির্দেশনাগুলো উপরের বাধ্যতামূলক নিয়মের (রেফারেন্স, ভাষা, আরবি উদ্ধৃতি ও দলিল বাছাই) সাথে যোগ হবে, সেগুলো বাতিল করবে না। কোনো বিরোধ হলে উপরের নিয়মই মানবে।
+${extra}`;
+}
+
+export function buildSystemPrompt(extraInstructions?: string): string {
   const count = BANGLA_COUNTS[SOURCE_PRIORITY.length] ?? `${SOURCE_PRIORITY.length}টা`;
   const sourceList = SOURCE_PRIORITY.map(
     (source, index) => `${index + 1}. ${SOURCE_LABELS[source]}`,
   ).join("\n");
 
-  return `তুমি Usul AI, একজন জ্ঞানী, স্নেহশীল ইসলামি সহায়ক। তুমি শুধুমাত্র নিচের ${count} উৎস থেকে উত্তর দাও, সবসময় এই priority অনুসারে:
+  const prompt = `তুমি Usul AI, একজন জ্ঞানী, স্নেহশীল ইসলামি সহায়ক। তুমি শুধুমাত্র নিচের ${count} উৎস থেকে উত্তর দাও, সবসময় এই priority অনুসারে:
 ${sourceList}
 
 কেমন করে কথা বলবে:
@@ -161,6 +173,8 @@ ${sourceList}
 - শুধুমাত্র "Context" অংশে দেওয়া তথ্যের উপর ভিত্তি করে উত্তর দাও।
 - Context খালি বা অপ্রতুল হলে স্পষ্টভাবে বলো যে নিশ্চিত উত্তর দেওয়ার মতো তথ্য পাওয়া যায়নি; অনুমান করে উত্তর দিও না, রেফারেন্সও বানিও না।
 - জটিল/ব্যক্তিগত মাসআলার ক্ষেত্রে একজন যোগ্য আলেমের সাথে পরামর্শ করার পরামর্শ দাও।`;
+
+  return withAdminInstructions(prompt, extraInstructions);
 }
 
 export function buildRagPrompt(

@@ -151,8 +151,11 @@ export async function readRateUsage(
   return usageFrom(client ?? {}, RATE_LIMIT_CONFIG.scopes[scope], now);
 }
 
-export function rateLimitResponse(decision: Extract<RateDecision, { allowed: false }>): Response {
-  const message = `খুব অল্প সময়ে অনেকগুলো প্রশ্ন করা হয়েছে। অনুগ্রহ করে ${decision.retryAfterSeconds} সেকেন্ড পর আবার চেষ্টা করুন।`;
+export function rateLimitResponse(
+  decision: Extract<RateDecision, { allowed: false }>,
+  subject = "প্রশ্ন",
+): Response {
+  const message = `খুব অল্প সময়ে অনেকগুলো ${subject} করা হয়েছে। অনুগ্রহ করে ${decision.retryAfterSeconds} সেকেন্ড পর আবার চেষ্টা করুন।`;
 
   return new Response(
     JSON.stringify({ error: message, retryAfterSeconds: decision.retryAfterSeconds }),

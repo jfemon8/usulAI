@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { clsx } from "clsx";
+import { AnnouncementBanner } from "@/components/chat/AnnouncementBanner";
 import { ChatWindow } from "@/components/chat/ChatWindow";
 import { CloseIcon, MenuIcon, PenIcon, SidebarIcon, TrashIcon } from "@/components/ui/Icons";
 import { LogoMark } from "@/components/ui/Logo";
@@ -12,6 +13,7 @@ import {
   upsertConversation,
   type Conversation,
 } from "@/lib/chat/conversations";
+import { DEFAULT_HOME_CONTENT, type HomeContent } from "@/lib/site/contentShape";
 import type { UsulUIMessage } from "@/types";
 
 interface ActiveChat {
@@ -158,7 +160,13 @@ function SidebarContent({
   );
 }
 
-export function ChatApp({ compact = false }: { compact?: boolean }) {
+export function ChatApp({
+  compact = false,
+  homeContent = DEFAULT_HOME_CONTENT,
+}: {
+  compact?: boolean;
+  homeContent?: HomeContent;
+}) {
   const [active, setActive] = useState<ActiveChat>(newChat);
   const stored = useSyncExternalStore(
     conversationStore.subscribe,
@@ -222,8 +230,11 @@ export function ChatApp({ compact = false }: { compact?: boolean }) {
       initialMessages={active.messages}
       onMessagesSettled={handleSettled}
       compact={compact}
+      homeContent={homeContent}
     />
   );
+
+  const banner = <AnnouncementBanner announcement={homeContent.announcement} compact={compact} />;
 
   if (compact) {
     return (
@@ -234,6 +245,7 @@ export function ChatApp({ compact = false }: { compact?: boolean }) {
             <PenIcon className="h-4 w-4" />
           </IconButton>
         </header>
+        {banner}
         {chat}
       </div>
     );
@@ -318,6 +330,7 @@ export function ChatApp({ compact = false }: { compact?: boolean }) {
             <PenIcon className="h-5 w-5" />
           </IconButton>
         </header>
+        {banner}
         {chat}
       </main>
     </div>

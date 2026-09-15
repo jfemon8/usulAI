@@ -37,17 +37,6 @@ export function formatDuration(ms: number): string {
   return `${bn(seconds)} সেকেন্ড`;
 }
 
-const dayMonthFormat = new Intl.DateTimeFormat("bn-BD", { day: "numeric", month: "long" });
-const timeFormat = new Intl.DateTimeFormat("bn-BD", {
-  hour: "2-digit",
-  minute: "2-digit",
-  hourCycle: "h23",
-});
-
-export function formatClock(timestamp: number): string {
-  return `${dayMonthFormat.format(timestamp)}, ${timeFormat.format(timestamp)}`;
-}
-
 export interface LocalUsage {
   conversations: number;
   messages: number;

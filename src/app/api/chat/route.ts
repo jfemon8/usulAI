@@ -11,6 +11,7 @@ import { ANSWER_PRIORITY_HEADERS, getModelChain, type TieredModel } from "@/lib/
 import { rewriteQuery, type ConversationTurn } from "@/lib/ai/queryRewriter";
 import { buildSystemPrompt, buildRagPrompt } from "@/lib/ai/prompt";
 import { findVerifiedAnswer } from "@/lib/analytics/verifiedAnswers";
+import { loadAiSettings } from "@/lib/site/aiSettings";
 import { retrieveForQuestion } from "@/lib/retrieval/search";
 import { previousSourceReferences } from "@/lib/retrieval/carryForward";
 import { findChunksByReferences } from "@/lib/retrieval/vectorStore";
@@ -120,6 +121,7 @@ export async function POST(request: Request) {
     );
   }
   quranVerseIndex();
+  const aiSettings = await loadAiSettings();
   const history = toHistory(messages);
   if (history.length > 0) void learnFromFollowUp(messages, clientKey(request));
   const language = detectConversationLanguage(
@@ -127,7 +129,10 @@ export async function POST(request: Request) {
     history.filter((turn) => turn.role === "user").map((turn) => turn.text),
   );
 
-  const verified = history.length === 0 ? await findVerifiedAnswer(question) : null;
+  const verified =
+    history.length === 0 && aiSettings.verifiedAnswersEnabled
+      ? await findVerifiedAnswer(question)
+      : null;
 
   if (verified) {
     return createUIMessageStreamResponse({
@@ -175,7 +180,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const system = buildSystemPrompt();
+  const system = buildSystemPrompt(aiSettings.extraInstructions);
   const prompt = buildRagPrompt(question, context, history);
   const gateInput: GateInput = {
     contextTexts: context.map((chunk) => sanitizeSourceContent(chunk.content)),

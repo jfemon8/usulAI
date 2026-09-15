@@ -137,6 +137,46 @@ describe("planIngestion", () => {
     expect(plan.unchanged).toBe(1);
   });
 
+  it("never overwrites a document an admin edited, whether its text or metadata differ", () => {
+    const plan = planIngestion(
+      [document("1:1", "loader text"), document("1:2", "b", { surahName: "Loader" })],
+      [
+        stored("x1", "1:1", "admin text", { metadata: { adminEdited: true } }),
+        stored("x2", "1:2", "b", { metadata: { surahName: "Admin", adminEdited: true } }),
+      ],
+    );
+
+    expect(plan.changed).toHaveLength(0);
+    expect(plan.metadataOnly).toHaveLength(0);
+    expect(plan.inserts).toHaveLength(0);
+    expect(plan.unchanged).toBe(2);
+  });
+
+  it("never prunes an admin edited or admin created document missing from the source", () => {
+    const plan = planIngestion(
+      [document("1:1", "a")],
+      [
+        stored("x1", "1:1", "a"),
+        stored("admin", "9:9", "added by admin", { metadata: { adminEdited: true } }),
+        stored("gone", "9:10", "gone"),
+      ],
+    );
+
+    expect(plan.stale).toEqual(["gone"]);
+  });
+
+  it("still plans ordinary changes beside an admin edited document", () => {
+    const plan = planIngestion(
+      [document("1:1", "revised"), document("1:2", "loader")],
+      [
+        stored("x1", "1:1", "original"),
+        stored("x2", "1:2", "admin", { metadata: { adminEdited: false } }),
+      ],
+    );
+
+    expect(plan.changed.map((item) => item.id)).toEqual(["x1", "x2"]);
+  });
+
   it("does not insert the same reference twice when the source repeats it", () => {
     const plan = planIngestion([document("1:1", "a"), document("1:1", "a")], []);
 

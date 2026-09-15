@@ -1,5 +1,5 @@
 import type { Collection, Db, Document, IndexSpecification } from "mongodb";
-import { DB_CONFIG, RETENTION_CONFIG, SELF_LEARNING_CONFIG } from "@/config/site";
+import { ADMIN_CONFIG, DB_CONFIG, RETENTION_CONFIG, SELF_LEARNING_CONFIG } from "@/config/site";
 import { logger } from "@/lib/utils/logger";
 
 const REDUNDANT_DOCUMENT_INDEXES = [
@@ -97,6 +97,19 @@ export async function ensureStorageIndexes(db: Db): Promise<{ dropped: string[] 
   await db
     .collection(DB_CONFIG.rateLimitCollection)
     .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await db
+    .collection(DB_CONFIG.adminSessionCollection)
+    .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await db.collection(DB_CONFIG.adminSessionCollection).createIndex({ email: 1 });
+  await db
+    .collection(DB_CONFIG.adminResetTokenCollection)
+    .createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+  await db.collection(DB_CONFIG.adminResetTokenCollection).createIndex({ email: 1, createdAt: 1 });
+  await ensureTtl(
+    db.collection(DB_CONFIG.adminAuditCollection),
+    "at",
+    ADMIN_CONFIG.auditDays * DAY_SECONDS,
+  );
 
   return { dropped };
 }

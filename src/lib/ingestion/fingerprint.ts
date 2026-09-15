@@ -92,6 +92,7 @@ export function planIngestion(
     const existing = survivors.get(reference);
 
     if (!existing) plan.inserts.push(document);
+    else if (existing.metadata.adminEdited === true) plan.unchanged += 1;
     else if (existing.hash !== contentHash(document.content)) {
       plan.changed.push({ id: existing.id, document });
     } else if (describedChanged(document, existing)) {
@@ -109,7 +110,7 @@ export function planIngestion(
     if (seen.has(reference)) continue;
     const privateFileMissing =
       record.metadata.restricted === true && !loadedFiles.has(record.metadata.fileName);
-    if (!privateFileMissing) plan.stale.push(record.id);
+    if (!privateFileMissing && record.metadata.adminEdited !== true) plan.stale.push(record.id);
   }
 
   return plan;

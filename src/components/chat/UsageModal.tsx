@@ -8,7 +8,6 @@ import { conversationStore } from "@/lib/chat/conversations";
 import type { UsageResponse, WindowUsage } from "@/lib/usage/types";
 import {
   bn,
-  formatClock,
   formatDuration,
   localUsage,
   remainingToday,
@@ -16,6 +15,7 @@ import {
   usageRatio,
   type UsageLevel,
 } from "@/lib/usage/usageView";
+import { formatTimestamp } from "@/lib/utils/dateTime";
 import type { UsulUIMessage } from "@/types";
 
 interface UsageModalProps {
@@ -610,7 +610,7 @@ export function UsageModal({ open, onClose, messages, persistent }: UsageModalPr
           ) : null}
 
           <p className="border-t border-(--border) pt-4 text-xs leading-5 text-(--text-3)">
-            {data ? `সর্বশেষ হালনাগাদ ${formatClock(state.fetchedAt)}। ` : ""}
+            {data ? `সর্বশেষ হালনাগাদ ${formatTimestamp(state.fetchedAt)}। ` : ""}
             যেকোনো সময় Chat Box-এ{" "}
             <code className="rounded bg-(--surface-2) px-1 font-mono">/usage</code> লিখে এই হিসাব
             দেখতে পারবেন।

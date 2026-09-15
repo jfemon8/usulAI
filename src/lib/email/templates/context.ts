@@ -1,5 +1,6 @@
 import { EMAIL_CONFIG, SITE_NAME } from "@/config/site";
 import { getEmailEnv } from "@/lib/utils/env";
+import { formatTimestamp } from "@/lib/utils/dateTime";
 import { siteUrl } from "@/lib/utils/siteUrl";
 
 export type EmailLocale = "bn" | "en";
@@ -63,16 +64,7 @@ export function appLink(
 }
 
 export function formatDateTime(context: EmailContext, date: Date): string {
-  return new Intl.DateTimeFormat(context.locale === "bn" ? "bn-BD" : "en-GB", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    hourCycle: "h23",
-    timeZoneName: "short",
-    timeZone: context.timeZone,
-  }).format(date);
+  return formatTimestamp(date, { timeZone: context.timeZone }) ?? "";
 }
 
 export function formatCount(context: EmailContext, value: number): string {

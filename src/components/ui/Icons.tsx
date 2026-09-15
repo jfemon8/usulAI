@@ -168,3 +168,152 @@ export const ArrowDownIcon = (props: IconProps) => (
     <path d="M12 5v14M5 12l7 7 7-7" />
   </Base>
 );
+
+export const DashboardIcon = (props: IconProps) => (
+  <Base {...props}>
+    <rect x="3" y="3" width="7" height="9" rx="1.5" />
+    <rect x="14" y="3" width="7" height="5" rx="1.5" />
+    <rect x="14" y="12" width="7" height="9" rx="1.5" />
+    <rect x="3" y="16" width="7" height="5" rx="1.5" />
+  </Base>
+);
+
+export const BookIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z" />
+    <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H20v3H6.5A2.5 2.5 0 0 1 4 20.5zM9 7h7M9 11h5" />
+  </Base>
+);
+
+export const BadgeCheckIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M12 3l2.4 1.8 3-.2.9 2.9 2.4 1.8-1 2.8 1 2.8-2.4 1.8-.9 2.9-3-.2L12 21l-2.4-1.8-3 .2-.9-2.9-2.4-1.8 1-2.8-1-2.8 2.4-1.8.9-2.9 3 .2z" />
+    <path d="M8.5 12l2.5 2.5 4.5-5" />
+  </Base>
+);
+
+export const LayoutIcon = (props: IconProps) => (
+  <Base {...props}>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <path d="M3 9h18M9 20V9" />
+  </Base>
+);
+
+export const SparklesIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
+    <path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z" />
+  </Base>
+);
+
+export const FolderIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M3 7a2 2 0 0 1 2-2h4l2 2.5h8a2 2 0 0 1 2 2V18a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+  </Base>
+);
+
+export const ImageIcon = (props: IconProps) => (
+  <Base {...props}>
+    <rect x="3" y="4" width="18" height="16" rx="2.5" />
+    <circle cx="9" cy="9.5" r="1.8" />
+    <path d="M21 16l-5-5-9 9" />
+  </Base>
+);
+
+export const DatabaseIcon = (props: IconProps) => (
+  <Base {...props}>
+    <ellipse cx="12" cy="5.5" rx="8" ry="2.5" />
+    <path d="M4 5.5v13c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5v-13M4 12c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5" />
+  </Base>
+);
+
+export const ListIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M9 6h11M9 12h11M9 18h11" />
+    <circle cx="4.5" cy="6" r="1" fill="currentColor" stroke="none" />
+    <circle cx="4.5" cy="12" r="1" fill="currentColor" stroke="none" />
+    <circle cx="4.5" cy="18" r="1" fill="currentColor" stroke="none" />
+  </Base>
+);
+
+export const UserIcon = (props: IconProps) => (
+  <Base {...props}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M4 21a8 8 0 0 1 16 0" />
+  </Base>
+);
+
+export const LogoutIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4" />
+    <path d="M10 16l-4-4 4-4M6 12h10" />
+  </Base>
+);
+
+export const SearchIcon = (props: IconProps) => (
+  <Base {...props}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20.5 20.5l-4.55-4.55" />
+  </Base>
+);
+
+export const PlusIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M12 5v14M5 12h14" />
+  </Base>
+);
+
+export const UploadIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M12 16V5M7 9.5l5-5 5 5" />
+    <path d="M5 19.5h14" />
+  </Base>
+);
+
+export const LockIcon = (props: IconProps) => (
+  <Base {...props}>
+    <rect x="4" y="10.5" width="16" height="10.5" rx="2.5" />
+    <path d="M8 10.5V7a4 4 0 0 1 8 0v3.5" />
+  </Base>
+);
+
+export const EyeIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+    <circle cx="12" cy="12" r="3" />
+  </Base>
+);
+
+export const EyeOffIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M3 3l18 18M10.6 5.1A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a17.6 17.6 0 0 1-3.2 4.1M6.6 6.6C3.8 8.4 2 12 2 12s3.6 7 10 7a9.8 9.8 0 0 0 5.4-1.6" />
+    <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
+  </Base>
+);
+
+export const MailIcon = (props: IconProps) => (
+  <Base {...props}>
+    <rect x="3" y="5" width="18" height="14" rx="2.5" />
+    <path d="M3.5 6.5l8.5 6.5 8.5-6.5" />
+  </Base>
+);
+
+export const AlertIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M12 3.5l9.5 16.5h-19z" />
+    <path d="M12 10v4.5M12 17.5v.01" />
+  </Base>
+);
+
+export const HomeIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M3.5 11L12 4l8.5 7M5.5 9.5V20h13V9.5" />
+    <path d="M10 20v-5h4v5" />
+  </Base>
+);
+
+export const QuranIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M12 6.5C10 5 7 4.5 3.5 5v13.5c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5V20" />
+  </Base>
+);

@@ -3,8 +3,16 @@ import { groq } from "@ai-sdk/groq";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { openrouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
-import { MODEL_CHAIN, MODEL_CONFIG, OPENROUTER_FALLBACK_MODELS, ZAI_CONFIG } from "@/config/site";
+import {
+  ANSWER_GATE_CONFIG,
+  MODEL_CHAIN,
+  MODEL_CONFIG,
+  OPENROUTER_FALLBACK_MODELS,
+  ZAI_CONFIG,
+} from "@/config/site";
 import { createSlotGate, releaseWhenConsumed, SLOT_LEVEL, type SlotGate } from "@/lib/ai/slotGate";
+import { aiSettingsSnapshot } from "@/lib/site/aiSettings";
+import { enabledModels } from "@/lib/site/contentShape";
 import { getEmbeddingEnv } from "@/lib/utils/env";
 
 export type ModelTier = (typeof MODEL_CHAIN)[number];
@@ -130,12 +138,45 @@ export function getModelChain(): TieredModel[] {
     );
   }
 
-  return configured.flatMap((tier) =>
+  const chain = configured.flatMap((tier) =>
     TIER_FACTORIES[tier]().map(({ modelId, model }) => ({
       tier,
       provider: MODEL_CONFIG[tier].provider,
       modelId,
       model,
+    })),
+  );
+
+  return enabledModels(chain, aiSettingsSnapshot().disabledModels);
+}
+
+export interface ChainModelDescription {
+  tier: ModelTier;
+  provider: string;
+  modelId: string;
+  keyName: string;
+  keyConfigured: boolean;
+  trusted: boolean;
+  excludedFromAnswers: boolean;
+}
+
+const TIER_MODEL_IDS: Record<ModelTier, () => readonly string[]> = {
+  primary: () => [MODEL_CONFIG.primary.model],
+  secondary: () => [MODEL_CONFIG.secondary.model],
+  fallback: () => [MODEL_CONFIG.fallback.model, ...OPENROUTER_FALLBACK_MODELS],
+  reserve: () => ZAI_CONFIG.models,
+};
+
+export function describeModelChain(): ChainModelDescription[] {
+  return MODEL_CHAIN.flatMap((tier) =>
+    TIER_MODEL_IDS[tier]().map((modelId) => ({
+      tier,
+      provider: MODEL_CONFIG[tier].provider,
+      modelId,
+      keyName: TIER_KEYS[tier],
+      keyConfigured: Boolean(process.env[TIER_KEYS[tier]]),
+      trusted: ANSWER_GATE_CONFIG.trustedModels.includes(modelId),
+      excludedFromAnswers: ANSWER_GATE_CONFIG.excludedAnswerModels.includes(modelId),
     })),
   );
 }

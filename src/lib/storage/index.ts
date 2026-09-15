@@ -4,7 +4,7 @@ import { getStorageEnv } from "@/lib/utils/env";
 
 let configured = false;
 
-function getClient() {
+export function cloudinaryClient() {
   if (!configured) {
     const env = getStorageEnv();
     cloudinary.config({
@@ -27,7 +27,7 @@ export async function uploadRawDocument(
   file: Buffer,
   { restricted = false }: { restricted?: boolean } = {},
 ): Promise<string> {
-  const client = getClient();
+  const client = cloudinaryClient();
   const id = publicId(path);
 
   const result = await new Promise<{ public_id: string }>((resolve, reject) => {
@@ -51,7 +51,7 @@ export async function uploadRawDocument(
 }
 
 export function getRawDocumentUrl(key: string): string {
-  return getClient().url(key, { resource_type: "raw", secure: true });
+  return cloudinaryClient().url(key, { resource_type: "raw", secure: true });
 }
 
 export async function downloadRawDocument(key: string): Promise<Buffer> {
@@ -65,5 +65,5 @@ export async function downloadRawDocument(key: string): Promise<Buffer> {
 }
 
 export async function deleteRawDocument(key: string): Promise<void> {
-  await getClient().uploader.destroy(key, { resource_type: "raw", invalidate: true });
+  await cloudinaryClient().uploader.destroy(key, { resource_type: "raw", invalidate: true });
 }

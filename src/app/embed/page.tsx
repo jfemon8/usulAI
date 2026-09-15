@@ -1,5 +1,9 @@
 import { ChatApp } from "@/components/chat/ChatApp";
+import { loadHomeContent } from "@/lib/site/siteContent";
 
-export default function EmbedPage() {
-  return <ChatApp compact />;
+export const revalidate = 300;
+
+export default async function EmbedPage() {
+  const homeContent = await loadHomeContent();
+  return <ChatApp compact homeContent={homeContent} />;
 }

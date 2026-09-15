@@ -58,6 +58,10 @@ const emailShape = {
   EMAIL_LOGO_URL: blank(z.string().url().optional()),
 };
 
+const adminShape = {
+  ADMIN_INITIAL_PASSWORD: blank(z.string().min(6).optional()),
+};
+
 const appSchema = z.object(appShape);
 const aiSchema = z.object(aiShape);
 const embeddingSchema = z.object(embeddingShape);
@@ -65,6 +69,7 @@ const dbSchema = z.object(dbShape);
 const storageSchema = z.object(storageShape);
 const sourcesSchema = z.object(sourcesShape);
 const emailSchema = z.object(emailShape);
+const adminSchema = z.object(adminShape);
 
 const envSchema = z.object({
   ...appShape,
@@ -73,6 +78,7 @@ const envSchema = z.object({
   ...storageShape,
   ...sourcesShape,
   ...emailShape,
+  ...adminShape,
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -95,4 +101,5 @@ export const getDbEnv = scoped(dbSchema);
 export const getStorageEnv = scoped(storageSchema);
 export const getSourcesEnv = scoped(sourcesSchema);
 export const getEmailEnv = scoped(emailSchema);
+export const getAdminEnv = scoped(adminSchema);
 export const getEnv = scoped(envSchema);

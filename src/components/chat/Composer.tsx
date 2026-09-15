@@ -3,14 +3,14 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 import { clsx } from "clsx";
 import { ArrowUpIcon, StopIcon } from "@/components/ui/Icons";
-import { RATE_LIMIT_CONFIG, USAGE_CONFIG } from "@/config/site";
-import { isUsageCommand } from "@/lib/usage/usageView";
+import { RATE_LIMIT_CONFIG } from "@/config/site";
+import { commandSuggestions, matchCommand, type ChatCommand } from "@/lib/chat/commands";
 
 interface ComposerProps {
   value: string;
   onChange: (value: string) => void;
   onSubmit: () => void;
-  onCommand?: () => void;
+  onCommand?: (command: ChatCommand) => void;
   onStop: () => void;
   busy: boolean;
   autoFocus?: boolean;
@@ -28,14 +28,14 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
   ref,
 ) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const command = isUsageCommand(value);
-  const canSend = (command && onCommand !== undefined) || (!busy && value.trim().length > 0);
+  const command = matchCommand(value);
+  const canSend =
+    (command !== null && onCommand !== undefined) || (!busy && value.trim().length > 0);
   const submit = () => {
-    if (command && onCommand) onCommand();
+    if (command && onCommand) onCommand(command);
     else if (canSend) onSubmit();
   };
-  const showCommandHint =
-    value.startsWith("/") && USAGE_CONFIG.command.startsWith(value.trim().toLowerCase());
+  const suggestions = onCommand ? commandSuggestions(value) : [];
 
   useImperativeHandle(ref, () => ({ focus: () => textareaRef.current?.focus() }), []);
 
@@ -52,20 +52,29 @@ export const Composer = forwardRef<ComposerHandle, ComposerProps>(function Compo
 
   return (
     <div className="relative">
-      {showCommandHint && onCommand ? (
-        <button
-          type="button"
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={() => {
-            onCommand?.();
-          }}
-          className="absolute inset-x-2 bottom-full mb-2 flex items-center gap-3 rounded-2xl border border-(--border) bg-(--bg) px-4 py-3 text-left shadow-(--composer-shadow) transition hover:bg-(--surface-2)"
+      {suggestions.length > 0 && onCommand ? (
+        <div
+          role="listbox"
+          aria-label="কমান্ড"
+          className="absolute inset-x-2 bottom-full mb-2 overflow-hidden rounded-2xl border border-(--border) bg-(--bg) shadow-(--composer-shadow)"
         >
-          <code className="rounded-md bg-(--surface-2) px-2 py-0.5 font-mono text-sm text-(--text-1)">
-            {USAGE_CONFIG.command}
-          </code>
-          <span className="text-sm text-(--text-2)">ব্যবহার এবং সংরক্ষিত তথ্যের হিসাব দেখুন</span>
-        </button>
+          {suggestions.map((entry) => (
+            <button
+              key={entry.command}
+              type="button"
+              role="option"
+              aria-selected={entry.command === command}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={() => onCommand(entry.command)}
+              className="flex w-full items-center gap-3 border-b border-(--border) px-4 py-3 text-left transition last:border-b-0 hover:bg-(--surface-2)"
+            >
+              <code className="rounded-md bg-(--surface-2) px-2 py-0.5 font-mono text-sm text-(--text-1)">
+                {entry.command}
+              </code>
+              <span className="min-w-0 truncate text-sm text-(--text-2)">{entry.description}</span>
+            </button>
+          ))}
+        </div>
       ) : null}
       <form
         className={clsx(

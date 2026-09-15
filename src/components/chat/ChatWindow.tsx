@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useRouter } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { clsx } from "clsx";
@@ -11,7 +12,9 @@ import { SourceCitationList } from "@/components/chat/SourceCitation";
 import { UsageModal } from "@/components/chat/UsageModal";
 import { ArrowDownIcon, RetryIcon } from "@/components/ui/Icons";
 import { LogoMark } from "@/components/ui/Logo";
+import { ADMIN_CONFIG } from "@/config/site";
 import { messageText } from "@/lib/chat/conversations";
+import { DEFAULT_HOME_CONTENT, type HomeContent } from "@/lib/site/contentShape";
 import { readableChatError } from "@/lib/utils/chatError";
 import type { AnswerSource, UsulUIMessage } from "@/types";
 
@@ -20,98 +23,29 @@ interface ChatWindowProps {
   initialMessages?: UsulUIMessage[];
   onMessagesSettled?: (messages: UsulUIMessage[]) => void;
   compact?: boolean;
+  homeContent?: HomeContent;
 }
-
-const QUESTION_POOL = [
-  "নামাজের শর্ত কী কী?",
-  "যাকাত কাদের উপর ফরজ?",
-  "রোজা ভেঙে গেলে করণীয় কী?",
-  "অজু ভঙ্গের কারণগুলো কী কী?",
-  "তাহাজ্জুদ নামাজের ফজিলত কী?",
-  "সুদ সম্পর্কে কুরআনে কী নির্দেশনা এসেছে?",
-  "মা-বাবার সাথে আচরণ নিয়ে ইসলাম কী বলে?",
-  "জুমার দিনের আমলগুলো কী কী?",
-  "হজ কার উপর ফরজ হয়?",
-  "গীবত কাকে বলে, এর বিধান কী?",
-  "তাওবার শর্তগুলো কী কী?",
-  "প্রতিবেশীর হক সম্পর্কে হাদিসে কী আছে?",
-  "ধৈর্য সম্পর্কে কুরআন কী বলে?",
-  "ইয়াতিমের অধিকার নিয়ে ইসলাম কী বলে?",
-  "ঋণ পরিশোধ নিয়ে শরীয়তের বিধান কী?",
-  "মিথ্যা বলার ব্যাপারে হাদিসে কী সতর্কতা আছে?",
-  "ফজরের নামাজের ফজিলত কী?",
-  "জামাআতে নামাজ পড়ার গুরুত্ব কী?",
-  "সফরে নামাজ কসর করার নিয়ম কী?",
-  "তায়াম্মুম কখন করা যায়?",
-  "ফরজ গোসল কখন ওয়াজিব হয়?",
-  "রমযানের শেষ দশকের আমল কী?",
-  "লাইলাতুল কদরের ফজিলত কী?",
-  "সাদাকাতুল ফিতর কাদের উপর ওয়াজিব?",
-  "কুরবানি কার উপর ওয়াজিব?",
-  "উমরা করার ফজিলত কী?",
-  "ইতিকাফের বিধান কী?",
-  "দুআ কবুলের সময়গুলো কী কী?",
-  "সকাল-সন্ধ্যার যিকিরের ফজিলত কী?",
-  "দরুদ পাঠের ফজিলত কী?",
-  "কুরআন তিলাওয়াতের ফজিলত সম্পর্কে হাদিসে কী আছে?",
-  "সূরা ফাতিহার গুরুত্ব কী?",
-  "আয়াতুল কুরসির ফজিলত কী?",
-  "শিরক কাকে বলে, এর পরিণাম কী?",
-  "তাকদিরে বিশ্বাস সম্পর্কে ইসলাম কী বলে?",
-  "কিয়ামতের আলামত সম্পর্কে হাদিসে কী এসেছে?",
-  "জান্নাতে যাওয়ার আমলগুলো কী কী?",
-  "অহংকার সম্পর্কে কুরআন কী বলে?",
-  "হিংসা থেকে বাঁচার উপায় কী?",
-  "রাগ নিয়ন্ত্রণ সম্পর্কে হাদিসে কী আছে?",
-  "আত্মীয়তার সম্পর্ক ছিন্ন করার পরিণাম কী?",
-  "স্ত্রীর প্রতি স্বামীর দায়িত্ব কী?",
-  "সন্তানের প্রতি বাবা-মায়ের দায়িত্ব কী?",
-  "বিয়ের সুন্নত পদ্ধতি কী?",
-  "মোহরানা সম্পর্কে কুরআন কী বলে?",
-  "তালাকের বিধান কী?",
-  "পর্দা সম্পর্কে কুরআনে কী নির্দেশ এসেছে?",
-  "মদ ও জুয়া সম্পর্কে কুরআন কী বলে?",
-  "ব্যবসায় সততা সম্পর্কে হাদিসে কী আছে?",
-  "ওজনে কম দেওয়ার শাস্তি কী?",
-  "ঘুষ দেওয়া-নেওয়ার বিধান কী?",
-  "অন্যের সম্পদ অন্যায়ভাবে খাওয়ার পরিণাম কী?",
-  "মিসকিনকে খাওয়ানোর ফজিলত কী?",
-  "অসুস্থ ব্যক্তিকে দেখতে যাওয়ার ফজিলত কী?",
-  "জানাযার নামাজের ফজিলত কী?",
-  "কবর জিয়ারতের বিধান কী?",
-  "মৃত ব্যক্তির জন্য কোন আমল কাজে আসে?",
-  "খাবার খাওয়ার সুন্নতগুলো কী কী?",
-  "ঘুমানোর আগের সুন্নত আমল কী?",
-  "মেহমানদারির গুরুত্ব কী?",
-  "সৎকাজের আদেশ ও অসৎকাজে নিষেধের গুরুত্ব কী?",
-  "শুকরিয়া আদায় সম্পর্কে কুরআন কী বলে?",
-  "বিপদে ধৈর্য ধরার পুরস্কার কী?",
-  "জ্ঞান অর্জনের ফজিলত সম্পর্কে হাদিসে কী আছে?",
-  "প্রতিশ্রুতি রক্ষা সম্পর্কে কুরআন কী বলে?",
-  "জিহ্বার হেফাজত সম্পর্কে হাদিসে কী আছে?",
-  "নিয়তের গুরুত্ব সম্পর্কে হাদিস কী?",
-];
 
 const NO_SUGGESTIONS: string[] = [];
 const BOTTOM_THRESHOLD_PX = 96;
-let cachedSuggestions: string[] | null = null;
+let cachedSuggestions: { pool: readonly string[]; picked: string[] } | null = null;
 
-function pickSuggestions(): string[] {
-  if (cachedSuggestions) return cachedSuggestions;
-  const pool = [...QUESTION_POOL];
+function pickSuggestions(questionPool: readonly string[]): string[] {
+  if (cachedSuggestions?.pool === questionPool) return cachedSuggestions.picked;
+  const pool = [...questionPool];
   const picked: string[] = [];
   while (picked.length < 4 && pool.length > 0) {
     const [question] = pool.splice(Math.floor(Math.random() * pool.length), 1);
     if (question) picked.push(question);
   }
-  cachedSuggestions = picked;
+  cachedSuggestions = { pool: questionPool, picked };
   return picked;
 }
 
-function useSuggestions(): string[] {
+function useSuggestions(questionPool: readonly string[]): string[] {
   return useSyncExternalStore(
     () => () => {},
-    pickSuggestions,
+    () => pickSuggestions(questionPool),
     () => NO_SUGGESTIONS,
   );
 }
@@ -174,8 +108,16 @@ function ThinkingRow({ foundSources }: { foundSources: boolean }) {
   );
 }
 
-function EmptyState({ onPick, compact }: { onPick: (question: string) => void; compact: boolean }) {
-  const suggestions = useSuggestions();
+function EmptyState({
+  onPick,
+  compact,
+  content,
+}: {
+  onPick: (question: string) => void;
+  compact: boolean;
+  content: HomeContent;
+}) {
+  const suggestions = useSuggestions(content.suggestions);
 
   return (
     <div className="flex w-full flex-col items-center text-center">
@@ -187,21 +129,22 @@ function EmptyState({ onPick, compact }: { onPick: (question: string) => void; c
       >
         <LogoMark className={compact ? "h-7 w-7" : "h-9 w-9"} />
       </div>
-      <p className="arabic mb-1 text-center text-(--text-2)" dir="rtl">
-        بِسْمِ ٱللَّهِ ٱلرَّحْمَٰنِ ٱلرَّحِيمِ
-      </p>
+      {content.bismillah ? (
+        <p className="arabic mb-1 text-center text-(--text-2)" dir="rtl">
+          {content.bismillah}
+        </p>
+      ) : null}
       <h2
         className={clsx(
           "font-semibold tracking-tight text-(--text-1)",
           compact ? "text-xl" : "text-2xl sm:text-[1.75rem]",
         )}
       >
-        আসসালামু আলাইকুম, কী জানতে চান?
+        {content.greeting}
       </h2>
-      <p className="mt-2 max-w-xl text-sm text-balance text-(--text-3)">
-        আপনার প্রশ্নের উত্তর আসবে শুধুমাত্র কুরআন, হাদিস, ইজমা, কিয়াস ও সীরাতের দলিল থেকে,
-        ইং-শা-আল্লাহ।
-      </p>
+      {content.subtitle ? (
+        <p className="mt-2 max-w-xl text-sm text-balance text-(--text-3)">{content.subtitle}</p>
+      ) : null}
 
       {suggestions.length > 0 ? (
         <div
@@ -234,8 +177,10 @@ export function ChatWindow({
   initialMessages,
   onMessagesSettled,
   compact = false,
+  homeContent = DEFAULT_HOME_CONTENT,
 }: ChatWindowProps) {
   const [input, setInput] = useState("");
+  const router = useRouter();
   const [usageOpen, setUsageOpen] = useState(false);
   const closeUsage = useCallback(() => setUsageOpen(false), []);
   const [atBottom, setAtBottom] = useState(true);
@@ -320,9 +265,17 @@ export function ChatWindow({
       value={input}
       onChange={setInput}
       onSubmit={() => send(input)}
-      onCommand={() => {
+      onCommand={(command) => {
         setInput("");
-        setUsageOpen(true);
+        if (command === "/usage") {
+          setUsageOpen(true);
+          return;
+        }
+        if (compact || window.self !== window.top) {
+          window.open(ADMIN_CONFIG.paths.dashboard, "_blank", "noopener");
+          return;
+        }
+        router.push(ADMIN_CONFIG.paths.dashboard);
       }}
       onStop={() => void stop()}
       busy={isLoading}
@@ -345,7 +298,7 @@ export function ChatWindow({
           )}
         >
           <div className={clsx("mx-auto w-full py-6", column)}>
-            <EmptyState onPick={send} compact={compact} />
+            <EmptyState onPick={send} compact={compact} content={homeContent} />
             {!compact ? <div className="mt-6 hidden md:block">{composer}</div> : null}
           </div>
         </div>

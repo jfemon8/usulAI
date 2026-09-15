@@ -37,6 +37,11 @@ export function unpackSurahNotes(notes: Binary): SurahNotes {
 
 const cache = createLru<SurahNotes>(QURANENC_CONFIG.notesCacheSurahs);
 
+export function forgetSurahNotes(surah: number): void {
+  const key = String(surah);
+  cache.deleteWhere((_, cached) => cached === key);
+}
+
 async function notesCollection() {
   return (await getDb()).collection<StoredSurahNotes>(DB_CONFIG.quranNotesCollection);
 }

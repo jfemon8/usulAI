@@ -1,5 +1,10 @@
 export const SITE_NAME = "Usul AI";
 
+export const DATE_TIME_CONFIG = {
+  timeZone: "Asia/Dhaka",
+  locale: "en-US",
+} as const;
+
 export const SOURCE_PRIORITY = ["quran", "hadith", "ijma", "qiyas", "sirat", "fiqh"] as const;
 
 type SourceName = (typeof SOURCE_PRIORITY)[number];
@@ -155,6 +160,11 @@ export const DB_CONFIG = {
   rateLimitCollection: "rate_limits",
   sourceTranslationCollection: "source_translations",
   learningCollection: "learned_memory",
+  adminAccountCollection: "admin_accounts",
+  adminSessionCollection: "admin_sessions",
+  adminResetTokenCollection: "admin_reset_tokens",
+  adminAuditCollection: "admin_audit",
+  siteContentCollection: "site_content",
   vectorIndex: "documents_embedding_idx",
   textIndex: "documents_text_idx",
   embeddingPath: "embedding",
@@ -317,7 +327,7 @@ export const EMAIL_CONFIG = {
     welcome: "Welcome",
   },
   defaultLocale: "bn",
-  timeZone: "Asia/Dhaka",
+  timeZone: DATE_TIME_CONFIG.timeZone,
   logoPath: "/pwa/icon-192.png",
   links: {
     passwordReset: "/reset-password",
@@ -1118,10 +1128,45 @@ export const RATE_LIMIT_CONFIG = {
     maintenance: { minute: 1, hour: 2, day: 4 },
     sourceView: { minute: 30, hour: 300, day: 1000 },
     usage: { minute: 20, hour: 200, day: 1000 },
+    admin: { minute: 240, hour: 5000, day: 40000 },
+    adminLogin: { minute: 5, hour: 20, day: 60 },
+    adminReset: { minute: 6, hour: 30, day: 60 },
   },
   maxQuestionChars: 1000,
   maxMessages: 30,
 } as const;
+
+export const ADMIN_CONFIG = {
+  command: "/admin",
+  accounts: ["jfemon8@gmail.com", "emon.usulai@gmail.com"],
+  sessionCookie: "usul_admin_session",
+  sessionDays: 7,
+  sessionTouchMinutes: 10,
+  resetMinutes: 60,
+  maxResetRequestsPerHour: 3,
+  minPasswordChars: 8,
+  maxPasswordChars: 128,
+  maxFailedLogins: 5,
+  lockoutMinutes: 15,
+  auditDays: 365,
+  pageSize: 25,
+  databasePageSize: 20,
+  filesPageSize: 30,
+  maxJsonDocumentBytes: 2_000_000,
+  scrypt: { cost: 32_768, blockSize: 8, parallelization: 1, keyLength: 64, maxMemory: 67_108_864 },
+  paths: {
+    dashboard: "/admin",
+    login: "/admin/login",
+    forgotPassword: "/admin/forgot-password",
+    resetPassword: "/admin/reset-password",
+  },
+  protectedCollections: ["admin_accounts", "admin_sessions", "admin_reset_tokens"],
+} as const;
+
+export const CHAT_COMMANDS = [
+  { command: "/usage", description: "ব্যবহার এবং সংরক্ষিত তথ্যের হিসাব দেখুন" },
+  { command: "/admin", description: "অ্যাডমিন প্যানেলে যান" },
+] as const;
 
 export const USAGE_CONFIG = {
   command: "/usage",
