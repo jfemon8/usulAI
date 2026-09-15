@@ -253,6 +253,8 @@ export const ANSWER_GATE_CONFIG = {
 
 export const CHAT_HISTORY_CONFIG = {
   storageKey: "usul-ai:conversations:v1",
+  storageKeyPrefix: "usul-ai:conversations:",
+  maxAgeMs: 365 * 24 * 60 * 60 * 1000,
   maxConversations: 30,
   maxMessagesPerConversation: 40,
   maxStorageBytes: 2_500_000,

@@ -1,8 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CHAT_HISTORY_CONFIG } from "@/config/site";
 import {
   deriveTitle,
+  dropExpired,
   fitToBudget,
+  loadConversations,
+  saveConversations,
   upsertConversation,
   type Conversation,
 } from "@/lib/chat/conversations";
@@ -60,5 +63,76 @@ describe("fitToBudget", () => {
     const fitted = fitToBudget(list, oneSize * 2 + 10);
 
     expect(fitted.map((item) => item.id)).toEqual(["new", "mid"]);
+  });
+});
+
+function memoryStorage(initial: Record<string, string> = {}): Storage {
+  const data = new Map(Object.entries(initial));
+  return {
+    get length() {
+      return data.size;
+    },
+    key: (index: number) => [...data.keys()][index] ?? null,
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => void data.set(key, value),
+    removeItem: (key: string) => void data.delete(key),
+    clear: () => data.clear(),
+  };
+}
+
+describe("automatic expiry of stored conversations", () => {
+  const now = Date.UTC(2027, 8, 15);
+  const day = 24 * 60 * 60 * 1000;
+  const fresh = conversation("fresh", now - 30 * day, [user("নামাজ")]);
+  const almostYear = conversation("almost", now - 364 * day, [user("রোজা")]);
+  const old = conversation("old", now - 366 * day, [user("যাকাত")]);
+  let storage: Storage;
+
+  beforeEach(() => {
+    storage = memoryStorage();
+    vi.stubGlobal("window", { localStorage: storage });
+  });
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("drops conversations not touched for more than a year", () => {
+    expect(dropExpired([fresh, almostYear, old], now).map((item) => item.id)).toEqual([
+      "fresh",
+      "almost",
+    ]);
+    const untouched = [fresh];
+    expect(dropExpired(untouched, now)).toBe(untouched);
+  });
+
+  it("removes expired conversations from localStorage when the app loads", () => {
+    storage.setItem(CHAT_HISTORY_CONFIG.storageKey, JSON.stringify([fresh, old]));
+
+    expect(loadConversations(now).map((item) => item.id)).toEqual(["fresh"]);
+    expect(JSON.parse(storage.getItem(CHAT_HISTORY_CONFIG.storageKey)!)).toHaveLength(1);
+  });
+
+  it("deletes the key entirely once everything has expired", () => {
+    storage.setItem(CHAT_HISTORY_CONFIG.storageKey, JSON.stringify([old]));
+
+    expect(loadConversations(now)).toEqual([]);
+    expect(storage.getItem(CHAT_HISTORY_CONFIG.storageKey)).toBeNull();
+  });
+
+  it("never writes expired conversations back when saving", () => {
+    expect(saveConversations([fresh, old], now).map((item) => item.id)).toEqual(["fresh"]);
+    expect(storage.getItem(CHAT_HISTORY_CONFIG.storageKey)).toContain("fresh");
+    expect(storage.getItem(CHAT_HISTORY_CONFIG.storageKey)).not.toContain('"old"');
+  });
+
+  it("clears unreadable data and storage keys left by older versions", () => {
+    storage.setItem(`${CHAT_HISTORY_CONFIG.storageKeyPrefix}v0`, "[]");
+    storage.setItem("unrelated-key", "keep");
+    storage.setItem(CHAT_HISTORY_CONFIG.storageKey, "{not json");
+
+    expect(loadConversations(now)).toEqual([]);
+    expect(storage.getItem(CHAT_HISTORY_CONFIG.storageKey)).toBeNull();
+    expect(storage.getItem(`${CHAT_HISTORY_CONFIG.storageKeyPrefix}v0`)).toBeNull();
+    expect(storage.getItem("unrelated-key")).toBe("keep");
   });
 });

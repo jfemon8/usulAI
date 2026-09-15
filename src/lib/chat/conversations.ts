@@ -35,6 +35,15 @@ export function upsertConversation(
     .slice(0, CHAT_HISTORY_CONFIG.maxConversations);
 }
 
+export function dropExpired(
+  list: Conversation[],
+  now: number = Date.now(),
+  maxAgeMs: number = CHAT_HISTORY_CONFIG.maxAgeMs,
+): Conversation[] {
+  const kept = list.filter((item) => now - item.updatedAt <= maxAgeMs);
+  return kept.length === list.length ? list : kept;
+}
+
 export function fitToBudget(list: Conversation[], maxBytes: number): Conversation[] {
   const kept = [...list];
   while (kept.length > 1 && new Blob([JSON.stringify(kept)]).size > maxBytes) kept.pop();
@@ -52,21 +61,57 @@ function isConversation(value: unknown): value is Conversation {
   );
 }
 
-export function loadConversations(): Conversation[] {
+function removeOutdatedKeys(storage: Storage): void {
+  const outdated: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (
+      key?.startsWith(CHAT_HISTORY_CONFIG.storageKeyPrefix) &&
+      key !== CHAT_HISTORY_CONFIG.storageKey
+    ) {
+      outdated.push(key);
+    }
+  }
+  for (const key of outdated) storage.removeItem(key);
+}
+
+export function loadConversations(now: number = Date.now()): Conversation[] {
   try {
-    const raw = window.localStorage.getItem(CHAT_HISTORY_CONFIG.storageKey);
+    const storage = window.localStorage;
+    removeOutdatedKeys(storage);
+
+    const raw = storage.getItem(CHAT_HISTORY_CONFIG.storageKey);
     if (!raw) return [];
+
     const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(isConversation) : [];
+    if (!Array.isArray(parsed)) {
+      storage.removeItem(CHAT_HISTORY_CONFIG.storageKey);
+      return [];
+    }
+
+    const valid = parsed.filter(isConversation);
+    const current = dropExpired(valid, now);
+    if (current.length !== parsed.length) persist(storage, current);
+    return current;
   } catch {
+    try {
+      window.localStorage.removeItem(CHAT_HISTORY_CONFIG.storageKey);
+    } catch {
+      return [];
+    }
     return [];
   }
 }
 
-export function saveConversations(list: Conversation[]): Conversation[] {
-  const fitted = fitToBudget(list, CHAT_HISTORY_CONFIG.maxStorageBytes);
+function persist(storage: Storage, list: Conversation[]): void {
+  if (list.length === 0) storage.removeItem(CHAT_HISTORY_CONFIG.storageKey);
+  else storage.setItem(CHAT_HISTORY_CONFIG.storageKey, JSON.stringify(list));
+}
+
+export function saveConversations(list: Conversation[], now: number = Date.now()): Conversation[] {
+  const fitted = fitToBudget(dropExpired(list, now), CHAT_HISTORY_CONFIG.maxStorageBytes);
   try {
-    window.localStorage.setItem(CHAT_HISTORY_CONFIG.storageKey, JSON.stringify(fitted));
+    persist(window.localStorage, fitted);
   } catch {
     return fitted;
   }
