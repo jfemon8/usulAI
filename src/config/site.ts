@@ -1163,6 +1163,8 @@ export const ADMIN_CONFIG = {
   minPasswordChars: 6,
   maxPasswordChars: 128,
   auditDays: 365,
+  clientCache: { freshMs: 10_000, dataMs: 300_000, listMs: 120_000, maxEntries: 80 },
+  dashboardCacheMs: 20_000,
   pageSize: 25,
   databasePageSize: 20,
   filesPageSize: 30,

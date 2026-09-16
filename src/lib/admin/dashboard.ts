@@ -1,4 +1,4 @@
-import { DB_CONFIG, SOURCE_PRIORITY } from "@/config/site";
+import { ADMIN_CONFIG, DB_CONFIG, SOURCE_PRIORITY } from "@/config/site";
 import { listAudit } from "@/lib/admin/audit";
 import { feedbackSummary } from "@/lib/analytics/feedback";
 import { getModelChain } from "@/lib/ai/providers";
@@ -124,7 +124,21 @@ async function queueStats() {
   return { openReviews, openHelp, publishedMasail };
 }
 
-export async function dashboardSnapshot(role: BaseRole) {
+const snapshots = new Map<BaseRole, { at: number; value: Promise<DashboardSnapshot> }>();
+
+export function dashboardSnapshot(role: BaseRole): Promise<DashboardSnapshot> {
+  const cached = snapshots.get(role);
+  if (cached && Date.now() - cached.at < ADMIN_CONFIG.dashboardCacheMs) return cached.value;
+
+  const value = buildSnapshot(role).catch((error: unknown) => {
+    snapshots.delete(role);
+    throw error;
+  });
+  snapshots.set(role, { at: Date.now(), value });
+  return value;
+}
+
+async function buildSnapshot(role: BaseRole) {
   const monitor = can(role, "monitor.view");
   const skip = Promise.resolve(null);
   const [corpus, storage, activity, feedback, cloudinary, audit, queues] = await Promise.all([
@@ -159,4 +173,4 @@ export async function dashboardSnapshot(role: BaseRole) {
   };
 }
 
-export type DashboardSnapshot = Awaited<ReturnType<typeof dashboardSnapshot>>;
+export type DashboardSnapshot = Awaited<ReturnType<typeof buildSnapshot>>;

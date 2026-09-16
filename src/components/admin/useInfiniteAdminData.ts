@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { adminApi, errorMessage } from "@/components/admin/api";
+import { dropAdminCache, readAdminCache, writeAdminCache } from "@/components/admin/cache";
+import { ADMIN_CONFIG } from "@/config/site";
 
 interface InfiniteOptions<TPage, TItem> {
   key: string | null;
@@ -20,16 +22,37 @@ interface InfiniteState<TPage> {
   version: number;
 }
 
+interface CachedList<TPage> {
+  pages: TPage[];
+  nextCursor: string | null;
+  done: boolean;
+}
+
+function listKey(key: string | null): string | null {
+  return key === null ? null : `list:${key}`;
+}
+
 function initialState<TPage>(key: string | null, version = 0): InfiniteState<TPage> {
+  const cached = readAdminCache<CachedList<TPage>>(listKey(key), ADMIN_CONFIG.clientCache.listMs);
+
   return {
     key,
-    pages: [],
-    nextCursor: null,
-    done: false,
-    pending: key === null ? null : { cursor: null },
+    pages: cached?.data.pages ?? [],
+    nextCursor: cached?.data.nextCursor ?? null,
+    done: cached?.data.done ?? false,
+    pending: key === null || cached ? null : { cursor: null },
     error: null,
     version,
   };
+}
+
+function remember<TPage>(state: InfiniteState<TPage>): void {
+  if (state.key === null || state.pages.length === 0) return;
+  writeAdminCache(listKey(state.key), {
+    pages: state.pages,
+    nextCursor: state.nextCursor,
+    done: state.done,
+  });
 }
 
 export function useInfiniteAdminData<TPage, TItem>(options: InfiniteOptions<TPage, TItem>) {
@@ -55,18 +78,19 @@ export function useInfiniteAdminData<TPage, TItem>(options: InfiniteOptions<TPag
     adminApi<TPage>(current.path(pending.cursor), { signal: controller.signal }).then(
       (page) => {
         const nextCursor = optionsRef.current.next(page);
-        setState((previous) =>
-          previous.version !== version || previous.key !== key
-            ? previous
-            : {
-                ...previous,
-                pages: [...previous.pages, page],
-                nextCursor,
-                done: nextCursor === null,
-                pending: null,
-                error: null,
-              },
-        );
+        setState((previous) => {
+          if (previous.version !== version || previous.key !== key) return previous;
+          const next = {
+            ...previous,
+            pages: [...previous.pages, page],
+            nextCursor,
+            done: nextCursor === null,
+            pending: null,
+            error: null,
+          };
+          remember(next);
+          return next;
+        });
       },
       (failure: unknown) => {
         if (controller.signal.aborted) return;
@@ -101,11 +125,18 @@ export function useInfiniteAdminData<TPage, TItem>(options: InfiniteOptions<TPag
   }, []);
 
   const reload = useCallback(() => {
-    setState((previous) => initialState(previous.key, previous.version + 1));
+    setState((previous) => {
+      dropAdminCache(listKey(previous.key));
+      return initialState(previous.key, previous.version + 1);
+    });
   }, []);
 
   const setPages = useCallback((update: (pages: TPage[]) => TPage[]) => {
-    setState((previous) => ({ ...previous, pages: update(previous.pages) }));
+    setState((previous) => {
+      const next = { ...previous, pages: update(previous.pages) };
+      remember(next);
+      return next;
+    });
   }, []);
 
   const items = state.pages.flatMap((page) => options.items(page));

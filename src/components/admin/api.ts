@@ -1,5 +1,6 @@
 "use client";
 
+import { clearAdminCache } from "@/components/admin/cache";
 import { ADMIN_CONFIG } from "@/config/site";
 
 export class AdminApiError extends Error {
@@ -17,10 +18,13 @@ export async function adminApi<T>(
   path: string,
   options: { method?: string; body?: unknown; signal?: AbortSignal } = {},
 ): Promise<T> {
+  const method = options.method ?? (options.body === undefined ? "GET" : "POST");
+  if (method !== "GET") clearAdminCache();
+
   let response: Response;
   try {
     response = await fetch(path, {
-      method: options.method ?? (options.body === undefined ? "GET" : "POST"),
+      method,
       headers: options.body === undefined ? undefined : { "content-type": "application/json" },
       body: options.body === undefined ? undefined : JSON.stringify(options.body),
       cache: "no-store",
