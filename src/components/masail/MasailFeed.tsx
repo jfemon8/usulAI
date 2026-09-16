@@ -144,6 +144,19 @@ export function MasailFeed({
   });
 
   useEffect(() => {
+    const query = (new URLSearchParams(window.location.search).get("search") ?? "")
+      .trim()
+      .slice(0, MASAIL_CONFIG.maxSearchChars);
+    if (!query) return;
+
+    const start = setTimeout(() => {
+      setInput(query);
+      latest.current?.load(query, null);
+    }, 0);
+    return () => clearTimeout(start);
+  }, []);
+
+  useEffect(() => {
     const element = sentinel.current;
     if (!element) return;
     const observer = new IntersectionObserver(

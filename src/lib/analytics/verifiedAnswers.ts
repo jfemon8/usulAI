@@ -3,6 +3,7 @@ import { DB_CONFIG, MASAIL_CONFIG, VERIFIED_ANSWER_CONFIG } from "@/config/site"
 import { getDb } from "@/lib/db/mongoClient";
 import { markdownExcerpt } from "@/lib/editor/plainText";
 import { topicKey } from "@/lib/learning/topicKey";
+import { topicQuery } from "@/lib/retrieval/questionFiller";
 import { logger } from "@/lib/utils/logger";
 import type { AnswerSource } from "@/types";
 
@@ -38,25 +39,62 @@ export interface MasalaSummary {
   excerpt: string;
   author: MasalaAuthor | null;
   publishedAt: string | null;
+  updatedAt: string | null;
   path: string;
 }
 
 export interface MasalaDetail extends MasalaSummary {
   answer: string;
   sources: AnswerSource[];
-  updatedAt: string | null;
 }
 
 export function normalizeQuestion(question: string): string {
   return question
     .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/[^\p{L}\p{M}\p{N}\s]/gu, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-export function masalaPath(id: string): string {
-  return `${MASAIL_CONFIG.path}/${id}`;
+export function masalaSlug(question: string): string {
+  const words = question
+    .normalize("NFC")
+    .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, " ")
+    .trim()
+    .split(/[\s-]+/)
+    .filter(Boolean);
+
+  const parts: string[] = [];
+  let length = 0;
+  for (const word of words) {
+    if (length + word.length + parts.length > MASAIL_CONFIG.slugChars) break;
+    parts.push(word);
+    length += word.length;
+  }
+
+  return parts.join("-");
+}
+
+export function masalaSegment(id: string, question?: string): string {
+  const slug = question ? masalaSlug(question) : "";
+  return slug ? `${id}-${slug}` : id;
+}
+
+export function masalaPath(id: string, question?: string): string {
+  return `${MASAIL_CONFIG.path}/${encodeURIComponent(masalaSegment(id, question))}`;
+}
+
+export function decodeSegment(segment: string): string {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return segment;
+  }
+}
+
+export function masalaIdFromSlug(slug: string): string | null {
+  const id = decodeSegment(slug).slice(0, 24);
+  return ObjectId.isValid(id) ? id : null;
 }
 
 async function collection() {
@@ -393,7 +431,8 @@ function toSummary(row: VerifiedAnswer & { _id: ObjectId }): MasalaSummary {
     excerpt: excerpt(row.answer),
     author: row.author ?? null,
     publishedAt: row.publishedAt?.toISOString() ?? null,
-    path: masalaPath(id),
+    updatedAt: row.updatedAt?.toISOString() ?? null,
+    path: masalaPath(id, row.question),
   };
 }
 
@@ -441,6 +480,31 @@ export async function listPublishedMasail(options: {
   };
 }
 
+export async function listRelatedMasail(masala: MasalaSummary): Promise<MasalaSummary[]> {
+  const words = [...new Set(topicQuery(normalizeQuestion(masala.question)).split(" "))]
+    .filter((word) => word.length > 2)
+    .slice(0, 6);
+  if (words.length === 0) return [];
+
+  const rows = (await (
+    await collection()
+  )
+    .find(
+      {
+        published: true,
+        origin: "scholar",
+        _id: { $ne: new ObjectId(masala.id) },
+        question: { $regex: words.map(escapeRegex).join("|"), $options: "i" },
+      },
+      { projection: { sources: 0, normalizedQuestion: 0 } },
+    )
+    .sort({ publishedAt: -1 })
+    .limit(MASAIL_CONFIG.relatedCount)
+    .toArray()) as (VerifiedAnswer & { _id: ObjectId })[];
+
+  return rows.map(toSummary);
+}
+
 export async function getPublishedMasala(id: string): Promise<MasalaDetail | null> {
   if (!ObjectId.isValid(id)) return null;
   const row = (await (
@@ -448,12 +512,7 @@ export async function getPublishedMasala(id: string): Promise<MasalaDetail | nul
   ).findOne({ _id: new ObjectId(id), published: true, origin: "scholar" })) as
     (VerifiedAnswer & { _id: ObjectId }) | null;
   if (!row) return null;
-  return {
-    ...toSummary(row),
-    answer: row.answer,
-    sources: row.sources,
-    updatedAt: row.updatedAt?.toISOString() ?? null,
-  };
+  return { ...toSummary(row), answer: row.answer, sources: row.sources };
 }
 
 export async function findVerifiedAnswer(question: string): Promise<VerifiedAnswer | null> {

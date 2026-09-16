@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { MASAIL_CONFIG } from "@/config/site";
-import { listPublishedMasail, masalaPath } from "@/lib/analytics/verifiedAnswers";
+import { listPublishedMasail } from "@/lib/analytics/verifiedAnswers";
 import { resolveSiteUrl } from "@/lib/site/domain";
 import { logger } from "@/lib/utils/logger";
 
@@ -17,9 +17,10 @@ async function publishedEntries(base: string): Promise<MetadataRoute.Sitemap> {
     });
 
     for (const masala of result.items) {
+      const changed = masala.updatedAt ?? masala.publishedAt;
       entries.push({
-        url: new URL(masalaPath(masala.id), base).toString(),
-        ...(masala.publishedAt ? { lastModified: new Date(masala.publishedAt) } : {}),
+        url: new URL(masala.path, base).toString(),
+        ...(changed ? { lastModified: new Date(changed) } : {}),
         changeFrequency: "monthly",
         priority: 0.7,
       });

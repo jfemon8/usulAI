@@ -6,7 +6,11 @@ import { logger } from "@/lib/utils/logger";
 export function revalidateMasail(id?: string | null): void {
   try {
     revalidatePath(MASAIL_CONFIG.path);
-    if (id) revalidatePath(masalaPath(id));
+    revalidatePath("/sitemap.xml");
+    if (id) {
+      revalidatePath(masalaPath(id));
+      revalidatePath(`${MASAIL_CONFIG.path}/[slug]`, "page");
+    }
   } catch (error) {
     logger.warn("Masail revalidation failed", { error: String(error).slice(0, 160) });
   }

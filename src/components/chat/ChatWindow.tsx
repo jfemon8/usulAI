@@ -127,6 +127,7 @@ function EmptyState({
   content: HomeContent;
 }) {
   const suggestions = useSuggestions(content.suggestions);
+  const Heading = compact ? "h2" : "h1";
 
   return (
     <div className="flex w-full flex-col items-center text-center">
@@ -143,14 +144,14 @@ function EmptyState({
           {content.bismillah}
         </p>
       ) : null}
-      <h2
+      <Heading
         className={clsx(
           "font-semibold tracking-tight text-(--text-1)",
           compact ? "text-xl" : "text-2xl sm:text-[1.75rem]",
         )}
       >
         {content.greeting}
-      </h2>
+      </Heading>
       {content.subtitle ? (
         <p className="mt-2 max-w-xl text-sm text-balance text-(--text-3)">{content.subtitle}</p>
       ) : null}

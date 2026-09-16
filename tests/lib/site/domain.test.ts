@@ -41,10 +41,20 @@ describe("domain validation", () => {
   });
 
   it("reads a stored value defensively", () => {
-    expect(mergeDomainSettings(null)).toEqual({ url: "" });
-    expect(mergeDomainSettings({ url: "  " })).toEqual({ url: "" });
-    expect(mergeDomainSettings({ url: "usulai.com" })).toEqual({ url: "https://usulai.com" });
-    expect(mergeDomainSettings({ url: "https://usulai.com/path" })).toEqual({ url: "" });
+    expect(mergeDomainSettings(null)).toEqual({ url: "", googleVerification: "" });
+    expect(mergeDomainSettings({ url: "  " })).toEqual({ url: "", googleVerification: "" });
+    expect(mergeDomainSettings({ url: "usulai.com" })).toEqual({
+      url: "https://usulai.com",
+      googleVerification: "",
+    });
+    expect(mergeDomainSettings({ url: "https://usulai.com/path" })).toEqual({
+      url: "",
+      googleVerification: "",
+    });
+    expect(
+      mergeDomainSettings({ url: "usulai.com", googleVerification: "<meta content='abc_123' />" })
+        .googleVerification,
+    ).toBe("abc_123");
   });
 });
 

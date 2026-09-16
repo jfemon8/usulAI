@@ -16,10 +16,10 @@ import {
 } from "@/components/admin/ui";
 import { useAdminData } from "@/components/admin/useAdminData";
 import { SaveBar, useUnsavedWarning } from "@/components/admin/site/FormBits";
-import { normalizeDomainUrl } from "@/lib/site/contentShape";
+import { normalizeDomainUrl, normalizeVerificationCode } from "@/lib/site/contentShape";
 
 interface DomainResponse {
-  settings: { url: string };
+  settings: { url: string; googleVerification: string };
   updatedAt: string | null;
   updatedBy: string | null;
   fallbackUrl: string;
@@ -40,17 +40,24 @@ export function DomainSettings() {
   );
   const [source, setSource] = useState<DomainResponse | null>(null);
   const [value, setValue] = useState("");
+  const [verification, setVerification] = useState("");
   const [saving, setSaving] = useState(false);
 
   if (data && data !== source) {
     setSource(data);
     setValue(data.settings.url);
+    setVerification(data.settings.googleVerification);
   }
 
   const trimmed = value.trim();
   const normalized = trimmed ? normalizeDomainUrl(trimmed) : "";
   const invalid = trimmed.length > 0 && normalized === null;
-  const dirty = Boolean(data && trimmed !== data.settings.url);
+  const code = normalizeVerificationCode(verification);
+  const codeInvalid = verification.trim().length > 0 && code === "";
+  const dirty = Boolean(
+    data &&
+      (trimmed !== data.settings.url || verification.trim() !== data.settings.googleVerification),
+  );
   useUnsavedWarning(dirty);
 
   if (error && !data) {
@@ -78,10 +85,11 @@ export function DomainSettings() {
     try {
       const saved = await adminApi<DomainResponse>("/api/admin/domain", {
         method: "PUT",
-        body: { url: next },
+        body: { url: next, googleVerification: verification.trim() },
       });
       replace(saved);
       setValue(saved.settings.url);
+      setVerification(saved.settings.googleVerification);
       toast.success(
         saved.settings.url
           ? "ডোমেইন সংরক্ষিত হয়েছে। নতুন লিংক ও SEO ঠিকানা এখন থেকে এটিই ব্যবহার করবে।"
@@ -150,6 +158,28 @@ export function DomainSettings() {
           </div>
         </Card>
 
+        <Card
+          title="Google Search Console"
+          description="সাইটের মালিকানা যাচাইয়ের কোড, যা পেজের meta ট্যাগে বসে"
+        >
+          <Field
+            label="যাচাই কোড"
+            hint="Search Console-এ HTML tag পদ্ধতি বেছে নিলে যে meta ট্যাগ দেয়, সেটির content অংশ এখানে দিন। পুরো ট্যাগ পেস্ট করলেও চলবে।"
+            error={codeInvalid ? "কোডটি সঠিক নয়। শুধু অক্ষর, সংখ্যা, - এবং _ থাকতে পারে।" : null}
+          >
+            {(id) => (
+              <Input
+                id={id}
+                value={verification}
+                autoComplete="off"
+                spellCheck={false}
+                placeholder="google-site-verification=..."
+                onChange={(event) => setVerification(event.target.value)}
+              />
+            )}
+          </Field>
+        </Card>
+
         <Card title="কোথায় কোথায় ব্যবহার হয়">
           <dl className="flex flex-col gap-3 text-sm">
             {USES.map(([title, detail]) => (
@@ -173,7 +203,10 @@ export function DomainSettings() {
           </Button>
         ) : null}
         <Button
-          onClick={() => setValue(data.settings.url)}
+          onClick={() => {
+            setValue(data.settings.url);
+            setVerification(data.settings.googleVerification);
+          }}
           disabled={!dirty || saving}
           className="w-full sm:w-auto"
         >
@@ -183,7 +216,7 @@ export function DomainSettings() {
           tone="primary"
           onClick={() => void save(trimmed)}
           loading={saving}
-          disabled={!dirty || invalid}
+          disabled={!dirty || invalid || codeInvalid}
           className="w-full sm:w-auto"
         >
           সংরক্ষণ করুন

@@ -147,7 +147,9 @@ export async function POST(request: Request) {
               data: {
                 authorName: verified.author.name,
                 authorCategory: verified.author.category,
-                path: verified.published ? masalaPath(verified._id.toHexString()) : null,
+                path: verified.published
+                  ? masalaPath(verified._id.toHexString(), verified.question)
+                  : null,
               },
             });
           }

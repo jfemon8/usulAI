@@ -13,11 +13,14 @@ const LOAD_TIMEOUT_MS = 5_000;
 const DESCRIPTION =
   "আলেমদের যাচাই করা ও প্রকাশিত মাসআলা, কুরআন, হাদিস ও ফিকহের দলিলসহ। প্রশ্নের শব্দ লিখে খুঁজুন।";
 
+const TITLE = "মাসআলা ও ফতোয়া: দলিলসহ বাংলা ইসলামিক প্রশ্নোত্তর";
+
 export const metadata: Metadata = {
-  title: "মাসআলা",
+  title: TITLE,
   description: DESCRIPTION,
   alternates: { canonical: MASAIL_CONFIG.path },
-  openGraph: { title: "মাসআলা", description: DESCRIPTION, url: MASAIL_CONFIG.path },
+  openGraph: { type: "website", title: TITLE, description: DESCRIPTION, url: MASAIL_CONFIG.path },
+  twitter: { card: "summary_large_image", title: TITLE, description: DESCRIPTION },
 };
 
 async function firstPage(): Promise<{
@@ -43,10 +46,12 @@ export default async function MasailPage() {
     <MasailShell>
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl font-semibold tracking-tight text-balance text-(--text-1) sm:text-3xl">
-          মাসআলা
+          মাসআলা ও ফতোয়া
         </h1>
         <p className="mt-2 max-w-5xl text-sm leading-6 text-(--text-2) sm:text-base sm:leading-7">
-          আলেমদের লেখা ও যাচাই করা উত্তর, দলিলসহ। আপনার প্রশ্নের উত্তর না পেলে{" "}
+          নামাজ, রোজা, যাকাত, হজ, পবিত্রতা, লেনদেন ও পারিবারিক বিষয়সহ দৈনন্দিন জীবনের মাসআলা।
+          প্রতিটি উত্তর আলেমদের লেখা ও যাচাই করা, সাথে কুরআন, হাদিস, ইজমা, কিয়াস ও ফিকহের দলিল।
+          আপনার প্রশ্নের উত্তর না পেলে{" "}
           <Link
             href={HELP_CONFIG.path}
             className="font-medium text-(--accent) underline-offset-4 hover:underline"

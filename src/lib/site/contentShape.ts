@@ -28,6 +28,7 @@ export interface AiSettings {
 
 export interface DomainSettings {
   url: string;
+  googleVerification: string;
 }
 
 export const SITE_CONTENT_LIMITS = {
@@ -47,7 +48,12 @@ export const SITE_CONTENT_LIMITS = {
   aiSettingsCacheMs: 60_000,
 } as const;
 
-export const DEFAULT_DOMAIN_SETTINGS: DomainSettings = { url: "" };
+export const DEFAULT_DOMAIN_SETTINGS: DomainSettings = { url: "", googleVerification: "" };
+
+export function normalizeVerificationCode(value: string): string {
+  const trimmed = value.trim().replace(/^<meta[^>]*content=["']([^"']+)["'][^>]*>$/i, "$1");
+  return /^[A-Za-z0-9_-]{1,120}$/.test(trimmed) ? trimmed : "";
+}
 
 export function normalizeDomainUrl(value: string): string | null {
   const trimmed = value.trim();
@@ -77,8 +83,14 @@ export function normalizeDomainUrl(value: string): string | null {
 }
 
 export function mergeDomainSettings(stored: unknown): DomainSettings {
-  if (!isRecord(stored) || typeof stored.url !== "string") return { ...DEFAULT_DOMAIN_SETTINGS };
-  return { url: normalizeDomainUrl(stored.url) ?? "" };
+  if (!isRecord(stored)) return { ...DEFAULT_DOMAIN_SETTINGS };
+  return {
+    url: typeof stored.url === "string" ? (normalizeDomainUrl(stored.url) ?? "") : "",
+    googleVerification:
+      typeof stored.googleVerification === "string"
+        ? normalizeVerificationCode(stored.googleVerification)
+        : "",
+  };
 }
 
 export const DEFAULT_QUESTION_POOL: readonly string[] = [

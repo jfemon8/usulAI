@@ -3,6 +3,7 @@ import {
   DEFAULT_DOMAIN_SETTINGS,
   mergeDomainSettings,
   normalizeDomainUrl,
+  normalizeVerificationCode,
   SITE_CONTENT_LIMITS,
   type DomainSettings,
 } from "@/lib/site/contentShape";
@@ -82,8 +83,14 @@ export async function loadStoredSiteDomain(): Promise<StoredDomainSettings> {
   return readDomain();
 }
 
-export async function saveSiteDomain(url: string, email: string): Promise<StoredDomainSettings> {
-  const settings: DomainSettings = { url: url.trim() ? (normalizeDomainUrl(url) ?? "") : "" };
+export async function saveSiteDomain(
+  input: { url: string; googleVerification: string },
+  email: string,
+): Promise<StoredDomainSettings> {
+  const settings: DomainSettings = {
+    url: input.url.trim() ? (normalizeDomainUrl(input.url) ?? "") : "",
+    googleVerification: normalizeVerificationCode(input.googleVerification),
+  };
   const updatedAt = new Date();
 
   await (

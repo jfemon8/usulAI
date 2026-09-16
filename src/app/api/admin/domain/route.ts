@@ -4,6 +4,7 @@ import { MASAIL_CONFIG } from "@/config/site";
 import { recordAudit } from "@/lib/admin/audit";
 import { adminJson, adminRoute, AdminError, readJson } from "@/lib/admin/http";
 import { SITE_CONTENT_LIMITS } from "@/lib/site/contentShape";
+import { normalizeVerificationCode } from "@/lib/site/contentShape";
 import {
   effectiveSiteUrl,
   fallbackSiteUrl,
@@ -16,7 +17,10 @@ import { logger } from "@/lib/utils/logger";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const schema = z.object({ url: z.string().max(SITE_CONTENT_LIMITS.domainChars) });
+const schema = z.object({
+  url: z.string().max(SITE_CONTENT_LIMITS.domainChars),
+  googleVerification: z.string().max(SITE_CONTENT_LIMITS.domainChars).default(""),
+});
 
 const INVALID =
   "ডোমেইনটি সঠিক নয়। শুধু ঠিকানা লিখুন, যেমন usulai.com বা https://usulai.com। পথ, প্রশ্নচিহ্ন বা লগইন তথ্য দেওয়া যাবে না, আর https ছাড়া চলবে না।";
@@ -35,11 +39,16 @@ export const GET = adminRoute("domain.manage", async () => {
 });
 
 export const PUT = adminRoute("domain.manage", async (request, session) => {
-  const { url } = await readJson(request, schema);
+  const { url, googleVerification } = await readJson(request, schema);
   const trimmed = url.trim();
   if (trimmed && !normalizeDomainUrl(trimmed)) throw new AdminError(INVALID);
+  if (googleVerification.trim() && !normalizeVerificationCode(googleVerification)) {
+    throw new AdminError(
+      "Google যাচাই কোডটি সঠিক নয়। Search Console থেকে পাওয়া meta ট্যাগের content অংশটুকু দিন।",
+    );
+  }
 
-  const saved = await saveSiteDomain(trimmed, session.email);
+  const saved = await saveSiteDomain({ url: trimmed, googleVerification }, session.email);
 
   try {
     revalidatePath("/", "layout");

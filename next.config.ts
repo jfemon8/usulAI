@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["mongodb", "pdfkit", "mailtrap"],
   outputFileTracingIncludes: {
     "/api/source-view": ["./src/assets/fonts/*.ttf"],
+    "/masail/[slug]/opengraph-image": ["./src/assets/fonts/*.ttf"],
   },
   devIndicators: false,
   poweredByHeader: false,

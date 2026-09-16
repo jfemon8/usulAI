@@ -1224,6 +1224,8 @@ export const MASAIL_CONFIG = {
   pageSize: 20,
   revalidateSeconds: 300,
   maxSearchChars: 200,
+  slugChars: 80,
+  relatedCount: 6,
   sitemapPageSize: 200,
   sitemapPages: 25,
 } as const;
