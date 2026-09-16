@@ -1,4 +1,5 @@
 import { ImageResponse } from "next/og";
+import { browserCacheControl, CLIENT_CACHE_CONFIG } from "@/config/site";
 import { BRAND_COLORS, logoMarkDataUri } from "@/lib/brand";
 
 export const PWA_ICONS = {
@@ -31,6 +32,10 @@ export function renderPwaIcon(name: PwaIconName): ImageResponse {
     >
       <img src={logoMarkDataUri("#ffffff", mark)} width={mark} height={mark} alt="" />
     </div>,
-    { width: size, height: size },
+    {
+      width: size,
+      height: size,
+      headers: { "cache-control": browserCacheControl(CLIENT_CACHE_CONFIG.appIcon) },
+    },
   );
 }

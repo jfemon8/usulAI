@@ -1220,6 +1220,21 @@ export const MASAIL_CONFIG = {
   maxSearchChars: 200,
 } as const;
 
+export const CLIENT_CACHE_CONFIG = {
+  routerStaleSeconds: { dynamic: 30, static: 300 },
+  widget: { maxAge: 3_600, staleWhileRevalidate: 86_400 },
+  brand: { maxAge: 86_400, staleWhileRevalidate: 604_800 },
+  appIcon: { maxAge: 604_800, staleWhileRevalidate: 2_592_000 },
+  masailList: { maxAge: 60, staleWhileRevalidate: 300 },
+} as const;
+
+export function browserCacheControl(policy: {
+  maxAge: number;
+  staleWhileRevalidate: number;
+}): string {
+  return `public, max-age=${policy.maxAge}, stale-while-revalidate=${policy.staleWhileRevalidate}`;
+}
+
 export interface ChatCommandEntry {
   command: string;
   description: string;

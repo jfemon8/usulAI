@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { MASAIL_CONFIG } from "@/config/site";
+import { browserCacheControl, CLIENT_CACHE_CONFIG, MASAIL_CONFIG } from "@/config/site";
 import { listPublishedMasail } from "@/lib/analytics/verifiedAnswers";
 import { consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
 import { logger } from "@/lib/utils/logger";
@@ -38,7 +38,7 @@ export async function GET(request: Request) {
       cursor: parsed.data.cursor ?? null,
     });
     return NextResponse.json(page, {
-      headers: { "cache-control": "public, s-maxage=60, stale-while-revalidate=300" },
+      headers: { "cache-control": browserCacheControl(CLIENT_CACHE_CONFIG.masailList) },
     });
   } catch (error) {
     logger.warn("Masail list failed", { error: String(error).slice(0, 160) });
