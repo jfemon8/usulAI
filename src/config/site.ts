@@ -1195,6 +1195,15 @@ export const STAFF_CONFIG = {
   categoryCacheMs: 30_000,
 } as const;
 
+export const FEEDBACK_SUBMIT_CONFIG = {
+  questionChars: 4_000,
+  answerChars: 20_000,
+  noteChars: 2_000,
+  maxSources: 40,
+  referenceChars: 400,
+  maxBodyChars: 200_000,
+} as const;
+
 export const FEEDBACK_VOTE_CONFIG = {
   retentionDays: 365,
   maxAnswerChars: 8_000,

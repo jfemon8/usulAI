@@ -1,36 +1,24 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { SOURCE_PRIORITY } from "@/config/site";
+import { feedbackSubmitInput } from "@/lib/analytics/feedbackInput";
 import { recordFeedback } from "@/lib/analytics/feedback";
 import { clientKey, consumeRateLimit, rateLimitResponse } from "@/lib/security/rateLimit";
 import { logger } from "@/lib/utils/logger";
 
 export const runtime = "nodejs";
 
-const submitSchema = z.object({
-  verdict: z.enum(["helpful", "unhelpful", "wrong-citation"]),
-  question: z.string().min(1).max(2000),
-  answer: z.string().min(1).max(8000),
-  note: z.string().max(2000).optional(),
-  sources: z
-    .array(
-      z.object({
-        index: z.number(),
-        sourceType: z.enum(SOURCE_PRIORITY),
-        reference: z.string(),
-      }),
-    )
-    .max(40),
-});
-
 export async function POST(request: Request) {
   const limit = await consumeRateLimit("feedback", request);
   if (!limit.allowed) return rateLimitResponse(limit);
 
-  const parsed = submitSchema.safeParse(await request.json().catch(() => null));
+  const parsed = feedbackSubmitInput.safeParse(await request.json().catch(() => null));
 
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid feedback payload" }, { status: 400 });
+    const issue = parsed.error.issues[0];
+    logger.warn("Feedback payload rejected", {
+      field: String(issue?.path[0] ?? "body"),
+      code: issue?.code ?? "unknown",
+    });
+    return NextResponse.json({ error: "মতামতের তথ্য সঠিক নয়।" }, { status: 400 });
   }
 
   try {
@@ -52,6 +40,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: "ok", verdict: outcome.verdict });
   } catch (error) {
     logger.error("Feedback write failed", { error: String(error) });
-    return NextResponse.json({ error: "Could not record feedback" }, { status: 500 });
+    return NextResponse.json(
+      { error: "মতামত সংরক্ষণ করা যায়নি। কিছুক্ষণ পর আবার চেষ্টা করুন।" },
+      { status: 500 },
+    );
   }
 }
