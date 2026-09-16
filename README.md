@@ -4,17 +4,17 @@
 
 # Usul AI
 
-Usul AI (উসূল AI) একটা Islamic Q&A assistant, যেটার প্রতিটা উত্তর কঠোরভাবে চারটা উৎস থেকে আসে — এবং সবসময় এই priority অনুসরণ করে:
+Usul AI (উসূল AI) একটা Islamic Q&A assistant, যেটার প্রতিটা উত্তর শুধুমাত্র পাঁচটা উৎস থেকে আসে এবং সবসময় এই priority অনুসরণ করেঃ
 
 1. **Quran**
 2. **Hadith**
 3. **Ijma** (scholarly consensus)
 4. **Qiyas** (analogical reasoning)
-5. **Sirat** (নবী জীবনী ও ফিকহ কিতাব — supplementary)
+5. **Sirat** (নবী জীবনী ও ফিকহ কিতাব, supplementary)
 
 প্রতিটা উত্তরের সাথে সোর্স রেফারেন্স দেখানো হয় (UI-তে ক্লিকযোগ্য চিপ হিসেবে), আর ইউজার বাংলা বা বাংলিশে প্রশ্ন করলে উত্তরও বাংলাতেই আসে।
 
-কোনো উত্তর এই উৎসগুলোর বাইরে থেকে দেওয়া হয় না — মডেল শুধু retrieval দিয়ে পাওয়া প্রাসঙ্গিক অংশের উপর ভিত্তি করে উত্তর তৈরি করে (Retrieval-Augmented Generation)।
+কোনো উত্তর এই উৎসগুলোর বাইরে থেকে দেওয়া হয় না। মডেল শুধু retrieval দিয়ে পাওয়া প্রাসঙ্গিক অংশের উপর ভিত্তি করে উত্তর তৈরি করে (Retrieval-Augmented Generation)।
 
 ## Stack
 
