@@ -34,7 +34,6 @@ npm run setup:db             # MongoDB Atlas collection + vector index
 npm run dev
 ```
 
-বিস্তারিত সেটআপ: [`docs/setup.md`](docs/setup.md)
 
 ## Vercel-এ deploy (GitHub থেকে সরাসরি)
 
@@ -66,7 +65,6 @@ npm run ingest -- --dry-run      # কী বদলাবে শুধু দে
 npm run ingest -- --replace      # উৎস থেকে হারিয়ে যাওয়া রেফারেন্স মুছে দেয়
 ```
 
-সোর্স-ভিত্তিক বিস্তারিত: [`docs/data-sources.md`](docs/data-sources.md)
 
 ## Floating widget
 
