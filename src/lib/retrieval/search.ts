@@ -151,20 +151,43 @@ export async function retrieveForQuestion(
   return { context: await retrieveAnswerContext(query, learning), scopedTo: null };
 }
 
+export function selectForEmbedding<T extends { id: string }>(
+  ids: string[],
+  pending: T[],
+  limit: number,
+): T[] {
+  const order = new Map(ids.map((id, index) => [id, index]));
+  return [...pending]
+    .sort((a, b) => (order.get(a.id) ?? ids.length) - (order.get(b.id) ?? ids.length))
+    .slice(0, limit);
+}
+
 async function backfillEmbeddings(candidates: RetrievedChunk[]): Promise<void> {
   if (embeddingsCoolingDown()) return;
 
   const ids = dedupe(candidates)
     .map((chunk) => chunk.id)
     .filter((id) => !embeddingsInFlight.has(id))
-    .slice(0, HYBRID_CONFIG.lazyEmbedPerRequest);
+    .slice(0, HYBRID_CONFIG.lazyEmbedCandidates);
 
   if (ids.length === 0) return;
-  for (const id of ids) embeddingsInFlight.add(id);
+  const claimed: string[] = [];
 
   try {
-    const missing = await findUnembedded(ids);
+    const pending = await findUnembedded(ids);
+    if (pending.length === 0) return;
+
+    const missing = selectForEmbedding(
+      ids,
+      pending.filter((row) => !embeddingsInFlight.has(row.id)),
+      HYBRID_CONFIG.lazyEmbedPerRequest,
+    );
     if (missing.length === 0) return;
+
+    for (const row of missing) {
+      embeddingsInFlight.add(row.id);
+      claimed.push(row.id);
+    }
 
     const embeddings = await embedTexts(missing.map((row) => row.content));
     const updated = await attachEmbeddings(
@@ -175,10 +198,12 @@ async function backfillEmbeddings(candidates: RetrievedChunk[]): Promise<void> {
       })),
     );
 
-    logger.info(`Lazy-embedded ${updated} retrieved documents`);
+    logger.info(
+      `Lazy-embedded ${updated} of ${pending.length} retrieved documents still without a vector`,
+    );
   } catch (error) {
     logger.warn("Lazy embedding skipped", { error: String(error).slice(0, 160) });
   } finally {
-    for (const id of ids) embeddingsInFlight.delete(id);
+    for (const id of claimed) embeddingsInFlight.delete(id);
   }
 }

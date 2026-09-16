@@ -196,6 +196,7 @@ export const HYBRID_CONFIG = {
   textCandidatesPerSource: 12,
   minTextScore: 3.0,
   lazyEmbedPerRequest: 12,
+  lazyEmbedCandidates: 96,
   fusionK: 60,
 } as const;
 
