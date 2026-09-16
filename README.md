@@ -111,4 +111,4 @@ npm run ingest -- --replace      # উৎস থেকে হারিয়ে 
 
 PNG দুটো বিল্ডের সময় `next/og` দিয়ে তৈরি হয়। রিপোতে কোনো বাইনারি ইমেজ রাখতে হয় না, রঙ বা জ্যামিতি বদলালে দুটোই নিজে থেকে আপডেট হয়। রঙের টোকেন [`src/lib/brand.ts`](src/lib/brand.ts)-এ।
 
-আরও দেখো: [`docs/architecture.md`](docs/architecture.md)
+ লাইভ দেখোঃ http://usulai.onrender.com/
