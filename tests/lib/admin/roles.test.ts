@@ -33,10 +33,13 @@ describe("role permissions", () => {
       "site.manage",
       "ai.manage",
       "maintenance.run",
+      "masail.categories",
     ] as const) {
       expect(can("moderator", permission)).toBe(true);
       expect(can("scholar", permission)).toBe(false);
     }
+    expect(can("moderator", "masail.write")).toBe(false);
+    expect(can("scholar", "masail.write")).toBe(true);
     expect(can("moderator", "reviews.view")).toBe(true);
     expect(can("moderator", "reviews.handle")).toBe(false);
     expect(can("moderator", "help.handle")).toBe(false);

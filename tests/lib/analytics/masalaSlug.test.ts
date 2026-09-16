@@ -9,15 +9,26 @@ import {
 } from "@/lib/analytics/verifiedAnswers";
 
 const ID = "6aaa1d56812ca39ec173b9d9";
+const YA_NUKTA = "য়";
+const YYA = "য়";
 
 describe("masala slugs", () => {
   it("keeps Bengali vowel signs, which are marks and not letters", () => {
-    expect(masalaSlug("নামাজ ভঙ্গের কারণ কয়টি?")).toBe("নামাজ-ভঙ্গের-কারণ-কয়টি");
+    expect(masalaSlug("নামাজ ভঙ্গের কারণ")).toBe("নামাজ-ভঙ্গের-কারণ");
     expect(masalaSlug("যাকাতের নিসাব কত?")).toBe("যাকাতের-নিসাব-কত");
   });
 
   it("drops punctuation and collapses separators", () => {
-    expect(masalaSlug("  রোজা  ভাঙলে, কী করণীয়?? ")).toBe("রোজা-ভাঙলে-কী-করণীয়");
+    expect(masalaSlug("  রোজা  ভাঙলে, কী করণীয? ")).toBe("রোজা-ভাঙলে-কী-করণীয");
+  });
+
+  it("gives the two spellings of য় one slug", () => {
+    const decomposed = `ক${YA_NUKTA}টি`;
+    const composed = `ক${YYA}টি`;
+
+    expect(decomposed).not.toBe(composed);
+    expect(masalaSlug(decomposed)).toBe(masalaSlug(composed));
+    expect(masalaSlug(decomposed)).toContain(YYA);
   });
 
   it("stays inside the length budget without cutting a word in half", () => {

@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { MASAIL_CONFIG } from "@/config/site";
 import { listPublishedMasail } from "@/lib/analytics/verifiedAnswers";
+import { listMasailCategories, publishedCategoryCounts } from "@/lib/masail/categories";
 import { resolveSiteUrl } from "@/lib/site/domain";
 import { logger } from "@/lib/utils/logger";
 
@@ -48,7 +49,17 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   ];
 
   try {
-    return [...fixed, ...(await publishedEntries(base))];
+    const [items, counts] = await Promise.all([listMasailCategories(), publishedCategoryCounts()]);
+    const topics: MetadataRoute.Sitemap = items
+      .filter((topic) => (counts[topic.slug] ?? 0) > 0)
+      .map((topic) => ({
+        url: new URL(topic.path, base).toString(),
+        lastModified: now,
+        changeFrequency: "weekly",
+        priority: 0.8,
+      }));
+
+    return [...fixed, ...topics, ...(await publishedEntries(base))];
   } catch (error) {
     logger.warn("Sitemap could not list published masail", {
       error: String(error).slice(0, 160),

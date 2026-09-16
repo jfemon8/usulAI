@@ -17,6 +17,7 @@ import {
   masalaSegment,
   type MasalaDetail,
 } from "@/lib/analytics/verifiedAnswers";
+import { getMasailCategory } from "@/lib/masail/categories";
 import { resolveSiteUrl } from "@/lib/site/domain";
 
 export const revalidate = 300;
@@ -56,7 +57,11 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   };
 }
 
-function structuredData(masala: MasalaDetail, baseUrl: string): string {
+function structuredData(
+  masala: MasalaDetail,
+  baseUrl: string,
+  topic: { name: string; path: string } | null,
+): string {
   const url = new URL(masalaPath(masala.id, masala.question), baseUrl).toString();
   const site = { "@type": "Organization", name: SITE_NAME, url: baseUrl };
   const author = masala.author
@@ -99,7 +104,17 @@ function structuredData(masala: MasalaDetail, baseUrl: string): string {
           name: "মাসআলা",
           item: new URL(MASAIL_CONFIG.path, baseUrl).toString(),
         },
-        { "@type": "ListItem", position: 3, name: masala.question, item: url },
+        ...(topic
+          ? [
+              {
+                "@type": "ListItem",
+                position: 3,
+                name: topic.name,
+                item: new URL(topic.path, baseUrl).toString(),
+              },
+            ]
+          : []),
+        { "@type": "ListItem", position: topic ? 4 : 3, name: masala.question, item: url },
       ],
     },
   ];
@@ -120,9 +135,10 @@ export default async function MasalaPage({ params }: { params: Promise<Params> }
     permanentRedirect(masalaPath(masala.id, masala.question));
   }
 
-  const [baseUrl, related] = await Promise.all([
+  const [baseUrl, related, topic] = await Promise.all([
     resolveSiteUrl(),
     listRelatedMasail(masala).catch(() => []),
+    masala.category ? getMasailCategory(masala.category).catch(() => null) : null,
   ]);
 
   const author = authorLabel(masala.author);
@@ -136,7 +152,7 @@ export default async function MasalaPage({ params }: { params: Promise<Params> }
     <MasailShell>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: structuredData(masala, baseUrl) }}
+        dangerouslySetInnerHTML={{ __html: structuredData(masala, baseUrl, topic) }}
       />
 
       <nav aria-label="অবস্থান" className="mb-4 text-sm">
@@ -156,6 +172,16 @@ export default async function MasalaPage({ params }: { params: Promise<Params> }
               মাসআলা
             </Link>
           </li>
+          {topic ? (
+            <>
+              <li aria-hidden="true">/</li>
+              <li>
+                <Link href={topic.path} className="transition hover:text-(--text-1)">
+                  {topic.name}
+                </Link>
+              </li>
+            </>
+          ) : null}
         </ol>
       </nav>
 

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { RATE_LIMIT_CONFIG } from "@/config/site";
+import { MASAIL_CONFIG, RATE_LIMIT_CONFIG } from "@/config/site";
 import { AdminError } from "@/lib/admin/errors";
 import { markdownExcerpt } from "@/lib/editor/plainText";
 import { ANSWER_LIMITS, answerSourceInput, validatedSources } from "@/lib/admin/answers";
@@ -25,6 +25,7 @@ export const masalaInput = z.object({
   question: z.string().trim().min(1).max(RATE_LIMIT_CONFIG.maxQuestionChars),
   answer: z.string().trim().min(1).max(ANSWER_LIMITS.answerChars),
   sources: z.array(answerSourceInput).max(ANSWER_LIMITS.maxSources),
+  category: z.string().trim().max(MASAIL_CONFIG.slugChars * 2).default(""),
   published: z.boolean(),
   reviewerNote: z.string().trim().max(ANSWER_LIMITS.reviewerNoteChars).default(""),
 });
@@ -37,6 +38,7 @@ export interface WorkspaceMasala {
   id: string;
   question: string;
   excerpt: string;
+  category: string | null;
   author: MasalaAuthor | null;
   published: boolean;
   publishedAt: string | null;
@@ -86,6 +88,7 @@ export function toWorkspaceMasala(row: StoredVerifiedAnswer, reviewer: Reviewer)
     id,
     question: row.question,
     excerpt: excerpt(row.answer),
+    category: row.category ?? null,
     author: row.author ?? null,
     published,
     publishedAt: iso(row.publishedAt),
@@ -170,6 +173,7 @@ export async function publishScholarAnswer(options: {
   question: string;
   answer: string;
   sources: AnswerSource[];
+  category?: string;
   published: boolean;
   reviewerNote?: string;
   author?: MasalaAuthor;
@@ -199,6 +203,7 @@ export async function publishScholarAnswer(options: {
     question: options.question,
     answer: options.answer,
     sources: options.sources,
+    ...(options.category ? { category: options.category } : {}),
     published: options.published,
     reviewerNote: options.reviewerNote,
     author: options.author,
@@ -216,6 +221,7 @@ export async function createMasala(
     question: input.question,
     answer: input.answer,
     sources,
+    category: input.category,
     published: input.published,
     reviewerNote: input.reviewerNote,
     author: authorOf(reviewer),
@@ -236,6 +242,7 @@ export async function updateMasala(
     question: input.question,
     answer: input.answer,
     sources,
+    category: input.category,
     published: input.published,
     reviewerNote: input.reviewerNote,
     author: row.author,

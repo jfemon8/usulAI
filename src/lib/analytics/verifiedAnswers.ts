@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db/mongoClient";
 import { markdownExcerpt } from "@/lib/editor/plainText";
 import { topicKey } from "@/lib/learning/topicKey";
 import { topicQuery } from "@/lib/retrieval/questionFiller";
+import { composeNukta } from "@/lib/utils/bangla";
 import { logger } from "@/lib/utils/logger";
 import type { AnswerSource } from "@/types";
 
@@ -25,6 +26,7 @@ export interface VerifiedAnswer {
   sources: AnswerSource[];
   reviewerNote?: string;
   author?: MasalaAuthor;
+  category?: string;
   published?: boolean;
   publishedAt?: Date;
   updatedAt?: Date;
@@ -37,6 +39,7 @@ export interface MasalaSummary {
   id: string;
   question: string;
   excerpt: string;
+  category: string | null;
   author: MasalaAuthor | null;
   publishedAt: string | null;
   updatedAt: string | null;
@@ -57,8 +60,7 @@ export function normalizeQuestion(question: string): string {
 }
 
 export function masalaSlug(question: string): string {
-  const words = question
-    .normalize("NFC")
+  const words = composeNukta(question.normalize("NFC"))
     .replace(/[^\p{L}\p{M}\p{N}\s-]/gu, " ")
     .trim()
     .split(/[\s-]+/)
@@ -162,6 +164,7 @@ export async function saveScholarAnswer(input: {
   answer: string;
   sources: AnswerSource[];
   author?: MasalaAuthor;
+  category?: string;
   published: boolean;
   reviewerNote?: string;
   actor: string;
@@ -183,6 +186,7 @@ export async function saveScholarAnswer(input: {
     sources: input.sources,
     ...(note ? { reviewerNote: note } : {}),
     ...(input.author ? { author: input.author } : {}),
+    ...(input.category ? { category: input.category } : {}),
     published: input.published,
     updatedAt: now,
     updatedBy: input.actor,
@@ -191,6 +195,7 @@ export async function saveScholarAnswer(input: {
   if (existing?._id) {
     const unset = {
       ...(note ? {} : { reviewerNote: "" as const }),
+      ...(input.category ? {} : { category: "" as const }),
       ...(input.published ? {} : { publishedAt: "" as const }),
     };
     await verified.updateOne(
@@ -429,6 +434,7 @@ function toSummary(row: VerifiedAnswer & { _id: ObjectId }): MasalaSummary {
     id,
     question: row.question,
     excerpt: excerpt(row.answer),
+    category: row.category ?? null,
     author: row.author ?? null,
     publishedAt: row.publishedAt?.toISOString() ?? null,
     updatedAt: row.updatedAt?.toISOString() ?? null,
@@ -442,12 +448,14 @@ function escapeRegex(value: string): string {
 
 export async function listPublishedMasail(options: {
   search?: string;
+  category?: string;
   cursor?: string | null;
   limit?: number;
 }): Promise<{ items: MasalaSummary[]; nextCursor: string | null }> {
   await ensureMasailIndexes();
   const limit = options.limit ?? MASAIL_CONFIG.pageSize;
   const filter: Filter<VerifiedAnswer> = { published: true, origin: "scholar" };
+  if (options.category) filter.category = options.category;
   const search = options.search?.trim().slice(0, MASAIL_CONFIG.maxSearchChars);
   if (search) filter.question = { $regex: escapeRegex(search), $options: "i" };
 

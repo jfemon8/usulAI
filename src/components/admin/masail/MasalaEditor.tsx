@@ -20,6 +20,7 @@ import {
   type SourceRow,
 } from "@/components/admin/masail/MasalaFields";
 import type { WorkspaceMasalaDetail } from "@/components/admin/masail/types";
+import { useMasailTopics } from "@/components/admin/masail/useMasailTopics";
 import { CharCount, SaveBar, Toggle, useUnsavedWarning } from "@/components/admin/site/FormBits";
 import {
   Button,
@@ -29,6 +30,7 @@ import {
   LoadError,
   Notice,
   PageHeader,
+  Select,
   Skeleton,
   formatCount,
   formatWhen,
@@ -43,6 +45,7 @@ import type { PrincipalView } from "@/lib/admin/roles";
 interface FormState {
   question: string;
   answer: string;
+  category: string;
   published: boolean;
   reviewerNote: string;
   sources: SourceRow[];
@@ -52,6 +55,7 @@ function toForm(detail: WorkspaceMasalaDetail | null): FormState {
   return {
     question: detail?.question ?? "",
     answer: detail?.answer ?? "",
+    category: detail?.category ?? "",
     published: detail?.published ?? false,
     reviewerNote: detail?.reviewerNote ?? "",
     sources: rowsFromSources(detail?.sources ?? []),
@@ -62,6 +66,7 @@ function payload(form: FormState) {
   return {
     question: form.question.trim(),
     answer: form.answer.trim(),
+    category: form.category,
     published: form.published,
     reviewerNote: form.reviewerNote.trim(),
     sources: sourcePayload(form.sources),
@@ -116,6 +121,7 @@ export function MasalaEditor({ id, principal }: { id?: string; principal: Princi
   const { data, error, loading, reload, replace } = useAdminData<WorkspaceMasalaDetail>(
     id ? `/api/admin/masail/${id}` : null,
   );
+  const topics = useMasailTopics();
   const [source, setSource] = useState<WorkspaceMasalaDetail | null>(null);
   const [form, setForm] = useState<FormState>(() => toForm(null));
   const [baseline, setBaseline] = useState(() => JSON.stringify(payload(toForm(null))));
@@ -299,6 +305,25 @@ export function MasalaEditor({ id, principal }: { id?: string; principal: Princi
                   onChange={(event) => patch({ question: event.target.value })}
                   placeholder="যেমন: সফরে কসর নামাজ কত দিন পড়া যাবে?"
                 />
+              )}
+            </Field>
+            <Field label="বিষয়" hint="পাঠক বিষয় ধরে মাসআলা খুঁজে পান, আর বিষয়ের পাতাটি সার্চে আসে">
+              {(fieldId) => (
+                <Select
+                  id={fieldId}
+                  value={form.category}
+                  onChange={(event) => patch({ category: event.target.value })}
+                >
+                  <option value="">বিষয় নির্বাচন করুন</option>
+                  {topics.map((topic) => (
+                    <option key={topic.slug} value={topic.slug}>
+                      {topic.name}
+                    </option>
+                  ))}
+                  {form.category && !topics.some((topic) => topic.slug === form.category) ? (
+                    <option value={form.category}>{form.category}</option>
+                  ) : null}
+                </Select>
               )}
             </Field>
             <Toggle

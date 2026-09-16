@@ -26,6 +26,7 @@ export const PERMISSIONS = {
   "help.view": EVERYONE,
   "help.handle": SCHOLARS,
   "masail.write": SCHOLARS,
+  "masail.categories": STAFF_MANAGERS,
   "masail.override": ADMIN_ONLY,
   "answers.manage": ADMIN_ONLY,
   "corpus.manage": ADMIN_ONLY,

@@ -199,6 +199,13 @@ export const LayoutIcon = (props: IconProps) => (
   </Base>
 );
 
+export const TagIcon = (props: IconProps) => (
+  <Base {...props}>
+    <path d="M3 12.6V5a2 2 0 0 1 2-2h7.6a2 2 0 0 1 1.4.6l6.4 6.4a2 2 0 0 1 0 2.8l-7.6 7.6a2 2 0 0 1-2.8 0L3.6 14a2 2 0 0 1-.6-1.4z" />
+    <path d="M7.8 7.8h.01" />
+  </Base>
+);
+
 export const GlobeIcon = (props: IconProps) => (
   <Base {...props}>
     <circle cx="12" cy="12" r="9" />

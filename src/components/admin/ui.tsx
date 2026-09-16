@@ -275,7 +275,7 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
   return (
     <div className="flex flex-col items-center gap-1 px-4 py-10 text-center">
       <p className="text-sm font-medium text-(--text-1)">{title}</p>
-      {children ? <div className="max-w-md text-sm text-(--text-3)">{children}</div> : null}
+      {children ? <div className="max-w-xl text-sm text-(--text-3)">{children}</div> : null}
     </div>
   );
 }

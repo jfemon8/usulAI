@@ -4,6 +4,7 @@ import { MasailShell } from "@/components/masail/MasailChrome";
 import { MasailFeed } from "@/components/masail/MasailFeed";
 import { HELP_CONFIG, MASAIL_CONFIG } from "@/config/site";
 import { listPublishedMasail, type MasalaSummary } from "@/lib/analytics/verifiedAnswers";
+import { listMasailCategories, publishedCategoryCounts } from "@/lib/masail/categories";
 import { withTimeout } from "@/lib/site/siteContent";
 import { logger } from "@/lib/utils/logger";
 
@@ -39,8 +40,19 @@ async function firstPage(): Promise<{
   }
 }
 
+async function topics() {
+  try {
+    const [items, counts] = await Promise.all([listMasailCategories(), publishedCategoryCounts()]);
+    return items
+      .map((item) => ({ ...item, count: counts[item.slug] ?? 0 }))
+      .filter((item) => item.count > 0);
+  } catch {
+    return [];
+  }
+}
+
 export default async function MasailPage() {
-  const page = await firstPage();
+  const [page, categories] = await Promise.all([firstPage(), topics()]);
 
   return (
     <MasailShell>
@@ -65,6 +77,20 @@ export default async function MasailPage() {
           ।
         </p>
       </div>
+      {categories.length > 0 ? (
+        <nav aria-label="বিষয়" className="mb-6 flex flex-wrap gap-2">
+          {categories.map((category) => (
+            <Link
+              key={category.slug}
+              href={category.path}
+              className="inline-flex items-center gap-1.5 rounded-full border border-(--border) px-3 py-1.5 text-sm text-(--text-2) transition hover:border-(--border-strong) hover:text-(--text-1)"
+            >
+              {category.name}
+              <span className="text-xs text-(--text-3)">{category.count}</span>
+            </Link>
+          ))}
+        </nav>
+      ) : null}
       <MasailFeed
         initialItems={page.items}
         initialCursor={page.nextCursor}

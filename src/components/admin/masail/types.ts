@@ -10,6 +10,7 @@ export interface WorkspaceMasala {
   id: string;
   question: string;
   excerpt: string;
+  category: string | null;
   author: MasalaAuthorView | null;
   published: boolean;
   publishedAt: string | null;

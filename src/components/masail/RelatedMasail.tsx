@@ -2,15 +2,33 @@ import Link from "next/link";
 import { authorLabel } from "@/components/masail/MasailChrome";
 import type { MasalaSummary } from "@/lib/analytics/verifiedAnswers";
 
-export function RelatedMasail({ items }: { items: MasalaSummary[] }) {
+export function RelatedMasail({
+  items,
+  heading = "সম্পর্কিত মাসআলা",
+  bare = false,
+}: {
+  items: MasalaSummary[];
+  heading?: string;
+  bare?: boolean;
+}) {
   if (items.length === 0) return null;
 
   return (
-    <section aria-labelledby="related-masail" className="mt-10 border-t border-(--border) pt-6">
-      <h2 id="related-masail" className="text-lg font-semibold tracking-tight text-(--text-1)">
-        সম্পর্কিত মাসআলা
+    <section
+      aria-labelledby="related-masail"
+      className={bare ? "" : "mt-10 border-t border-(--border) pt-6"}
+    >
+      <h2
+        id="related-masail"
+        className={
+          bare
+            ? "sr-only"
+            : "text-lg font-semibold tracking-tight text-(--text-1)"
+        }
+      >
+        {heading}
       </h2>
-      <ul className="mt-4 flex flex-col gap-3">
+      <ul className={bare ? "flex flex-col gap-3" : "mt-4 flex flex-col gap-3"}>
         {items.map((item) => {
           const author = authorLabel(item.author);
           return (
