@@ -25,6 +25,7 @@ secrets/
 # ai assistant / editor local config
 .claude/
 CLAUDE.md
+AGENTS.md
 .cursor/
 .cursorrules
 .codex/
