@@ -10,6 +10,7 @@ const CORE: Permission[] = [
   "audit.view",
   "answers.manage",
   "masail.override",
+  "domain.manage",
 ];
 
 describe("role permissions", () => {

@@ -18,6 +18,7 @@ export const PERMISSIONS = {
   "dashboard.view": EVERYONE,
   "monitor.view": STAFF_MANAGERS,
   "site.manage": STAFF_MANAGERS,
+  "domain.manage": ADMIN_ONLY,
   "ai.manage": STAFF_MANAGERS,
   "maintenance.run": STAFF_MANAGERS,
   "reviews.view": EVERYONE,

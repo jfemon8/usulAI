@@ -26,6 +26,10 @@ export interface AiSettings {
   verifiedAnswersEnabled: boolean;
 }
 
+export interface DomainSettings {
+  url: string;
+}
+
 export const SITE_CONTENT_LIMITS = {
   bismillahChars: 200,
   greetingChars: 200,
@@ -38,9 +42,44 @@ export const SITE_CONTENT_LIMITS = {
   extraInstructionsChars: 4000,
   maxDisabledModels: 50,
   modelIdChars: 200,
+  domainChars: 200,
   loadTimeoutMs: 3000,
   aiSettingsCacheMs: 60_000,
 } as const;
+
+export const DEFAULT_DOMAIN_SETTINGS: DomainSettings = { url: "" };
+
+export function normalizeDomainUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.length === 0 || trimmed.length > SITE_CONTENT_LIMITS.domainChars) return null;
+
+  let parsed: URL;
+  try {
+    parsed = new URL(/^[a-z]+:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`);
+  } catch {
+    return null;
+  }
+
+  if (parsed.username || parsed.password) return null;
+  if (parsed.pathname !== "/" || parsed.search || parsed.hash) return null;
+
+  const host = parsed.hostname.toLowerCase();
+  const local = host === "localhost" || host === "127.0.0.1";
+  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && local)) return null;
+
+  if (!local) {
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(host)) return null;
+    const tld = host.split(".").at(-1) ?? "";
+    if (tld.length < 2 || /^\d+$/.test(tld)) return null;
+  }
+
+  return `${parsed.protocol}//${host}${parsed.port ? `:${parsed.port}` : ""}`;
+}
+
+export function mergeDomainSettings(stored: unknown): DomainSettings {
+  if (!isRecord(stored) || typeof stored.url !== "string") return { ...DEFAULT_DOMAIN_SETTINGS };
+  return { url: normalizeDomainUrl(stored.url) ?? "" };
+}
 
 export const DEFAULT_QUESTION_POOL: readonly string[] = [
   "নামাজের শর্ত কী কী?",

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { SITE_URL_CONFIG } from "@/config/site";
 import { maintenanceAccess } from "@/lib/security/maintenanceAccess";
-import { siteUrl } from "@/lib/utils/siteUrl";
+import { setStoredSiteUrl, siteUrl } from "@/lib/utils/siteUrl";
 
 const saved = { ...process.env };
 
@@ -34,16 +35,27 @@ describe("maintenanceAccess", () => {
 });
 
 describe("siteUrl", () => {
-  it("prefers the explicit URL, then Vercel's production URL, then localhost", () => {
-    process.env.NEXT_PUBLIC_APP_URL = "https://usul.ai";
-    expect(siteUrl()).toBe("https://usul.ai");
+  afterEach(() => setStoredSiteUrl(null));
 
+  it("takes the development override before the stored domain", () => {
+    process.env.NEXT_PUBLIC_APP_URL = "https://usul.ai";
+    setStoredSiteUrl("https://usulai.com");
+
+    expect(siteUrl()).toBe("https://usul.ai");
+  });
+
+  it("ignores the hosting platform's own variables", () => {
     delete process.env.NEXT_PUBLIC_APP_URL;
     process.env.VERCEL_PROJECT_PRODUCTION_URL = "usul-ai.vercel.app";
-    expect(siteUrl()).toBe("https://usul-ai.vercel.app");
+    setStoredSiteUrl(null);
 
-    delete process.env.VERCEL_PROJECT_PRODUCTION_URL;
-    delete process.env.VERCEL_URL;
-    expect(siteUrl()).toBe("http://localhost:3000");
+    expect(siteUrl()).toBe(SITE_URL_CONFIG.fallbackUrl);
+  });
+
+  it("uses the stored domain when there is no development override", () => {
+    delete process.env.NEXT_PUBLIC_APP_URL;
+    setStoredSiteUrl("https://usulai.com");
+
+    expect(siteUrl()).toBe("https://usulai.com");
   });
 });

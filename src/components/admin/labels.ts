@@ -34,6 +34,7 @@ const ACTION_NAMES: Record<string, string> = {
   "auth.password-changed": "পাসওয়ার্ড পরিবর্তন",
   "auth.profile-updated": "নিজের তথ্য হালনাগাদ",
   "auth.sessions-revoked": "অন্য সব সেশন বন্ধ",
+  "site.domain": "ডোমেইন পরিবর্তন",
   "auth.session-revoked": "একটি সেশন বন্ধ",
   create: "তৈরি",
   update: "হালনাগাদ",

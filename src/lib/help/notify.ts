@@ -4,6 +4,7 @@ import { masalaPath } from "@/lib/analytics/verifiedAnswers";
 import { sendRenderedEmail } from "@/lib/email/mailer";
 import { appLink, emailContext } from "@/lib/email/templates/context";
 import { helpAnsweredEmail } from "@/lib/email/templates/helpAnswered";
+import { resolveSiteUrl } from "@/lib/site/domain";
 import type { HelpRequestDoc } from "@/lib/help/shape";
 import { signedHelpToken } from "@/lib/help/tokens";
 import { logger } from "@/lib/utils/logger";
@@ -25,7 +26,7 @@ export async function notifyHelpAnswered(doc: HelpRequestDoc): Promise<HelpNotif
 
   try {
     const locale = detectQuestionLanguage(doc.question) === "other" ? "en" : "bn";
-    const context = emailContext({ locale });
+    const context = emailContext({ locale, appUrl: await resolveSiteUrl() });
     const email = helpAnsweredEmail(
       {
         email: doc.email,

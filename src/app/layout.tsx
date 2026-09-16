@@ -1,37 +1,39 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { SITE_NAME } from "@/config/site";
-import { siteUrl } from "@/lib/utils/siteUrl";
+import { resolveSiteUrl } from "@/lib/site/domain";
 import "./globals.css";
 
 const DESCRIPTION = "কুরআন, হাদিস, ইজমা, কিয়াস ও সীরাতের আলোকে দলিলসহ উত্তর, এই তারতীব মেনে।";
 
-export const metadata: Metadata = {
-  metadataBase: new URL(siteUrl()),
-  title: {
-    default: `${SITE_NAME}: ইসলামিক প্রশ্নোত্তর`,
-    template: `%s · ${SITE_NAME}`,
-  },
-  description: DESCRIPTION,
-  applicationName: SITE_NAME,
-  appleWebApp: {
-    capable: true,
-    title: SITE_NAME,
-    statusBarStyle: "default",
-  },
-  openGraph: {
-    type: "website",
-    siteName: SITE_NAME,
-    title: `${SITE_NAME}: ইসলামিক প্রশ্নোত্তর`,
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    metadataBase: new URL(await resolveSiteUrl()),
+    title: {
+      default: `${SITE_NAME}: ইসলামিক প্রশ্নোত্তর`,
+      template: `%s · ${SITE_NAME}`,
+    },
     description: DESCRIPTION,
-    locale: "bn_BD",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: `${SITE_NAME}: ইসলামিক প্রশ্নোত্তর`,
-    description: DESCRIPTION,
-  },
-};
+    applicationName: SITE_NAME,
+    appleWebApp: {
+      capable: true,
+      title: SITE_NAME,
+      statusBarStyle: "default",
+    },
+    openGraph: {
+      type: "website",
+      siteName: SITE_NAME,
+      title: `${SITE_NAME}: ইসলামিক প্রশ্নোত্তর`,
+      description: DESCRIPTION,
+      locale: "bn_BD",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${SITE_NAME}: ইসলামিক প্রশ্নোত্তর`,
+      description: DESCRIPTION,
+    },
+  };
+}
 
 export const viewport: Viewport = {
   themeColor: [

@@ -10,6 +10,7 @@ import type { StaffRole } from "@/lib/admin/roles";
 import { deleteResetTokensByEmail, deleteSessionsByEmail } from "@/lib/admin/sessionStore";
 import { sendRenderedEmail, senderAddress } from "@/lib/email/mailer";
 import { staffAccountEmail, type StaffEmailKind } from "@/lib/email/templates/staffAccount";
+import { loadSiteDomain } from "@/lib/site/domain";
 import { logger } from "@/lib/utils/logger";
 
 export type StaffStatus = "active" | "suspended";
@@ -755,6 +756,7 @@ export async function sendStaffAccountEmail(
 ): Promise<StaffEmailOutcome> {
   const demoSender = isDemoSender(senderAddress().email);
   try {
+    await loadSiteDomain();
     const email = staffAccountEmail({
       kind,
       email: account.email,

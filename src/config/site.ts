@@ -1,5 +1,10 @@
 export const SITE_NAME = "Usul AI";
 
+export const SITE_URL_CONFIG = {
+  fallbackUrl: "https://usulai.onrender.com",
+  cacheMs: 60_000,
+} as const;
+
 export const DATE_TIME_CONFIG = {
   timeZone: "Asia/Dhaka",
   locale: "en-US",
@@ -1219,6 +1224,8 @@ export const MASAIL_CONFIG = {
   pageSize: 20,
   revalidateSeconds: 300,
   maxSearchChars: 200,
+  sitemapPageSize: 200,
+  sitemapPages: 25,
 } as const;
 
 export const CLIENT_CACHE_CONFIG = {

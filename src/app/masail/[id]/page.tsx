@@ -8,7 +8,7 @@ import { authorLabel, MasailShell, publishedLabel } from "@/components/masail/Ma
 import { AlertIcon, BookIcon, PenIcon, QuestionIcon } from "@/components/ui/Icons";
 import { HELP_CONFIG, MASAIL_CONFIG, SITE_NAME } from "@/config/site";
 import { getPublishedMasala, masalaPath, type MasalaDetail } from "@/lib/analytics/verifiedAnswers";
-import { siteUrl } from "@/lib/utils/siteUrl";
+import { resolveSiteUrl } from "@/lib/site/domain";
 
 export const revalidate = 300;
 
@@ -42,8 +42,8 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   };
 }
 
-function structuredData(masala: MasalaDetail): string {
-  const url = new URL(masalaPath(masala.id), siteUrl()).toString();
+function structuredData(masala: MasalaDetail, baseUrl: string): string {
+  const url = new URL(masalaPath(masala.id), baseUrl).toString();
   const author = masala.author
     ? { "@type": "Person", name: authorLabel(masala.author) ?? masala.author.name }
     : { "@type": "Organization", name: SITE_NAME };
@@ -80,6 +80,7 @@ export default async function MasalaPage({ params }: { params: Promise<Params> }
   const masala = await loadMasala(id);
   if (!masala) notFound();
 
+  const baseUrl = await resolveSiteUrl();
   const author = authorLabel(masala.author);
   const published = publishedLabel(masala.publishedAt);
   const updated =
@@ -91,7 +92,7 @@ export default async function MasalaPage({ params }: { params: Promise<Params> }
     <MasailShell>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: structuredData(masala) }}
+        dangerouslySetInnerHTML={{ __html: structuredData(masala, baseUrl) }}
       />
 
       <nav aria-label="অবস্থান" className="mb-4 text-sm">

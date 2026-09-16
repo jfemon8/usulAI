@@ -199,6 +199,14 @@ export const LayoutIcon = (props: IconProps) => (
   </Base>
 );
 
+export const GlobeIcon = (props: IconProps) => (
+  <Base {...props}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3.4 9h17.2M3.4 15h17.2" />
+    <path d="M12 3c2.3 2.5 3.5 5.6 3.5 9s-1.2 6.5-3.5 9c-2.3-2.5-3.5-5.6-3.5-9S9.7 5.5 12 3z" />
+  </Base>
+);
+
 export const SparklesIcon = (props: IconProps) => (
   <Base {...props}>
     <path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />

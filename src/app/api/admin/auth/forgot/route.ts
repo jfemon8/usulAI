@@ -7,7 +7,7 @@ import { isEmailConfigured, sendRenderedEmail } from "@/lib/email/mailer";
 import { passwordResetEmail } from "@/lib/email/templates";
 import { clientAddress } from "@/lib/security/rateLimit";
 import { logger } from "@/lib/utils/logger";
-import { siteUrl } from "@/lib/utils/siteUrl";
+import { resolveSiteUrl } from "@/lib/site/domain";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,7 +55,8 @@ export const POST = publicAdminRoute("adminReset", async (request) => {
     logger.error("Admin password reset requested but MAILTRAP_API_TOKEN is not set");
   }
 
-  const resetUrl = new URL(ADMIN_CONFIG.paths.resetPassword, `${siteUrl().replace(/\/+$/, "")}/`);
+  const base = await resolveSiteUrl();
+  const resetUrl = new URL(ADMIN_CONFIG.paths.resetPassword, `${base.replace(/\/+$/, "")}/`);
   resetUrl.searchParams.set("token", token);
   const device = deviceFrom(request.headers.get("user-agent") ?? "");
   const ipAddress = clientAddress(request);
