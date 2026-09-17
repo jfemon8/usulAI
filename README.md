@@ -34,7 +34,6 @@ npm run setup:db             # MongoDB Atlas collection + vector index
 npm run dev
 ```
 
-
 ## Vercel-এ deploy (GitHub থেকে সরাসরি)
 
 কোনো `vercel.json` বদলাতে বা build command লিখতে হয় না। Vercel-এ **Add New Project → GitHub repo import → Deploy**। Framework, build (`npm run build`, যেটা widget.js-ও বানায়), Node সংস্করণ, দৈনিক maintenance cron আর function-এর সময়সীমা সব repo থেকেই আসে।
@@ -65,7 +64,6 @@ npm run ingest -- --dry-run      # কী বদলাবে শুধু দে
 npm run ingest -- --replace      # উৎস থেকে হারিয়ে যাওয়া রেফারেন্স মুছে দেয়
 ```
 
-
 ## Floating widget
 
 অন্য যেকোনো ওয়েবসাইটে বসানোর জন্য:
@@ -75,6 +73,8 @@ npm run ingest -- --replace      # উৎস থেকে হারিয়ে 
 ```
 
 `npm run build` নিজেই `public/widget.js` তৈরি করে; আলাদা করে লাগলে `npm run build:widget`।
+
+Widget-এর logo bubble টেনে স্ক্রিনের যেকোনো জায়গায় রাখা যায়; কোনো edge থেকে ১rem-এর কম দূরে নিলে সেটিতে আটকে যায়। অবস্থানটি ওই ওয়েবসাইটের browser-এ মনে রাখা হয়। Bubble সাধারণত ৫০% opacity-তে থাকে, সরালে ৫ সেকেন্ড এবং chat খোলা থাকলে ১০০% থাকে; chat বন্ধের ৫ সেকেন্ড পর আবার ৫০% হয়। Chat খুললে panel screen size অনুযায়ী যথেষ্ট জায়গা নেয় এবং bubble panel-এর কিনারায় দৃশ্যমান toggle হিসেবে যায়। Chat খোলা থাকলে bubble ও panel টেনে সরানো যায় না; chat বন্ধ করলে bubble খোলার আগের জায়গায় ফেরে। Bubble-এর আচরণ ও panel-এর আকার বদলাতে `widget-src/loader.ts` এবং `widget-src/layout.ts` সম্পাদনা করে আবার deploy করতে হবে।
 
 ## Scripts
 
@@ -109,4 +109,4 @@ npm run ingest -- --replace      # উৎস থেকে হারিয়ে 
 
 PNG দুটো বিল্ডের সময় `next/og` দিয়ে তৈরি হয়। রিপোতে কোনো বাইনারি ইমেজ রাখতে হয় না, রঙ বা জ্যামিতি বদলালে দুটোই নিজে থেকে আপডেট হয়। রঙের টোকেন [`src/lib/brand.ts`](src/lib/brand.ts)-এ।
 
- লাইভ দেখোঃ http://usulai.onrender.com/
+লাইভ দেখোঃ https://usulai.onrender.com/
