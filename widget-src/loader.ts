@@ -164,7 +164,7 @@ import {
   Object.assign(edgeBar.style, {
     position: "fixed",
     display: "none",
-    width: `${edgeBarWidth()}px`,
+    width: edgeBarWidth().css,
     height: `${barHeight}px`,
     padding: "0",
     margin: "0",
@@ -313,8 +313,10 @@ import {
     };
   }
 
-  function edgeBarWidth(): number {
-    return viewport().width <= 640 ? 8 : 16;
+  function edgeBarWidth(): { css: string; px: number } {
+    const size = viewport();
+    const remWidth = size.width <= 640 ? 0.5 : 0.75;
+    return { css: `${remWidth}rem`, px: (size.bubbleSize! / 3) * remWidth };
   }
 
   function readPosition(): Point | null {
@@ -493,11 +495,11 @@ import {
 
   function placeBarMenu() {
     const width = edgeBarWidth();
-    barMenu.style.left = hiddenSide === "left" ? `${width}px` : "auto";
-    barMenu.style.right = hiddenSide === "right" ? `${width}px` : "auto";
+    barMenu.style.left = hiddenSide === "left" ? width.css : "auto";
+    barMenu.style.right = hiddenSide === "right" ? width.css : "auto";
     barMenu.style.top = `${barY}px`;
     barMenu.style.borderRadius = hiddenSide === "left" ? "0 8px 8px 0" : "8px 0 0 8px";
-    barMenu.style.width = `${barMenuOpen ? Math.min(132, viewport().width - width) : 0}px`;
+    barMenu.style.width = `${barMenuOpen ? Math.min(132, viewport().width - width.px) : 0}px`;
   }
 
   function finishBarClose() {
@@ -534,9 +536,9 @@ import {
     const width = edgeBarWidth();
     barY = Math.max(0, Math.min(nextY, maxY));
     barRatio = maxY > 0 ? barY / maxY : 0;
-    edgeBar.style.width = `${width}px`;
+    edgeBar.style.width = width.css;
     edgeBar.style.left =
-      hiddenSide === "left" ? "0px" : `${Math.max(0, viewport().width - width)}px`;
+      hiddenSide === "left" ? "0px" : `${Math.max(0, viewport().width - width.px)}px`;
     edgeBar.style.top = `${barY}px`;
     edgeBar.style.borderRadius =
       barMenuOpen || barClosing ? "0" : hiddenSide === "left" ? "0 8px 8px 0" : "8px 0 0 8px";

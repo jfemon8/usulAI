@@ -53,6 +53,7 @@ async function loadWidget(
     sessionStore?: Map<string, string>;
     localStore?: Map<string, string>;
     darkMode?: boolean;
+    rootFontSize?: number;
   } = {},
 ) {
   const elements: FakeElement[] = [];
@@ -90,7 +91,7 @@ async function loadWidget(
     setItem: (key: string, value: string) => sessionStore.set(key, value),
     removeItem: (key: string) => sessionStore.delete(key),
   });
-  vi.stubGlobal("getComputedStyle", () => ({ fontSize: "16px" }));
+  vi.stubGlobal("getComputedStyle", () => ({ fontSize: `${options.rootFontSize ?? 16}px` }));
   vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => callback(0));
 
   vi.resetModules();
@@ -339,7 +340,7 @@ describe("floating widget interactions", () => {
     bubbleMenu.children[0]!.emit("click");
     expect(bubble.style.display).toBe("none");
     expect(edgeBar.style.display).toBe("block");
-    expect(edgeBar.style.width).toBe("8px");
+    expect(edgeBar.style.width).toBe("0.5rem");
     expect(edgeBar.style.left).toBe("0px");
     expect(edgeBar.style.borderRadius).toBe("0 8px 8px 0");
     expect(edgeBar.textContent).toBe("");
@@ -359,7 +360,7 @@ describe("floating widget interactions", () => {
     edgeBar.emit("pointerdown", pointer(8, startY - 190));
     edgeBar.emit("pointerup", pointer(8, startY - 190));
     expect(barMenu.style.width).toBe("132px");
-    expect(barMenu.style.left).toBe("8px");
+    expect(barMenu.style.left).toBe("0.5rem");
     expect(barMenu.style.top).toBe(edgeBar.style.top);
     expect(barMenu.style.background).toBe(edgeBar.style.background);
     expect(edgeBar.style.borderRadius).toBe("0");
@@ -401,33 +402,33 @@ describe("floating widget interactions", () => {
     const second = await loadWidget(undefined, { localStore: first.storage });
     expect(second.bubble.style.display).toBe("none");
     expect(second.edgeBar.style.display).toBe("block");
-    expect(second.edgeBar.style.width).toBe("8px");
+    expect(second.edgeBar.style.width).toBe("0.5rem");
     expect(second.edgeBar.style.left).toBe("382px");
     expect(second.edgeBar.style.borderRadius).toBe("8px 0 0 8px");
     expect(second.edgeBar.textContent).toBe("");
-    expect(second.barMenu.style.right).toBe("8px");
+    expect(second.barMenu.style.right).toBe("0.5rem");
     expect(second.edgeBar.style.top).toBe(savedTop);
     expect(second.edgeBar.style.opacity).toBe("0.75");
   });
 
-  it("uses a 16px edge tab on desktop and halves it when resized to mobile", async () => {
+  it("uses 0.75rem on desktop and 0.5rem on mobile at the host root font size", async () => {
     vi.useFakeTimers();
     const { bubble, bubbleMenu, edgeBar, barMenu, window, windowEvents, document } =
-      await loadWidget({ width: 1024, height: 768 });
+      await loadWidget({ width: 1024, height: 768 }, { rootFontSize: 20 });
     bubble.emit("pointerdown", pointer(980, 720));
     vi.advanceTimersByTime(600);
     bubble.emit("pointerup", pointer(980, 720));
     bubbleMenu.children[1]!.emit("click");
-    expect(edgeBar.style.width).toBe("16px");
-    expect(edgeBar.style.left).toBe("1008px");
-    expect(barMenu.style.right).toBe("16px");
+    expect(edgeBar.style.width).toBe("0.75rem");
+    expect(edgeBar.style.left).toBe("1009px");
+    expect(barMenu.style.right).toBe("0.75rem");
 
     window.innerWidth = 390;
     document.documentElement.clientWidth = 390;
     windowEvents.get("resize")?.({} as Event);
-    expect(edgeBar.style.width).toBe("8px");
-    expect(edgeBar.style.left).toBe("382px");
-    expect(barMenu.style.right).toBe("8px");
+    expect(edgeBar.style.width).toBe("0.5rem");
+    expect(edgeBar.style.left).toBe("380px");
+    expect(barMenu.style.right).toBe("0.5rem");
   });
 
   it("rounds the edge tab only after the drawer finishes closing", async () => {
