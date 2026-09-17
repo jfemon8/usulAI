@@ -40,7 +40,6 @@ import {
   const menuEdge = prefersDark ? "#526071" : "#c8d1dd";
   const menuHover = prefersDark ? "#3b4657" : "#e7edf5";
   const drawerSurface = "#513477";
-  const drawerHover = "#6a4b91";
   const shadow = prefersDark
     ? "0 20px 48px -22px rgba(0,0,0,0.78)"
     : "0 20px 48px -22px rgba(33,53,82,0.45)";
@@ -137,18 +136,20 @@ import {
       cursor: "pointer",
       whiteSpace: "nowrap",
     });
-    button.addEventListener("mouseenter", () => {
-      button.style.background = drawer ? drawerHover : menuHover;
-    });
-    button.addEventListener("mouseleave", () => {
-      button.style.background = "transparent";
-    });
-    button.addEventListener("focus", () => {
-      button.style.background = drawer ? drawerHover : menuHover;
-    });
-    button.addEventListener("blur", () => {
-      button.style.background = "transparent";
-    });
+    if (!drawer) {
+      button.addEventListener("mouseenter", () => {
+        button.style.background = menuHover;
+      });
+      button.addEventListener("mouseleave", () => {
+        button.style.background = "transparent";
+      });
+      button.addEventListener("focus", () => {
+        button.style.background = menuHover;
+      });
+      button.addEventListener("blur", () => {
+        button.style.background = "transparent";
+      });
+    }
     return button;
   }
 

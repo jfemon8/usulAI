@@ -365,8 +365,11 @@ describe("floating widget interactions", () => {
     expect(barMenu.style.background).toBe(edgeBar.style.background);
     expect(edgeBar.style.borderRadius).toBe("0");
     expect(barMenu.children[0]!.textContent).toBe("Show UsulAI");
+    expect(barMenu.children[0]!.style.cursor).toBe("pointer");
     barMenu.children[0]!.emit("mouseenter");
-    expect(barMenu.children[0]!.style.background).toBe("#6a4b91");
+    expect(barMenu.children[0]!.style.background).toBe("transparent");
+    barMenu.children[0]!.emit("focus");
+    expect(barMenu.children[0]!.style.background).toBe("transparent");
     barMenu.children[0]!.emit("mouseleave");
     vi.advanceTimersByTime(10_000);
     expect(edgeBar.style.opacity).toBe("1");
