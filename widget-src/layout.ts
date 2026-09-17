@@ -1,11 +1,11 @@
-export const BUBBLE_SIZE = 56;
+export const BUBBLE_SIZE = 48;
 export const EDGE_SNAP_DISTANCE = 16;
 
 const FRAME_MARGIN = 12;
 const FRAME_MAX_WIDTH = 420;
 const FRAME_MAX_HEIGHT = 680;
-const TAB_OVERLAP = 8;
-const TAB_EXTENSION = BUBBLE_SIZE - TAB_OVERLAP;
+export const POINTER_GAP = 12;
+const HEAD_INSET = 8;
 
 export interface Point {
   x: number;
@@ -15,6 +15,7 @@ export interface Point {
 export interface Viewport {
   width: number;
   height: number;
+  bubbleSize?: number;
 }
 
 export interface FrameLayout extends Point {
@@ -25,6 +26,7 @@ export interface FrameLayout extends Point {
 export interface WidgetLayout {
   frame: FrameLayout;
   bubble: Point;
+  pointer: "top" | "left";
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -35,18 +37,11 @@ function frameMargin(viewport: Viewport): number {
   return Math.min(FRAME_MARGIN, viewport.width / 4, viewport.height / 4);
 }
 
-function nearestTabAnchor(value: number, start: number, span: number): number {
-  const travel = Math.max(0, span - BUBBLE_SIZE);
-  const anchors = [start, start + travel / 2, start + travel];
-  return anchors.reduce((nearest, candidate) =>
-    Math.abs(candidate - value) < Math.abs(nearest - value) ? candidate : nearest,
-  );
-}
-
 export function bubbleBounds(viewport: Viewport): Point {
+  const bubbleSize = viewport.bubbleSize ?? BUBBLE_SIZE;
   return {
-    x: Math.max(0, viewport.width - BUBBLE_SIZE),
-    y: Math.max(0, viewport.height - BUBBLE_SIZE),
+    x: Math.max(0, viewport.width - bubbleSize),
+    y: Math.max(0, viewport.height - bubbleSize),
   };
 }
 
@@ -63,78 +58,66 @@ export function snapBubble(
   const bounds = bubbleBounds(viewport);
   const next = clampBubble(position, viewport);
 
-  if (next.x < distance) next.x = 0;
-  else if (bounds.x - next.x < distance) next.x = bounds.x;
+  if (next.x <= distance) next.x = 0;
+  else if (bounds.x - next.x <= distance) next.x = bounds.x;
 
-  if (next.y < distance) next.y = 0;
-  else if (bounds.y - next.y < distance) next.y = bounds.y;
+  if (next.y <= distance) next.y = 0;
+  else if (bounds.y - next.y <= distance) next.y = bounds.y;
 
   return next;
 }
 
+export function bubbleBorderRadius(position: Point, viewport: Viewport): string {
+  const bounds = bubbleBounds(viewport);
+  const left = position.x === 0;
+  const right = position.x === bounds.x;
+  const top = position.y === 0;
+  const bottom = position.y === bounds.y;
+  const round = `${(viewport.bubbleSize ?? BUBBLE_SIZE) / 2}px`;
+  const corner = (attached: boolean) => (attached ? "0" : round);
+
+  return [
+    corner(top || left),
+    corner(top || right),
+    corner(bottom || right),
+    corner(bottom || left),
+  ].join(" ");
+}
+
 export function placeOpenWidget(resting: Point, viewport: Viewport): WidgetLayout {
   const margin = frameMargin(viewport);
-  const verticalWidth = Math.min(FRAME_MAX_WIDTH, Math.max(0, viewport.width - 2 * margin));
-  const verticalHeight = Math.min(
+  const headSpace = (viewport.bubbleSize ?? BUBBLE_SIZE) + POINTER_GAP;
+  const topWidth = Math.min(FRAME_MAX_WIDTH, Math.max(0, viewport.width - 2 * margin));
+  const topHeight = Math.min(
     FRAME_MAX_HEIGHT,
-    Math.max(0, viewport.height - 2 * margin - TAB_EXTENSION),
+    Math.max(0, viewport.height - 2 * margin - headSpace),
   );
-  const horizontalWidth = Math.min(
-    FRAME_MAX_WIDTH,
-    Math.max(0, viewport.width - 2 * margin - TAB_EXTENSION),
-  );
-  const horizontalHeight = Math.min(FRAME_MAX_HEIGHT, Math.max(0, viewport.height - 2 * margin));
+  const leftWidth = Math.min(FRAME_MAX_WIDTH, Math.max(0, viewport.width - 2 * margin - headSpace));
+  const leftHeight = Math.min(FRAME_MAX_HEIGHT, Math.max(0, viewport.height - 2 * margin));
 
-  const verticalX = clamp(
-    resting.x + BUBBLE_SIZE - verticalWidth,
-    margin,
-    viewport.width - margin - verticalWidth,
+  const topX = clamp(resting.x, margin, viewport.width - margin - topWidth);
+  const topY = clamp(
+    resting.y + headSpace,
+    margin + headSpace,
+    viewport.height - margin - topHeight,
   );
-  const verticalTabX = nearestTabAnchor(resting.x, verticalX, verticalWidth);
-  const aboveY = clamp(
-    resting.y - verticalHeight + TAB_OVERLAP,
-    margin,
-    viewport.height - margin - verticalHeight - TAB_EXTENSION,
-  );
-  const belowY = clamp(
-    resting.y + TAB_EXTENSION,
-    margin + TAB_EXTENSION,
-    viewport.height - margin - verticalHeight,
-  );
-
-  const horizontalY = clamp(
-    resting.y + BUBBLE_SIZE - horizontalHeight,
-    margin,
-    viewport.height - margin - horizontalHeight,
-  );
-  const horizontalTabY = nearestTabAnchor(resting.y, horizontalY, horizontalHeight);
   const leftX = clamp(
-    resting.x - horizontalWidth + TAB_OVERLAP,
-    margin,
-    viewport.width - margin - horizontalWidth - TAB_EXTENSION,
+    resting.x + headSpace,
+    margin + headSpace,
+    viewport.width - margin - leftWidth,
   );
-  const rightX = clamp(
-    resting.x + TAB_EXTENSION,
-    margin + TAB_EXTENSION,
-    viewport.width - margin - horizontalWidth,
-  );
+  const leftY = clamp(resting.y, margin, viewport.height - margin - leftHeight);
 
   const candidates: WidgetLayout[] = [
     {
-      frame: { x: verticalX, y: aboveY, width: verticalWidth, height: verticalHeight },
-      bubble: { x: verticalTabX, y: aboveY + verticalHeight - TAB_OVERLAP },
+      frame: { x: topX, y: topY, width: topWidth, height: topHeight },
+      bubble: { x: topX + HEAD_INSET, y: topY - headSpace },
+      pointer: "top",
     },
     {
-      frame: { x: verticalX, y: belowY, width: verticalWidth, height: verticalHeight },
-      bubble: { x: verticalTabX, y: belowY - TAB_EXTENSION },
-    },
-    {
-      frame: { x: leftX, y: horizontalY, width: horizontalWidth, height: horizontalHeight },
-      bubble: { x: leftX + horizontalWidth - TAB_OVERLAP, y: horizontalTabY },
-    },
-    {
-      frame: { x: rightX, y: horizontalY, width: horizontalWidth, height: horizontalHeight },
-      bubble: { x: rightX - TAB_EXTENSION, y: horizontalTabY },
+      frame: { x: leftX, y: leftY, width: leftWidth, height: leftHeight },
+      bubble: { x: leftX - headSpace, y: leftY + HEAD_INSET },
+      pointer: "left",
     },
   ];
 

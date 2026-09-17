@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   BUBBLE_SIZE,
+  POINTER_GAP,
+  bubbleBorderRadius,
   bubbleBounds,
   clampBubble,
   placeOpenWidget,
@@ -12,7 +14,7 @@ import {
 describe("widget bubble layout", () => {
   const viewport = { width: 390, height: 844 };
 
-  it("keeps the bubble on screen and snaps within one rem of each edge", () => {
+  it("keeps the bubble on screen and snaps at or within one rem of each edge", () => {
     const bounds = bubbleBounds(viewport);
     expect(clampBubble({ x: -40, y: 900 }, viewport)).toEqual({ x: 0, y: bounds.y });
     expect(snapBubble({ x: 15, y: bounds.y - 15 }, viewport)).toEqual({
@@ -24,14 +26,28 @@ describe("widget bubble layout", () => {
       y: 0,
     });
     expect(snapBubble({ x: 16, y: bounds.y - 16 }, viewport)).toEqual({
-      x: 16,
-      y: bounds.y - 16,
+      x: 0,
+      y: bounds.y,
     });
     expect(snapBubble({ x: 20, y: 20 }, viewport)).toEqual({ x: 20, y: 20 });
   });
 
   it("uses the host site's rem size for edge snapping", () => {
-    expect(snapBubble({ x: 19, y: 20 }, viewport, 20)).toEqual({ x: 0, y: 20 });
+    expect(snapBubble({ x: 19, y: 21 }, viewport, 20)).toEqual({ x: 0, y: 21 });
+  });
+
+  it("squares only the corners touching a viewport edge", () => {
+    const bounds = bubbleBounds(viewport);
+    expect(bubbleBorderRadius({ x: 0, y: 300 }, viewport)).toBe("0 24px 24px 0");
+    expect(bubbleBorderRadius({ x: bounds.x, y: 300 }, viewport)).toBe("24px 0 0 24px");
+    expect(bubbleBorderRadius({ x: 0, y: 0 }, viewport)).toBe("0 0 24px 0");
+    expect(bubbleBorderRadius({ x: 100, y: 300 }, viewport)).toBe("24px 24px 24px 24px");
+  });
+
+  it("uses a three rem bubble at a nondefault host font size", () => {
+    const larger = { width: 390, height: 844, bubbleSize: 60 };
+    expect(bubbleBounds(larger)).toEqual({ x: 330, y: 784 });
+    expect(bubbleBorderRadius({ x: 0, y: 300 }, larger)).toBe("0 30px 30px 0");
   });
 });
 
@@ -52,7 +68,7 @@ describe("widget chat panel layout", () => {
     );
 
     for (const position of positions) {
-      const { frame, bubble } = placeOpenWidget(position, viewport);
+      const { frame, bubble, pointer } = placeOpenWidget(position, viewport);
       expect(frame.x).toBeGreaterThanOrEqual(0);
       expect(frame.y).toBeGreaterThanOrEqual(0);
       expect(frame.width).toBeGreaterThan(0);
@@ -64,42 +80,41 @@ describe("widget chat panel layout", () => {
       expect(bubble.x + BUBBLE_SIZE).toBeLessThanOrEqual(viewport.width);
       expect(bubble.y + BUBBLE_SIZE).toBeLessThanOrEqual(viewport.height);
 
-      const overlapWidth = Math.max(
-        0,
-        Math.min(frame.x + frame.width, bubble.x + BUBBLE_SIZE) - Math.max(frame.x, bubble.x),
-      );
-      const overlapHeight = Math.max(
-        0,
-        Math.min(frame.y + frame.height, bubble.y + BUBBLE_SIZE) - Math.max(frame.y, bubble.y),
-      );
-      expect(overlapWidth * overlapHeight).toBe(BUBBLE_SIZE * 8);
+      if (pointer === "top") {
+        expect(bubble.x).toBe(frame.x + 8);
+        expect(bubble.y + BUBBLE_SIZE + POINTER_GAP).toBe(frame.y);
+      } else {
+        expect(bubble.x + BUBBLE_SIZE + POINTER_GAP).toBe(frame.x);
+        expect(bubble.y).toBe(frame.y + 8);
+      }
     }
   });
 
-  it("opens above a bubble at the bottom of a phone screen", () => {
+  it("places the chat head above the panel's upper-left corner on a phone", () => {
     const viewport = { width: 390, height: 844 };
     const bounds = bubbleBounds(viewport);
     const resting = { x: bounds.x, y: bounds.y };
-    const { frame, bubble } = placeOpenWidget(resting, viewport);
+    const { frame, bubble, pointer } = placeOpenWidget(resting, viewport);
     expect(frame.width).toBe(366);
     expect(frame.height).toBe(680);
-    expect(bubble.y).toBe(frame.y + frame.height - 8);
+    expect(pointer).toBe("top");
+    expect(bubble.x).toBe(frame.x + 8);
+    expect(bubble.y).toBe(frame.y - BUBBLE_SIZE - POINTER_GAP);
     expect(bubble).not.toEqual(resting);
   });
 
-  it("uses the side of a centered bubble in landscape", () => {
+  it("places the chat head left of the upper-left corner in landscape", () => {
     const viewport = { width: 844, height: 390 };
-    const { frame, bubble } = placeOpenWidget({ x: 380, y: 160 }, viewport);
+    const { frame, bubble, pointer } = placeOpenWidget({ x: 380, y: 160 }, viewport);
     expect(frame.width).toBe(420);
     expect(frame.height).toBe(366);
-    expect(bubble.x === frame.x + frame.width - 8 || bubble.x + BUBBLE_SIZE === frame.x + 8).toBe(
-      true,
-    );
+    expect(pointer).toBe("left");
+    expect(bubble.x + BUBBLE_SIZE + POINTER_GAP).toBe(frame.x);
   });
 
   it("keeps the panel usable on a short screen", () => {
     const { frame } = placeOpenWidget({ x: 132, y: 132 }, { width: 320, height: 320 });
     expect(frame.width).toBe(296);
-    expect(frame.height).toBe(248);
+    expect(frame.height).toBe(236);
   });
 });

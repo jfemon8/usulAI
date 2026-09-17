@@ -165,6 +165,7 @@ export const DB_CONFIG = {
   corpusSourcesCollection: "corpus_sources",
   maintenanceCollection: "maintenance_state",
   rateLimitCollection: "rate_limits",
+  widgetJobCollection: "widget_chat_jobs",
   sourceTranslationCollection: "source_translations",
   learningCollection: "learned_memory",
   adminAccountCollection: "admin_accounts",

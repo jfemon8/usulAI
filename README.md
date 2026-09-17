@@ -69,12 +69,14 @@ npm run ingest -- --replace      # উৎস থেকে হারিয়ে 
 অন্য যেকোনো ওয়েবসাইটে বসানোর জন্য:
 
 ```html
-<script src="https://<your-domain>/widget.js" defer></script>
+<script src="https://usulai.onrender.com/widget.js" defer></script>
 ```
 
 `npm run build` নিজেই `public/widget.js` তৈরি করে; আলাদা করে লাগলে `npm run build:widget`।
 
-Widget-এর logo bubble টেনে স্ক্রিনের যেকোনো জায়গায় রাখা যায়; কোনো edge থেকে ১rem-এর কম দূরে নিলে সেটিতে আটকে যায়। অবস্থানটি ওই ওয়েবসাইটের browser-এ মনে রাখা হয়। Bubble সাধারণত ৫০% opacity-তে থাকে, সরালে ৫ সেকেন্ড এবং chat খোলা থাকলে ১০০% থাকে; chat বন্ধের ৫ সেকেন্ড পর আবার ৫০% হয়। Chat খুললে panel screen size অনুযায়ী যথেষ্ট জায়গা নেয় এবং bubble panel-এর কিনারায় দৃশ্যমান toggle হিসেবে যায়। Chat খোলা থাকলে bubble ও panel টেনে সরানো যায় না; chat বন্ধ করলে bubble খোলার আগের জায়গায় ফেরে। Bubble-এর আচরণ ও panel-এর আকার বদলাতে `widget-src/loader.ts` এবং `widget-src/layout.ts` সম্পাদনা করে আবার deploy করতে হবে।
+Widget-এর logo bubble টেনে স্ক্রিনের যেকোনো জায়গায় রাখা যায়; কোনো edge থেকে ১rem বা তার কম দূরে নিলে সেটিতে আটকে যায় এবং সেই পাশের কোণগুলো সোজা হয়। অবস্থানটি ওই ওয়েবসাইটের browser-এ মনে রাখা হয়। Bubble সাধারণত ৫০% opacity-তে থাকে, সরালে ৫ সেকেন্ড এবং chat খোলা থাকলে ১০০% থাকে; chat বন্ধের ৫ সেকেন্ড পর আবার ৫০% হয়। Chat খুললে panel screen size অনুযায়ী যথেষ্ট জায়গা নেয়। Logo bubble panel-এর উপরের বাম পাশে যায়, আর ছোট arrow panel থেকে bubble-কে নির্দেশ করে। Chat খোলা থাকলে bubble ও panel টেনে সরানো যায় না; chat বন্ধ করলে bubble খোলার আগের জায়গায় ফেরে। Bubble-এর আচরণ ও panel-এর আকার বদলাতে `widget-src/loader.ts` এবং `widget-src/layout.ts` সম্পাদনা করে আবার deploy করতে হবে।
+
+Bubble button-এর আকার `3rem`। Panel-এর বাইরে click করলে chat বন্ধ হয়। একই website-এর page বদলালে বর্তমান tab-এর chat history থাকে; উত্তর তৈরি চললেও নতুন page-এ সেই উত্তর আবার চলতে থাকে। নতুন visit শুরু হলে নতুন conversation দেখায়। Development-এ `http://localhost:3000/widget-preview` দিয়ে local widget এবং `?source=live` দিয়ে Render-এ থাকা widget পরীক্ষা করা যায়।
 
 ## Scripts
 

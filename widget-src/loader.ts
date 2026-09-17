@@ -1,5 +1,5 @@
 import {
-  BUBBLE_SIZE,
+  bubbleBorderRadius,
   bubbleBounds,
   clampBubble,
   placeOpenWidget,
@@ -8,6 +8,17 @@ import {
   type Viewport,
   type WidgetLayout,
 } from "./layout";
+import {
+  WIDGET_CHAT_KEY,
+  WIDGET_MESSAGE_SOURCE,
+  WIDGET_NAVIGATION_KEY,
+  WIDGET_VISIT_KEY,
+  isWidgetChat,
+  isWidgetMessage,
+  shouldContinueVisit,
+  type WidgetChat,
+  type WidgetMessage,
+} from "./session";
 
 (function initUsulAiWidget() {
   const currentScript = document.currentScript as HTMLScriptElement | null;
@@ -18,20 +29,23 @@ import {
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-color-scheme: dark)").matches;
 
-  const surface = prefersDark ? "rgba(20,30,45,0.72)" : "rgba(255,255,255,0.62)";
-  const edge = prefersDark ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.78)";
-  const ink = prefersDark ? "#7fb2e4" : "#3d6d9e";
+  const surface = "#d6dbe3";
+  const edge = "#a3adbc";
+  const panelSurface = prefersDark ? "#1b1d21" : "#ffffff";
   const shadow = prefersDark
     ? "0 20px 48px -22px rgba(0,0,0,0.78)"
     : "0 20px 48px -22px rgba(33,53,82,0.45)";
 
   const markSvg =
-    '<svg viewBox="0 0 64 64" width="28" height="28" fill="currentColor" aria-hidden="true">' +
+    '<svg viewBox="0 0 64 64" style="width:calc(100% - 4px);height:calc(100% - 4px)" aria-hidden="true">' +
+    '<defs><linearGradient id="usulWidgetLogoFill" x1="0" y1="0" x2="1" y2="1">' +
+    '<stop offset="0" stop-color="#315f8d"/><stop offset="1" stop-color="#193d62"/>' +
+    '</linearGradient></defs><g fill="url(#usulWidgetLogoFill)">' +
     '<g opacity="0.3"><rect x="15" y="15" width="34" height="34" rx="3"/>' +
     '<rect x="15" y="15" width="34" height="34" rx="3" transform="rotate(45 32 32)"/></g>' +
     '<g opacity="0.55"><rect x="22" y="22" width="20" height="20" rx="2.5"/>' +
     '<rect x="22" y="22" width="20" height="20" rx="2.5" transform="rotate(45 32 32)"/></g>' +
-    '<rect x="27.5" y="27.5" width="9" height="9" rx="1.5" transform="rotate(45 32 32)"/></svg>';
+    '<rect x="27.5" y="27.5" width="9" height="9" rx="1.5" transform="rotate(45 32 32)"/></g></svg>';
 
   const bubble = document.createElement("button");
   bubble.type = "button";
@@ -42,14 +56,14 @@ import {
     position: "fixed",
     left: "0",
     top: "0",
-    width: `${BUBBLE_SIZE}px`,
-    height: `${BUBBLE_SIZE}px`,
+    width: "3rem",
+    height: "3rem",
     borderRadius: "50%",
+    padding: "0",
+    margin: "0",
+    boxSizing: "border-box",
     border: `1px solid ${edge}`,
     background: surface,
-    backdropFilter: "blur(20px) saturate(165%)",
-    WebkitBackdropFilter: "blur(20px) saturate(165%)",
-    color: ink,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -64,8 +78,76 @@ import {
     zIndex: "2147483647",
   });
 
+  function readStored(key: string): string | null {
+    try {
+      return sessionStorage.getItem(key);
+    } catch {
+      return null;
+    }
+  }
+
+  function writeStored(key: string, value: string | null) {
+    try {
+      if (value === null) sessionStorage.removeItem(key);
+      else sessionStorage.setItem(key, value);
+    } catch {
+      // Chat remains usable when host session storage is unavailable.
+    }
+  }
+
+  function createVisitId(): string {
+    return (
+      globalThis.crypto?.randomUUID?.() ??
+      `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+    );
+  }
+
+  const navigation = (() => {
+    try {
+      return JSON.parse(readStored(WIDGET_NAVIGATION_KEY) ?? "null") as {
+        href: string;
+        at: number;
+      } | null;
+    } catch {
+      return null;
+    }
+  })();
+  writeStored(WIDGET_NAVIGATION_KEY, null);
+  const expectedUrl = navigation && Date.now() - navigation.at < 30_000 ? navigation.href : null;
+  const navigationType = window.performance?.getEntriesByType("navigation")[0] as
+    PerformanceNavigationTiming | undefined;
+  const previousVisit = readStored(WIDGET_VISIT_KEY);
+  let visitId =
+    previousVisit &&
+    shouldContinueVisit(
+      document.referrer ?? "",
+      window.location.href,
+      navigationType?.type ?? "navigate",
+      expectedUrl,
+    )
+      ? previousVisit
+      : createVisitId();
+  if (visitId !== previousVisit) writeStored(WIDGET_CHAT_KEY, null);
+  writeStored(WIDGET_VISIT_KEY, visitId);
+
+  function readChat(): WidgetChat | null {
+    try {
+      const stored: unknown = JSON.parse(readStored(WIDGET_CHAT_KEY) ?? "null");
+      return isWidgetChat(stored) ? stored : null;
+    } catch {
+      return null;
+    }
+  }
+
+  let chatState = readChat();
+  let leavingSite = false;
+  let departed = false;
+
   const frame = document.createElement("iframe");
-  frame.src = `${baseUrl}/embed`;
+  const embedUrl = new URL("/embed", baseUrl);
+  embedUrl.searchParams.set("widgetOrigin", window.location.origin);
+  embedUrl.searchParams.set("widgetVisit", visitId);
+  frame.src = embedUrl.href;
   frame.title = "Usul AI";
   Object.assign(frame.style, {
     position: "fixed",
@@ -83,10 +165,25 @@ import {
     zIndex: "2147483646",
   });
 
+  const headPointer = document.createElement("div");
+  headPointer.setAttribute("aria-hidden", "true");
+  Object.assign(headPointer.style, {
+    position: "fixed",
+    width: "0",
+    height: "0",
+    display: "none",
+    opacity: "0",
+    pointerEvents: "none",
+    transition: "opacity .24s ease",
+    zIndex: "2147483646",
+  });
+
   function viewport(): Viewport {
+    const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
     return {
       width: document.documentElement.clientWidth || window.innerWidth,
       height: window.innerHeight,
+      bubbleSize: rem * 3,
     };
   }
 
@@ -135,6 +232,7 @@ import {
     bubblePosition = next;
     bubble.style.left = `${next.x}px`;
     bubble.style.top = `${next.y}px`;
+    bubble.style.borderRadius = isOpen ? "50%" : bubbleBorderRadius(next, viewport());
   }
 
   function applyOpenLayout(layout: WidgetLayout) {
@@ -143,6 +241,19 @@ import {
       top: `${layout.frame.y}px`,
       width: `${layout.frame.width}px`,
       height: `${layout.frame.height}px`,
+    });
+    const arrowInset = viewport().bubbleSize! / 2 - 9;
+    const arrowLeft = layout.pointer === "top" ? layout.bubble.x + arrowInset : layout.frame.x - 10;
+    const arrowTop = layout.pointer === "top" ? layout.frame.y - 10 : layout.bubble.y + arrowInset;
+    Object.assign(headPointer.style, {
+      left: `${arrowLeft}px`,
+      top: `${arrowTop}px`,
+      borderTop: layout.pointer === "left" ? "9px solid transparent" : "0",
+      borderRight:
+        layout.pointer === "top" ? "9px solid transparent" : `10px solid ${panelSurface}`,
+      borderBottom:
+        layout.pointer === "top" ? `10px solid ${panelSurface}` : "9px solid transparent",
+      borderLeft: layout.pointer === "top" ? "9px solid transparent" : "0",
     });
     setBubblePosition(layout.bubble);
   }
@@ -187,19 +298,25 @@ import {
       clearTimeout(hideTimer);
       applyOpenLayout(placeOpenWidget(restingPosition, viewport()));
       frame.style.display = "block";
+      headPointer.style.display = "block";
       requestAnimationFrame(() => {
         if (!isOpen) return;
         frame.style.opacity = "1";
         frame.style.transform = "none";
+        headPointer.style.opacity = "1";
       });
       return;
     }
 
     setBubblePosition(restingPosition);
     frame.style.opacity = "0";
+    headPointer.style.opacity = "0";
     frame.style.transform = "translateY(12px) scale(0.98)";
     hideTimer = setTimeout(() => {
-      if (!isOpen) frame.style.display = "none";
+      if (!isOpen) {
+        frame.style.display = "none";
+        headPointer.style.display = "none";
+      }
     }, 240);
   }
 
@@ -264,17 +381,151 @@ import {
     bubble.style.filter = "none";
   });
 
+  document.addEventListener("pointerdown", (event) => {
+    if (
+      isOpen &&
+      event.target instanceof Node &&
+      !bubble.contains(event.target) &&
+      !frame.contains(event.target)
+    ) {
+      setOpen(false);
+    }
+  });
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      const anchor = (event.target as Element | null)?.closest?.("a[href]");
+      if (
+        !anchor ||
+        anchor.hasAttribute("download") ||
+        anchor.getAttribute("target") === "_blank"
+      ) {
+        return;
+      }
+      try {
+        const destination = new URL((anchor as HTMLAnchorElement).href, window.location.href);
+        if (destination.origin !== window.location.origin) {
+          leavingSite = true;
+        } else if (destination.href !== window.location.href) {
+          leavingSite = false;
+          writeStored(
+            WIDGET_NAVIGATION_KEY,
+            JSON.stringify({ href: destination.href, at: Date.now() }),
+          );
+        }
+      } catch {
+        // Ignore invalid links.
+      }
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "submit",
+    (event) => {
+      const form = event.target as HTMLFormElement | null;
+      if (!form || form.tagName !== "FORM" || form.target === "_blank") return;
+      try {
+        const destination = new URL(form.action || window.location.href, window.location.href);
+        if (destination.origin !== window.location.origin) {
+          leavingSite = true;
+        } else {
+          leavingSite = false;
+          writeStored(
+            WIDGET_NAVIGATION_KEY,
+            JSON.stringify({ href: destination.href, at: Date.now() }),
+          );
+        }
+      } catch {
+        // Ignore invalid form destinations.
+      }
+    },
+    true,
+  );
+
+  window.addEventListener("pagehide", () => {
+    if (!leavingSite) return;
+    departed = true;
+    writeStored(WIDGET_VISIT_KEY, null);
+    writeStored(WIDGET_CHAT_KEY, null);
+  });
+
+  window.addEventListener("pageshow", (event) => {
+    if (!event.persisted) return;
+    departed = false;
+    const storedVisit = readStored(WIDGET_VISIT_KEY);
+    if (storedVisit === visitId) return;
+    visitId = storedVisit ?? createVisitId();
+    chatState = readChat();
+    writeStored(WIDGET_VISIT_KEY, visitId);
+    embedUrl.searchParams.set("widgetVisit", visitId);
+    frame.src = embedUrl.href;
+    if (isOpen) setOpen(false);
+    leavingSite = false;
+  });
+
+  window.addEventListener("message", (event) => {
+    if (
+      event.origin !== baseUrl ||
+      event.source !== frame.contentWindow ||
+      !isWidgetMessage(event.data) ||
+      event.data.visitId !== visitId
+    ) {
+      return;
+    }
+    if (event.data.type === "ready") {
+      const response: WidgetMessage = {
+        source: WIDGET_MESSAGE_SOURCE,
+        type: "restore",
+        visitId,
+        chat: chatState,
+      };
+      frame.contentWindow?.postMessage(response, baseUrl);
+    } else if (event.data.type === "save") {
+      if (departed) return;
+      const pendingJobId =
+        event.data.chat.messages.at(-1)?.role === "assistant" ||
+        chatState?.id !== event.data.chat.id
+          ? undefined
+          : chatState.pendingJobId;
+      chatState = {
+        ...event.data.chat,
+        ...(pendingJobId ? { pendingJobId } : {}),
+      };
+      writeStored(WIDGET_CHAT_KEY, JSON.stringify(chatState));
+    } else if (event.data.type === "pending") {
+      if (departed) return;
+      chatState = {
+        id: event.data.chatId,
+        messages: event.data.messages,
+        pendingJobId: event.data.jobId,
+      };
+      writeStored(WIDGET_CHAT_KEY, JSON.stringify(chatState));
+    } else if (event.data.type === "cancel") {
+      if (chatState?.id !== event.data.chatId || chatState.pendingJobId !== event.data.jobId) {
+        return;
+      }
+      chatState = { id: chatState.id, messages: chatState.messages };
+      writeStored(WIDGET_CHAT_KEY, JSON.stringify(chatState));
+    } else if (event.data.type === "clear") {
+      chatState = null;
+      writeStored(WIDGET_CHAT_KEY, null);
+    }
+  });
+
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && isOpen) setOpen(false);
   });
 
   window.addEventListener("resize", () => {
     const bounds = bubbleBounds(viewport());
-    setRestingPosition({ x: ratios.x * bounds.x, y: ratios.y * bounds.y });
+    setRestingPosition({ x: ratios.x * bounds.x, y: ratios.y * bounds.y }, true);
     if (isOpen) applyOpenLayout(placeOpenWidget(restingPosition, viewport()));
   });
 
-  setRestingPosition({ x: ratios.x * initialBounds.x, y: ratios.y * initialBounds.y });
+  setRestingPosition({ x: ratios.x * initialBounds.x, y: ratios.y * initialBounds.y }, true);
   document.body.appendChild(frame);
+  document.body.appendChild(headPointer);
   document.body.appendChild(bubble);
 })();

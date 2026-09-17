@@ -91,10 +91,15 @@ function jsonError(message: string, status: number): Response {
   });
 }
 
-export async function POST(request: Request) {
+export async function createChatResponse(
+  request: Request,
+  { rateLimitChecked = false }: { rateLimitChecked?: boolean } = {},
+): Promise<Response> {
   const deadline = Date.now() + MODEL_ATTEMPT_CONFIG.requestBudgetMs;
-  const limit = await consumeRateLimit("chat", request);
-  if (!limit.allowed) return rateLimitResponse(limit);
+  if (!rateLimitChecked) {
+    const limit = await consumeRateLimit("chat", request);
+    if (!limit.allowed) return rateLimitResponse(limit);
+  }
 
   const body = (await request.json().catch(() => null)) as { messages?: unknown } | null;
   if (!body || !Array.isArray(body.messages)) {
@@ -566,4 +571,8 @@ export async function POST(request: Request) {
   });
 
   return createUIMessageStreamResponse({ stream });
+}
+
+export async function POST(request: Request): Promise<Response> {
+  return createChatResponse(request);
 }

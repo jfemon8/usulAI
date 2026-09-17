@@ -18,16 +18,23 @@ import { LogoMark } from "@/components/ui/Logo";
 import { HELP_CONFIG, MASAIL_CONFIG, SITE_NAME } from "@/config/site";
 import {
   conversationStore,
+  compactMessages,
   deriveTitle,
   upsertConversation,
   type Conversation,
 } from "@/lib/chat/conversations";
 import { DEFAULT_HOME_CONTENT, type HomeContent } from "@/lib/site/contentShape";
 import type { UsulUIMessage } from "@/types";
+import {
+  WIDGET_MESSAGE_SOURCE,
+  isWidgetMessage,
+  type WidgetMessage,
+} from "../../../widget-src/session";
 
 interface ActiveChat {
   id: string;
   messages: UsulUIMessage[];
+  pendingJobId?: string;
 }
 
 function newChat(): ActiveChat {
@@ -191,6 +198,10 @@ export function ChatApp({
   homeContent?: HomeContent;
 }) {
   const [active, setActive] = useState<ActiveChat>(newChat);
+  const [widgetBridge, setWidgetBridge] = useState<{ origin: string; visitId: string } | null>(
+    null,
+  );
+  const [widgetReady, setWidgetReady] = useState(!compact);
   const stored = useSyncExternalStore(
     conversationStore.subscribe,
     conversationStore.getSnapshot,
@@ -199,6 +210,50 @@ export function ChatApp({
   const conversations = compact ? [] : stored;
   const [desktopOpen, setDesktopOpen] = useState(true);
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  useEffect(() => {
+    if (!compact) return;
+    const params = new URLSearchParams(window.location.search);
+    const visitId = params.get("widgetVisit");
+    const originParam = params.get("widgetOrigin");
+    if (!visitId || !originParam || window.parent === window) {
+      queueMicrotask(() => setWidgetReady(true));
+      return;
+    }
+
+    let origin: string;
+    try {
+      const parsed = new URL(originParam);
+      if (!["https:", "http:"].includes(parsed.protocol)) throw new Error("Invalid widget origin");
+      origin = parsed.origin;
+    } catch {
+      queueMicrotask(() => setWidgetReady(true));
+      return;
+    }
+
+    const onMessage = (event: MessageEvent) => {
+      if (
+        event.source !== window.parent ||
+        event.origin !== origin ||
+        !isWidgetMessage(event.data) ||
+        event.data.type !== "restore" ||
+        event.data.visitId !== visitId
+      ) {
+        return;
+      }
+      if (event.data.chat) setActive(event.data.chat);
+      setWidgetReady(true);
+    };
+    window.addEventListener("message", onMessage);
+    queueMicrotask(() => setWidgetBridge({ origin, visitId }));
+    const ready: WidgetMessage = { source: WIDGET_MESSAGE_SOURCE, type: "ready", visitId };
+    window.parent.postMessage(ready, origin);
+    const timeout = window.setTimeout(() => setWidgetReady(true), 1_000);
+    return () => {
+      window.clearTimeout(timeout);
+      window.removeEventListener("message", onMessage);
+    };
+  }, [compact]);
 
   useEffect(() => {
     if (!drawerOpen) return;
@@ -211,7 +266,18 @@ export function ChatApp({
 
   const handleSettled = useCallback(
     (messages: UsulUIMessage[]) => {
-      if (compact) return;
+      if (compact) {
+        if (widgetBridge) {
+          const message: WidgetMessage = {
+            source: WIDGET_MESSAGE_SOURCE,
+            type: "save",
+            visitId: widgetBridge.visitId,
+            chat: { id: active.id, messages: compactMessages(messages) },
+          };
+          window.parent.postMessage(message, widgetBridge.origin);
+        }
+        return;
+      }
       conversationStore.update((current) => {
         const existing = current.find((item) => item.id === active.id);
         const unchanged =
@@ -228,10 +294,60 @@ export function ChatApp({
         });
       });
     },
-    [active.id, compact],
+    [active.id, compact, widgetBridge],
+  );
+
+  const handlePendingJob = useCallback(
+    (jobId: string, messages: UsulUIMessage[]) => {
+      if (!compact || !widgetBridge) return;
+      const savedMessages = compactMessages(messages);
+      const message: WidgetMessage = {
+        source: WIDGET_MESSAGE_SOURCE,
+        type: "pending",
+        visitId: widgetBridge.visitId,
+        chatId: active.id,
+        jobId,
+        messages: savedMessages,
+      };
+      window.parent.postMessage(message, widgetBridge.origin);
+      setActive((current) =>
+        current.id === active.id
+          ? { ...current, messages: savedMessages, pendingJobId: jobId }
+          : current,
+      );
+    },
+    [active.id, compact, widgetBridge],
+  );
+
+  const handleJobFailed = useCallback(
+    (jobId: string) => {
+      if (!compact || !widgetBridge) return;
+      const message: WidgetMessage = {
+        source: WIDGET_MESSAGE_SOURCE,
+        type: "cancel",
+        visitId: widgetBridge.visitId,
+        chatId: active.id,
+        jobId,
+      };
+      window.parent.postMessage(message, widgetBridge.origin);
+      setActive((current) =>
+        current.id === active.id && current.pendingJobId === jobId
+          ? { id: current.id, messages: current.messages }
+          : current,
+      );
+    },
+    [active.id, compact, widgetBridge],
   );
 
   function startNew() {
+    if (compact && widgetBridge) {
+      const message: WidgetMessage = {
+        source: WIDGET_MESSAGE_SOURCE,
+        type: "clear",
+        visitId: widgetBridge.visitId,
+      };
+      window.parent.postMessage(message, widgetBridge.origin);
+    }
     setActive(newChat());
     setDrawerOpen(false);
   }
@@ -253,6 +369,12 @@ export function ChatApp({
       onNewChat={startNew}
       initialMessages={active.messages}
       onMessagesSettled={handleSettled}
+      resumeJobId={compact ? active.pendingJobId : undefined}
+      onPendingJob={handlePendingJob}
+      onJobFailed={handleJobFailed}
+      onJobStopped={() => {
+        if (active.pendingJobId) handleJobFailed(active.pendingJobId);
+      }}
       compact={compact}
       homeContent={homeContent}
     />
@@ -270,7 +392,7 @@ export function ChatApp({
           </IconButton>
         </header>
         {banner}
-        {chat}
+        {widgetReady ? chat : null}
       </div>
     );
   }

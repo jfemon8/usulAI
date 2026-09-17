@@ -15,6 +15,7 @@ import { ArrowDownIcon, RetryIcon } from "@/components/ui/Icons";
 import { LogoMark } from "@/components/ui/Logo";
 import { commandEntry } from "@/lib/chat/commands";
 import { messageText } from "@/lib/chat/conversations";
+import { createWidgetTransport } from "@/lib/chat/widgetTransport";
 import { DEFAULT_HOME_CONTENT, type HomeContent } from "@/lib/site/contentShape";
 import { readableChatError } from "@/lib/utils/chatError";
 import type { AnswerSource, UsulUIMessage, VerifiedInfo } from "@/types";
@@ -26,6 +27,10 @@ interface ChatWindowProps {
   compact?: boolean;
   homeContent?: HomeContent;
   onNewChat?: () => void;
+  resumeJobId?: string;
+  onPendingJob?: (id: string, messages: UsulUIMessage[]) => void;
+  onJobFailed?: (id: string) => void;
+  onJobStopped?: () => void;
 }
 
 const NO_SUGGESTIONS: string[] = [];
@@ -189,6 +194,10 @@ export function ChatWindow({
   compact = false,
   homeContent = DEFAULT_HOME_CONTENT,
   onNewChat,
+  resumeJobId,
+  onPendingJob,
+  onJobFailed,
+  onJobStopped,
 }: ChatWindowProps) {
   const [input, setInput] = useState("");
   const router = useRouter();
@@ -198,15 +207,24 @@ export function ChatWindow({
   const scrollRef = useRef<HTMLDivElement>(null);
   const stickRef = useRef(true);
 
+  const [restoredJobId] = useState(resumeJobId);
   const transport = useMemo(
-    () => new DefaultChatTransport<UsulUIMessage>({ api: "/api/chat" }),
-    [],
+    () =>
+      compact
+        ? createWidgetTransport({
+            resumeJobId: restoredJobId,
+            onPending: onPendingJob ?? (() => {}),
+            onFailure: onJobFailed ?? (() => {}),
+          })
+        : new DefaultChatTransport<UsulUIMessage>({ api: "/api/chat" }),
+    [compact, restoredJobId, onPendingJob, onJobFailed],
   );
   const { messages, sendMessage, regenerate, stop, status, error, clearError } =
     useChat<UsulUIMessage>({
       id: chatId,
       messages: initialMessages,
       transport,
+      resume: compact && Boolean(restoredJobId),
       experimental_throttle: 40,
     });
 
@@ -232,8 +250,10 @@ export function ChatWindow({
   }, [messages, isWaiting, errorMessage]);
 
   useEffect(() => {
-    if (status === "ready" && messages.length > 0) onMessagesSettled?.(messages);
-  }, [status, messages, onMessagesSettled]);
+    if (messages.length > 0 && (status === "ready" || (compact && status === "submitted"))) {
+      onMessagesSettled?.(messages);
+    }
+  }, [status, messages, onMessagesSettled, compact]);
 
   function handleScroll() {
     const element = scrollRef.current;
@@ -294,7 +314,10 @@ export function ChatWindow({
         }
         router.push(href);
       }}
-      onStop={() => void stop()}
+      onStop={() => {
+        void stop();
+        onJobStopped?.();
+      }}
       busy={isLoading}
       autoFocus
       compact={compact}
