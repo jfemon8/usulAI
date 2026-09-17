@@ -185,7 +185,7 @@ import {
   const barMenu = document.createElement("div");
   barMenu.setAttribute("role", "menu");
   barMenu.setAttribute("aria-label", "Usul AI hidden chat actions");
-  barMenu.setAttribute("aria-hidden", "true");
+  barMenu.inert = true;
   Object.assign(barMenu.style, {
     position: "fixed",
     display: "flex",
@@ -512,7 +512,9 @@ import {
     barMenu.style.boxShadow = "none";
   }
 
-  function setBarMenuOpen(open: boolean) {
+  function setBarMenuOpen(open: boolean, focusTarget: HTMLButtonElement = edgeBar) {
+    if (!open && barMenu.contains(document.activeElement))
+      focusTarget.focus({ preventScroll: true });
     const wasOpen = barMenuOpen;
     clearTimeout(barCloseTimer);
     barMenuOpen = open;
@@ -520,7 +522,7 @@ import {
     barMenu.style.display = "flex";
     barMenu.style.pointerEvents = open ? "auto" : "none";
     barMenu.style.boxShadow = open || barClosing ? shadow : "none";
-    barMenu.setAttribute("aria-hidden", String(!open));
+    barMenu.inert = !open;
     showUsulAi.tabIndex = open ? 0 : -1;
     if (!open) showUsulAi.style.background = "transparent";
     edgeBar.setAttribute("aria-expanded", String(open));
@@ -576,12 +578,12 @@ import {
     rememberPosition();
     hiddenSide = null;
     rememberHidden();
-    setBarMenuOpen(false);
+    bubble.style.display = "flex";
+    setBarMenuOpen(false, bubble);
     edgeBar.style.display = "none";
     barMenu.style.display = "none";
     clearTimeout(barCloseTimer);
     barClosing = false;
-    bubble.style.display = "flex";
     showBubbleTemporarily();
   }
 

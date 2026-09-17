@@ -9,6 +9,7 @@ class FakeElement {
   children: FakeElement[] = [];
   innerHTML = "";
   textContent = "";
+  inert = false;
   title = "";
   type = "";
   src = "";
@@ -42,6 +43,10 @@ class FakeElement {
 
   setPointerCapture() {}
   releasePointerCapture() {}
+
+  focus() {
+    (globalThis.document as unknown as { activeElement: FakeElement | null }).activeElement = this;
+  }
 }
 
 async function loadWidget(
@@ -62,6 +67,7 @@ async function loadWidget(
   const sessionStore = options.sessionStore ?? new Map<string, string>();
   const documentEvents = new Map<string, EventListener>();
   const document = {
+    activeElement: null as FakeElement | null,
     currentScript: { src: "https://usulai.onrender.com/widget.js" },
     referrer: options.referrer ?? "",
     documentElement: { clientWidth: viewport.width },
@@ -311,8 +317,16 @@ describe("floating widget interactions", () => {
 
   it("opens hide options on hold, keeps the edge tab draggable, and restores the bubble", async () => {
     vi.useFakeTimers();
-    const { bubble, bubbleMenu, bubbleMenuPointer, edgeBar, barMenu, documentEvents, storage } =
-      await loadWidget();
+    const {
+      bubble,
+      bubbleMenu,
+      bubbleMenuPointer,
+      edgeBar,
+      barMenu,
+      document: mockDocument,
+      documentEvents,
+      storage,
+    } = await loadWidget();
     const press = pointer(340, 790);
 
     bubble.emit("pointerdown", press);
@@ -345,6 +359,8 @@ describe("floating widget interactions", () => {
     expect(edgeBar.style.borderRadius).toBe("0 8px 8px 0");
     expect(edgeBar.textContent).toBe("");
     expect(barMenu.style.width).toBe("0px");
+    expect(barMenu.inert).toBe(true);
+    expect(barMenu.getAttribute("aria-hidden")).toBe(null);
     expect(edgeBar.style.opacity).toBe("1");
     vi.advanceTimersByTime(5_000);
     expect(edgeBar.style.opacity).toBe("0.75");
@@ -360,6 +376,7 @@ describe("floating widget interactions", () => {
     edgeBar.emit("pointerdown", pointer(8, startY - 190));
     edgeBar.emit("pointerup", pointer(8, startY - 190));
     expect(barMenu.style.width).toBe("132px");
+    expect(barMenu.inert).toBe(false);
     expect(barMenu.style.left).toBe("0.5rem");
     expect(barMenu.style.top).toBe(edgeBar.style.top);
     expect(barMenu.style.background).toBe(edgeBar.style.background);
@@ -373,7 +390,10 @@ describe("floating widget interactions", () => {
     barMenu.children[0]!.emit("mouseleave");
     vi.advanceTimersByTime(10_000);
     expect(edgeBar.style.opacity).toBe("1");
+    barMenu.children[0]!.focus();
     documentEvents.get("pointerdown")?.({ target: new FakeElement("main") } as unknown as Event);
+    expect(mockDocument.activeElement).toBe(edgeBar);
+    expect(barMenu.inert).toBe(true);
     expect(barMenu.style.width).toBe("0px");
     expect(edgeBar.style.borderRadius).toBe("0");
     barMenu.emit("transitionend", { target: barMenu, propertyName: "width" });
@@ -383,7 +403,10 @@ describe("floating widget interactions", () => {
 
     edgeBar.emit("pointerdown", pointer(8, startY - 190));
     edgeBar.emit("pointerup", pointer(8, startY - 190));
+    barMenu.children[0]!.focus();
     barMenu.children[0]!.emit("click");
+    expect(mockDocument.activeElement).toBe(bubble);
+    expect(barMenu.inert).toBe(true);
     expect(edgeBar.style.display).toBe("none");
     expect(bubble.style.display).toBe("flex");
     expect(bubble.style.left).toBe("0px");
