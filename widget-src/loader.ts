@@ -24,7 +24,11 @@ import {
   const currentScript = document.currentScript as HTMLScriptElement | null;
   const baseUrl = currentScript ? new URL(currentScript.src).origin : "";
   const positionKey = "usul-ai-widget-position-v1";
+  const hiddenKey = "usul-ai-widget-hidden-v1";
   const fadeDelayMs = 5_000;
+  const holdDelayMs = 600;
+  const barWidth = 16;
+  const barHeight = 56;
   const prefersDark =
     typeof window.matchMedia === "function" &&
     window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -77,6 +81,91 @@ import {
     transition: "left .28s ease, top .28s ease, opacity .2s ease, filter .2s ease",
     zIndex: "2147483647",
   });
+
+  const bubbleMenu = document.createElement("div");
+  bubbleMenu.setAttribute("role", "menu");
+  bubbleMenu.setAttribute("aria-label", "Hide Usul AI chat bubble");
+  Object.assign(bubbleMenu.style, {
+    position: "fixed",
+    display: "none",
+    flexDirection: "column",
+    gap: "2px",
+    width: "128px",
+    padding: "4px",
+    boxSizing: "border-box",
+    borderRadius: "12px",
+    background: panelSurface,
+    boxShadow: shadow,
+    zIndex: "2147483647",
+  });
+
+  function menuButton(label: string): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.setAttribute("role", "menuitem");
+    Object.assign(button.style, {
+      display: "block",
+      width: "100%",
+      padding: "10px 12px",
+      boxSizing: "border-box",
+      border: "0",
+      borderRadius: "8px",
+      background: "transparent",
+      color: prefersDark ? "#ffffff" : "#243044",
+      font: "500 14px system-ui, sans-serif",
+      textAlign: "left",
+      cursor: "pointer",
+    });
+    return button;
+  }
+
+  const hideLeft = menuButton("Hide Left");
+  const hideRight = menuButton("Hide Right");
+  bubbleMenu.append(hideLeft, hideRight);
+
+  const edgeBar = document.createElement("button");
+  edgeBar.type = "button";
+  edgeBar.setAttribute("aria-label", "Usul AI hidden chat tab");
+  edgeBar.setAttribute("aria-expanded", "false");
+  Object.assign(edgeBar.style, {
+    position: "fixed",
+    display: "none",
+    width: `${barWidth}px`,
+    height: `${barHeight}px`,
+    padding: "0",
+    margin: "0",
+    boxSizing: "border-box",
+    border: "0",
+    background: "#513477",
+    color: "#ffffff",
+    font: "16px system-ui, sans-serif",
+    boxShadow: shadow,
+    opacity: "0.75",
+    cursor: "pointer",
+    touchAction: "none",
+    userSelect: "none",
+    WebkitUserSelect: "none",
+    transition: "top .2s ease, opacity .2s ease",
+    zIndex: "2147483647",
+  });
+
+  const barMenu = document.createElement("div");
+  barMenu.setAttribute("role", "menu");
+  barMenu.setAttribute("aria-label", "Usul AI hidden chat actions");
+  Object.assign(barMenu.style, {
+    position: "fixed",
+    display: "none",
+    width: "132px",
+    padding: "4px",
+    boxSizing: "border-box",
+    borderRadius: "10px",
+    background: panelSurface,
+    boxShadow: shadow,
+    zIndex: "2147483647",
+  });
+  const showUsulAi = menuButton("Show UsulAI");
+  barMenu.append(showUsulAi);
 
   function readStored(key: string): string | null {
     try {
@@ -207,7 +296,29 @@ import {
     return null;
   }
 
+  function readHidden(): { side: "left" | "right"; y: number } | null {
+    try {
+      const stored = JSON.parse(localStorage.getItem(hiddenKey) ?? "null") as {
+        side?: unknown;
+        y?: unknown;
+      } | null;
+      if (
+        (stored?.side === "left" || stored?.side === "right") &&
+        typeof stored.y === "number" &&
+        Number.isFinite(stored.y) &&
+        stored.y >= 0 &&
+        stored.y <= 1
+      ) {
+        return { side: stored.side, y: stored.y };
+      }
+    } catch {
+      // The widget remains usable when storage is unavailable.
+    }
+    return null;
+  }
+
   const savedPosition = readPosition();
+  const savedHidden = readHidden();
   const initialBounds = bubbleBounds(viewport());
   let ratios: Point = savedPosition ?? {
     x: initialBounds.x > 0 ? Math.max(0, initialBounds.x - 20) / initialBounds.x : 0,
@@ -216,7 +327,14 @@ import {
   let restingPosition: Point = { x: 0, y: 0 };
   let bubblePosition: Point = { x: 0, y: 0 };
   let isOpen = false;
+  let hiddenSide: "left" | "right" | null = savedHidden?.side ?? null;
+  let barRatio = savedHidden?.y ?? ratios.y;
+  let barY = 0;
+  let bubbleMenuOpen = false;
+  let barMenuOpen = false;
   let fadeTimer: ReturnType<typeof setTimeout> | undefined;
+  let barFadeTimer: ReturnType<typeof setTimeout> | undefined;
+  let holdTimer: ReturnType<typeof setTimeout> | undefined;
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
   let activePointer:
     | {
@@ -225,8 +343,11 @@ import {
         startY: number;
         origin: Point;
         dragged: boolean;
+        held: boolean;
       }
     | undefined;
+  let activeBarPointer:
+    { id: number; startY: number; originY: number; dragged: boolean } | undefined;
 
   function setBubblePosition(next: Point) {
     bubblePosition = next;
@@ -278,10 +399,106 @@ import {
     }
   }
 
+  function rememberHidden() {
+    try {
+      if (hiddenSide)
+        localStorage.setItem(hiddenKey, JSON.stringify({ side: hiddenSide, y: barRatio }));
+      else localStorage.removeItem(hiddenKey);
+    } catch {
+      // Storage may be unavailable on the host site.
+    }
+  }
+
+  function placeBubbleMenu() {
+    const size = viewport();
+    const menuWidth = 128;
+    const menuHeight = 96;
+    bubbleMenu.style.left = `${Math.max(0, Math.min(bubblePosition.x, size.width - menuWidth))}px`;
+    bubbleMenu.style.top = `${Math.max(
+      0,
+      Math.min(
+        bubblePosition.y + size.bubbleSize! + 8 + menuHeight <= size.height
+          ? bubblePosition.y + size.bubbleSize! + 8
+          : bubblePosition.y - menuHeight - 8,
+        size.height - menuHeight,
+      ),
+    )}px`;
+  }
+
+  function setBubbleMenuOpen(open: boolean) {
+    bubbleMenuOpen = open;
+    bubbleMenu.style.display = open ? "flex" : "none";
+    bubble.setAttribute("aria-haspopup", "menu");
+    if (open) placeBubbleMenu();
+    showBubbleTemporarily();
+  }
+
+  function placeBarMenu() {
+    const menuWidth = 132;
+    const size = viewport();
+    barMenu.style.left = `${hiddenSide === "left" ? barWidth + 4 : Math.max(0, size.width - barWidth - menuWidth - 4)}px`;
+    barMenu.style.top = `${Math.max(0, Math.min(barY + 4, size.height - 52))}px`;
+  }
+
+  function setBarMenuOpen(open: boolean) {
+    barMenuOpen = open;
+    barMenu.style.display = open ? "block" : "none";
+    edgeBar.setAttribute("aria-expanded", String(open));
+    if (open) placeBarMenu();
+    showBarTemporarily();
+  }
+
+  function setBarPosition(nextY: number) {
+    const maxY = Math.max(0, viewport().height - barHeight);
+    barY = Math.max(0, Math.min(nextY, maxY));
+    barRatio = maxY > 0 ? barY / maxY : 0;
+    edgeBar.style.left =
+      hiddenSide === "left" ? "0px" : `${Math.max(0, viewport().width - barWidth)}px`;
+    edgeBar.style.top = `${barY}px`;
+    edgeBar.style.borderRadius = hiddenSide === "left" ? "0 8px 8px 0" : "8px 0 0 8px";
+    edgeBar.textContent = hiddenSide === "left" ? "›" : "‹";
+    if (barMenuOpen) placeBarMenu();
+  }
+
+  function showBarTemporarily() {
+    clearTimeout(barFadeTimer);
+    edgeBar.style.opacity = "1";
+    if (!barMenuOpen && !activeBarPointer) {
+      barFadeTimer = setTimeout(() => {
+        edgeBar.style.opacity = "0.75";
+      }, fadeDelayMs);
+    }
+  }
+
+  function hideBubble(side: "left" | "right") {
+    if (isOpen) return;
+    setBubbleMenuOpen(false);
+    hiddenSide = side;
+    setBarPosition(restingPosition.y + (viewport().bubbleSize! - barHeight) / 2);
+    bubble.style.display = "none";
+    edgeBar.style.display = "block";
+    rememberHidden();
+    showBarTemporarily();
+  }
+
+  function restoreBubble() {
+    if (!hiddenSide) return;
+    const bounds = bubbleBounds(viewport());
+    const x = hiddenSide === "left" ? 0 : bounds.x;
+    setRestingPosition({ x, y: barY + (barHeight - viewport().bubbleSize!) / 2 });
+    rememberPosition();
+    hiddenSide = null;
+    rememberHidden();
+    setBarMenuOpen(false);
+    edgeBar.style.display = "none";
+    bubble.style.display = "flex";
+    showBubbleTemporarily();
+  }
+
   function showBubbleTemporarily() {
     clearTimeout(fadeTimer);
     bubble.style.opacity = "1";
-    if (!isOpen) {
+    if (!isOpen && !bubbleMenuOpen) {
       fadeTimer = setTimeout(() => {
         bubble.style.opacity = "0.5";
       }, fadeDelayMs);
@@ -289,6 +506,7 @@ import {
   }
 
   function setOpen(open: boolean) {
+    if (open && bubbleMenuOpen) setBubbleMenuOpen(false);
     isOpen = open;
     bubble.setAttribute("aria-expanded", String(open));
     bubble.setAttribute("aria-label", open ? "Close Usul AI chat" : "Open Usul AI chat");
@@ -322,16 +540,25 @@ import {
 
   bubble.addEventListener("pointerdown", (event) => {
     if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
+    clearTimeout(holdTimer);
     activePointer = {
       id: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       origin: { ...bubblePosition },
       dragged: false,
+      held: false,
     };
     bubble.setPointerCapture(event.pointerId);
     bubble.style.transition = "opacity .2s ease, filter .2s ease";
     showBubbleTemporarily();
+    if (!isOpen && !bubbleMenuOpen) {
+      holdTimer = setTimeout(() => {
+        if (!activePointer || activePointer.id !== event.pointerId || activePointer.dragged) return;
+        activePointer.held = true;
+        setBubbleMenuOpen(true);
+      }, holdDelayMs);
+    }
   });
 
   bubble.addEventListener("pointermove", (event) => {
@@ -339,8 +566,10 @@ import {
     const dx = event.clientX - activePointer.startX;
     const dy = event.clientY - activePointer.startY;
     if (!activePointer.dragged && Math.hypot(dx, dy) < 6) return;
+    clearTimeout(holdTimer);
     activePointer.dragged = true;
     if (!isOpen) {
+      if (bubbleMenuOpen) setBubbleMenuOpen(false);
       setRestingPosition({ x: activePointer.origin.x + dx, y: activePointer.origin.y + dy }, true);
     }
     showBubbleTemporarily();
@@ -349,12 +578,18 @@ import {
   bubble.addEventListener("pointerup", (event) => {
     if (!activePointer || event.pointerId !== activePointer.id) return;
     const dragged = activePointer.dragged;
+    const held = activePointer.held;
+    clearTimeout(holdTimer);
     activePointer = undefined;
     bubble.releasePointerCapture(event.pointerId);
     bubble.style.transition = "left .28s ease, top .28s ease, opacity .2s ease, filter .2s ease";
     if (dragged) {
       if (!isOpen) rememberPosition();
       showBubbleTemporarily();
+    } else if (held) {
+      showBubbleTemporarily();
+    } else if (bubbleMenuOpen) {
+      setBubbleMenuOpen(false);
     } else {
       setOpen(!isOpen);
     }
@@ -362,6 +597,7 @@ import {
 
   bubble.addEventListener("pointercancel", (event) => {
     if (!activePointer || event.pointerId !== activePointer.id) return;
+    clearTimeout(holdTimer);
     if (activePointer.dragged && !isOpen) rememberPosition();
     activePointer = undefined;
     bubble.style.transition = "left .28s ease, top .28s ease, opacity .2s ease, filter .2s ease";
@@ -369,8 +605,71 @@ import {
   });
 
   bubble.addEventListener("click", (event) => {
-    if (event.detail === 0) setOpen(!isOpen);
+    if (event.detail === 0) {
+      if (bubbleMenuOpen) setBubbleMenuOpen(false);
+      else setOpen(!isOpen);
+    }
   });
+
+  bubble.addEventListener("contextmenu", (event) => {
+    if (isOpen) return;
+    event.preventDefault();
+    clearTimeout(holdTimer);
+    if (activePointer) activePointer.held = true;
+    setBubbleMenuOpen(true);
+  });
+
+  hideLeft.addEventListener("click", () => hideBubble("left"));
+  hideRight.addEventListener("click", () => hideBubble("right"));
+
+  edgeBar.addEventListener("pointerdown", (event) => {
+    if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
+    activeBarPointer = {
+      id: event.pointerId,
+      startY: event.clientY,
+      originY: barY,
+      dragged: false,
+    };
+    edgeBar.setPointerCapture(event.pointerId);
+    edgeBar.style.transition = "opacity .2s ease";
+    showBarTemporarily();
+  });
+
+  edgeBar.addEventListener("pointermove", (event) => {
+    if (!activeBarPointer || event.pointerId !== activeBarPointer.id) return;
+    const dy = event.clientY - activeBarPointer.startY;
+    if (!activeBarPointer.dragged && Math.abs(dy) < 6) return;
+    activeBarPointer.dragged = true;
+    if (barMenuOpen) setBarMenuOpen(false);
+    setBarPosition(activeBarPointer.originY + dy);
+    showBarTemporarily();
+  });
+
+  edgeBar.addEventListener("pointerup", (event) => {
+    if (!activeBarPointer || event.pointerId !== activeBarPointer.id) return;
+    const dragged = activeBarPointer.dragged;
+    activeBarPointer = undefined;
+    edgeBar.releasePointerCapture(event.pointerId);
+    edgeBar.style.transition = "top .2s ease, opacity .2s ease";
+    if (dragged) rememberHidden();
+    else setBarMenuOpen(!barMenuOpen);
+    showBarTemporarily();
+  });
+
+  edgeBar.addEventListener("pointercancel", (event) => {
+    if (!activeBarPointer || event.pointerId !== activeBarPointer.id) return;
+    if (activeBarPointer.dragged) rememberHidden();
+    activeBarPointer = undefined;
+    edgeBar.style.transition = "top .2s ease, opacity .2s ease";
+    showBarTemporarily();
+  });
+
+  edgeBar.addEventListener("click", (event) => {
+    if (event.detail === 0) setBarMenuOpen(!barMenuOpen);
+  });
+
+  edgeBar.addEventListener("mouseenter", showBarTemporarily);
+  showUsulAi.addEventListener("click", restoreBubble);
 
   bubble.addEventListener("mouseenter", () => {
     showBubbleTemporarily();
@@ -382,12 +681,14 @@ import {
   });
 
   document.addEventListener("pointerdown", (event) => {
-    if (
-      isOpen &&
-      event.target instanceof Node &&
-      !bubble.contains(event.target) &&
-      !frame.contains(event.target)
-    ) {
+    if (!(event.target instanceof Node)) return;
+    if (bubbleMenuOpen && !bubble.contains(event.target) && !bubbleMenu.contains(event.target)) {
+      setBubbleMenuOpen(false);
+    }
+    if (barMenuOpen && !edgeBar.contains(event.target) && !barMenu.contains(event.target)) {
+      setBarMenuOpen(false);
+    }
+    if (isOpen && !bubble.contains(event.target) && !frame.contains(event.target)) {
       setOpen(false);
     }
   });
@@ -515,17 +816,30 @@ import {
   });
 
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && isOpen) setOpen(false);
+    if (event.key !== "Escape") return;
+    if (bubbleMenuOpen) setBubbleMenuOpen(false);
+    else if (barMenuOpen) setBarMenuOpen(false);
+    else if (isOpen) setOpen(false);
   });
 
   window.addEventListener("resize", () => {
     const bounds = bubbleBounds(viewport());
     setRestingPosition({ x: ratios.x * bounds.x, y: ratios.y * bounds.y }, true);
     if (isOpen) applyOpenLayout(placeOpenWidget(restingPosition, viewport()));
+    if (bubbleMenuOpen) placeBubbleMenu();
+    if (hiddenSide) setBarPosition(barRatio * Math.max(0, viewport().height - barHeight));
   });
 
   setRestingPosition({ x: ratios.x * initialBounds.x, y: ratios.y * initialBounds.y }, true);
+  if (hiddenSide) {
+    setBarPosition(barRatio * Math.max(0, viewport().height - barHeight));
+    bubble.style.display = "none";
+    edgeBar.style.display = "block";
+  }
   document.body.appendChild(frame);
   document.body.appendChild(headPointer);
   document.body.appendChild(bubble);
+  document.body.appendChild(bubbleMenu);
+  document.body.appendChild(edgeBar);
+  document.body.appendChild(barMenu);
 })();

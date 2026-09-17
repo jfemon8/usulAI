@@ -6,7 +6,9 @@ class FakeElement {
   style: Record<string, string> = {};
   attributes = new Map<string, string>();
   listeners = new Map<string, EventListener[]>();
+  children: FakeElement[] = [];
   innerHTML = "";
+  textContent = "";
   title = "";
   type = "";
   src = "";
@@ -22,8 +24,12 @@ class FakeElement {
     return this.attributes.get(name) ?? null;
   }
 
-  contains(target: unknown) {
-    return target === this;
+  contains(target: unknown): boolean {
+    return target === this || this.children.some((child) => child.contains(target));
+  }
+
+  append(...children: FakeElement[]) {
+    this.children.push(...children);
   }
 
   addEventListener(type: string, listener: EventListener) {
@@ -45,11 +51,12 @@ async function loadWidget(
     referrer?: string;
     navigationType?: string;
     sessionStore?: Map<string, string>;
+    localStore?: Map<string, string>;
   } = {},
 ) {
   const elements: FakeElement[] = [];
   const windowEvents = new Map<string, EventListener>();
-  const storage = new Map<string, string>();
+  const storage = options.localStore ?? new Map<string, string>();
   const sessionStore = options.sessionStore ?? new Map<string, string>();
   const documentEvents = new Map<string, EventListener>();
   const document = {
@@ -75,6 +82,7 @@ async function loadWidget(
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => storage.get(key) ?? null,
     setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key),
   });
   vi.stubGlobal("sessionStorage", {
     getItem: (key: string) => sessionStore.get(key) ?? null,
@@ -90,12 +98,26 @@ async function loadWidget(
   const bubble = elements.find((element) => element.tagName === "button");
   const frame = elements.find((element) => element.tagName === "iframe");
   const headPointer = elements.find((element) => element.tagName === "div");
-  if (!bubble || !frame || !headPointer) throw new Error("Widget was not mounted");
+  const bubbleMenu = elements.find(
+    (element) => element.getAttribute("aria-label") === "Hide Usul AI chat bubble",
+  );
+  const edgeBar = elements.find(
+    (element) => element.getAttribute("aria-label") === "Usul AI hidden chat tab",
+  );
+  const barMenu = elements.find(
+    (element) => element.getAttribute("aria-label") === "Usul AI hidden chat actions",
+  );
+  if (!bubble || !frame || !headPointer || !bubbleMenu || !edgeBar || !barMenu) {
+    throw new Error("Widget was not mounted");
+  }
 
   return {
     bubble,
     frame,
     headPointer,
+    bubbleMenu,
+    edgeBar,
+    barMenu,
     window,
     windowEvents,
     storage,
@@ -271,6 +293,82 @@ describe("floating widget interactions", () => {
     expect(bubble.getAttribute("aria-expanded")).toBe("true");
     documentEvents.get("pointerdown")?.({ target: new FakeElement("main") } as unknown as Event);
     expect(bubble.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("opens hide options on hold, keeps the edge tab draggable, and restores the bubble", async () => {
+    vi.useFakeTimers();
+    const { bubble, bubbleMenu, edgeBar, barMenu, documentEvents, storage } = await loadWidget();
+    const press = pointer(340, 790);
+
+    bubble.emit("pointerdown", press);
+    vi.advanceTimersByTime(599);
+    expect(bubbleMenu.style.display).toBe("none");
+    vi.advanceTimersByTime(1);
+    expect(bubbleMenu.style.display).toBe("flex");
+    expect(bubble.style.opacity).toBe("1");
+    bubble.emit("pointerup", press);
+    expect(bubble.getAttribute("aria-expanded")).toBe("false");
+    documentEvents.get("pointerdown")?.({ target: new FakeElement("main") } as unknown as Event);
+    expect(bubbleMenu.style.display).toBe("none");
+
+    bubble.emit("pointerdown", press);
+    vi.advanceTimersByTime(600);
+    bubble.emit("pointerup", press);
+    bubbleMenu.children[0]!.emit("click");
+    expect(bubble.style.display).toBe("none");
+    expect(edgeBar.style.display).toBe("block");
+    expect(edgeBar.style.left).toBe("0px");
+    expect(edgeBar.style.borderRadius).toBe("0 8px 8px 0");
+    expect(edgeBar.style.opacity).toBe("1");
+    vi.advanceTimersByTime(5_000);
+    expect(edgeBar.style.opacity).toBe("0.75");
+
+    const startY = Number.parseFloat(edgeBar.style.top ?? "NaN");
+    edgeBar.emit("pointerdown", pointer(8, startY + 10));
+    edgeBar.emit("pointermove", pointer(100, startY - 190));
+    edgeBar.emit("pointerup", pointer(100, startY - 190));
+    expect(edgeBar.style.left).toBe("0px");
+    expect(Number.parseFloat(edgeBar.style.top ?? "NaN")).toBe(startY - 200);
+    expect(storage.has("usul-ai-widget-hidden-v1")).toBe(true);
+
+    edgeBar.emit("pointerdown", pointer(8, startY - 190));
+    edgeBar.emit("pointerup", pointer(8, startY - 190));
+    expect(barMenu.style.display).toBe("block");
+    vi.advanceTimersByTime(10_000);
+    expect(edgeBar.style.opacity).toBe("1");
+    documentEvents.get("pointerdown")?.({ target: new FakeElement("main") } as unknown as Event);
+    expect(barMenu.style.display).toBe("none");
+    vi.advanceTimersByTime(5_000);
+    expect(edgeBar.style.opacity).toBe("0.75");
+
+    edgeBar.emit("pointerdown", pointer(8, startY - 190));
+    edgeBar.emit("pointerup", pointer(8, startY - 190));
+    barMenu.children[0]!.emit("click");
+    expect(edgeBar.style.display).toBe("none");
+    expect(bubble.style.display).toBe("flex");
+    expect(bubble.style.left).toBe("0px");
+    expect(storage.has("usul-ai-widget-hidden-v1")).toBe(false);
+  });
+
+  it("keeps a hidden right tab at its saved height after page navigation", async () => {
+    vi.useFakeTimers();
+    const first = await loadWidget();
+    first.bubble.emit("pointerdown", pointer(340, 790));
+    vi.advanceTimersByTime(600);
+    first.bubble.emit("pointerup", pointer(340, 790));
+    first.bubbleMenu.children[1]!.emit("click");
+    first.edgeBar.emit("pointerdown", pointer(382, 780));
+    first.edgeBar.emit("pointermove", pointer(200, 110));
+    first.edgeBar.emit("pointerup", pointer(200, 110));
+    const savedTop = first.edgeBar.style.top;
+
+    const second = await loadWidget(undefined, { localStore: first.storage });
+    expect(second.bubble.style.display).toBe("none");
+    expect(second.edgeBar.style.display).toBe("block");
+    expect(second.edgeBar.style.left).toBe("374px");
+    expect(second.edgeBar.style.borderRadius).toBe("8px 0 0 8px");
+    expect(second.edgeBar.style.top).toBe(savedTop);
+    expect(second.edgeBar.style.opacity).toBe("0.75");
   });
 
   it("restores the chat on an internal page and starts fresh after leaving the site", async () => {
