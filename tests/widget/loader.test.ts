@@ -52,6 +52,7 @@ async function loadWidget(
     navigationType?: string;
     sessionStore?: Map<string, string>;
     localStore?: Map<string, string>;
+    darkMode?: boolean;
   } = {},
 ) {
   const elements: FakeElement[] = [];
@@ -72,7 +73,7 @@ async function loadWidget(
     innerHeight: viewport.height,
     location: new URL(options.hostUrl ?? "https://host.example/page-one"),
     performance: { getEntriesByType: () => [{ type: options.navigationType ?? "navigate" }] },
-    matchMedia: () => ({ matches: false }),
+    matchMedia: () => ({ matches: options.darkMode ?? false }),
     addEventListener: (type: string, listener: EventListener) => windowEvents.set(type, listener),
   };
 
@@ -101,13 +102,24 @@ async function loadWidget(
   const bubbleMenu = elements.find(
     (element) => element.getAttribute("aria-label") === "Hide Usul AI chat bubble",
   );
+  const bubbleMenuPointer = elements.find(
+    (element) => element !== headPointer && element.getAttribute("aria-hidden") === "true",
+  );
   const edgeBar = elements.find(
     (element) => element.getAttribute("aria-label") === "Usul AI hidden chat tab",
   );
   const barMenu = elements.find(
     (element) => element.getAttribute("aria-label") === "Usul AI hidden chat actions",
   );
-  if (!bubble || !frame || !headPointer || !bubbleMenu || !edgeBar || !barMenu) {
+  if (
+    !bubble ||
+    !frame ||
+    !headPointer ||
+    !bubbleMenu ||
+    !bubbleMenuPointer ||
+    !edgeBar ||
+    !barMenu
+  ) {
     throw new Error("Widget was not mounted");
   }
 
@@ -116,6 +128,7 @@ async function loadWidget(
     frame,
     headPointer,
     bubbleMenu,
+    bubbleMenuPointer,
     edgeBar,
     barMenu,
     window,
@@ -297,7 +310,8 @@ describe("floating widget interactions", () => {
 
   it("opens hide options on hold, keeps the edge tab draggable, and restores the bubble", async () => {
     vi.useFakeTimers();
-    const { bubble, bubbleMenu, edgeBar, barMenu, documentEvents, storage } = await loadWidget();
+    const { bubble, bubbleMenu, bubbleMenuPointer, edgeBar, barMenu, documentEvents, storage } =
+      await loadWidget();
     const press = pointer(340, 790);
 
     bubble.emit("pointerdown", press);
@@ -305,11 +319,19 @@ describe("floating widget interactions", () => {
     expect(bubbleMenu.style.display).toBe("none");
     vi.advanceTimersByTime(1);
     expect(bubbleMenu.style.display).toBe("flex");
+    expect(bubbleMenu.style.background).toBe("#f8fafc");
+    expect(bubbleMenuPointer.style.display).toBe("block");
+    expect(bubbleMenuPointer.style.borderTop).toBe("8px solid #f8fafc");
+    bubbleMenu.children[0]!.emit("mouseenter");
+    expect(bubbleMenu.children[0]!.style.background).toBe("#e7edf5");
+    bubbleMenu.children[0]!.emit("mouseleave");
+    expect(bubbleMenu.children[0]!.style.background).toBe("transparent");
     expect(bubble.style.opacity).toBe("1");
     bubble.emit("pointerup", press);
     expect(bubble.getAttribute("aria-expanded")).toBe("false");
     documentEvents.get("pointerdown")?.({ target: new FakeElement("main") } as unknown as Event);
     expect(bubbleMenu.style.display).toBe("none");
+    expect(bubbleMenuPointer.style.display).toBe("none");
 
     bubble.emit("pointerdown", press);
     vi.advanceTimersByTime(600);
@@ -317,8 +339,11 @@ describe("floating widget interactions", () => {
     bubbleMenu.children[0]!.emit("click");
     expect(bubble.style.display).toBe("none");
     expect(edgeBar.style.display).toBe("block");
+    expect(edgeBar.style.width).toBe("8px");
     expect(edgeBar.style.left).toBe("0px");
     expect(edgeBar.style.borderRadius).toBe("0 8px 8px 0");
+    expect(edgeBar.textContent).toBe("");
+    expect(barMenu.style.width).toBe("0px");
     expect(edgeBar.style.opacity).toBe("1");
     vi.advanceTimersByTime(5_000);
     expect(edgeBar.style.opacity).toBe("0.75");
@@ -333,11 +358,22 @@ describe("floating widget interactions", () => {
 
     edgeBar.emit("pointerdown", pointer(8, startY - 190));
     edgeBar.emit("pointerup", pointer(8, startY - 190));
-    expect(barMenu.style.display).toBe("block");
+    expect(barMenu.style.width).toBe("132px");
+    expect(barMenu.style.left).toBe("8px");
+    expect(barMenu.style.top).toBe(edgeBar.style.top);
+    expect(barMenu.style.background).toBe(edgeBar.style.background);
+    expect(edgeBar.style.borderRadius).toBe("0");
+    expect(barMenu.children[0]!.textContent).toBe("Show UsulAI");
+    barMenu.children[0]!.emit("mouseenter");
+    expect(barMenu.children[0]!.style.background).toBe("#6a4b91");
+    barMenu.children[0]!.emit("mouseleave");
     vi.advanceTimersByTime(10_000);
     expect(edgeBar.style.opacity).toBe("1");
     documentEvents.get("pointerdown")?.({ target: new FakeElement("main") } as unknown as Event);
-    expect(barMenu.style.display).toBe("none");
+    expect(barMenu.style.width).toBe("0px");
+    expect(edgeBar.style.borderRadius).toBe("0");
+    barMenu.emit("transitionend", { target: barMenu, propertyName: "width" });
+    expect(edgeBar.style.borderRadius).toBe("0 8px 8px 0");
     vi.advanceTimersByTime(5_000);
     expect(edgeBar.style.opacity).toBe("0.75");
 
@@ -365,10 +401,83 @@ describe("floating widget interactions", () => {
     const second = await loadWidget(undefined, { localStore: first.storage });
     expect(second.bubble.style.display).toBe("none");
     expect(second.edgeBar.style.display).toBe("block");
-    expect(second.edgeBar.style.left).toBe("374px");
+    expect(second.edgeBar.style.width).toBe("8px");
+    expect(second.edgeBar.style.left).toBe("382px");
     expect(second.edgeBar.style.borderRadius).toBe("8px 0 0 8px");
+    expect(second.edgeBar.textContent).toBe("");
+    expect(second.barMenu.style.right).toBe("8px");
     expect(second.edgeBar.style.top).toBe(savedTop);
     expect(second.edgeBar.style.opacity).toBe("0.75");
+  });
+
+  it("uses a 16px edge tab on desktop and halves it when resized to mobile", async () => {
+    vi.useFakeTimers();
+    const { bubble, bubbleMenu, edgeBar, barMenu, window, windowEvents, document } =
+      await loadWidget({ width: 1024, height: 768 });
+    bubble.emit("pointerdown", pointer(980, 720));
+    vi.advanceTimersByTime(600);
+    bubble.emit("pointerup", pointer(980, 720));
+    bubbleMenu.children[1]!.emit("click");
+    expect(edgeBar.style.width).toBe("16px");
+    expect(edgeBar.style.left).toBe("1008px");
+    expect(barMenu.style.right).toBe("16px");
+
+    window.innerWidth = 390;
+    document.documentElement.clientWidth = 390;
+    windowEvents.get("resize")?.({} as Event);
+    expect(edgeBar.style.width).toBe("8px");
+    expect(edgeBar.style.left).toBe("382px");
+    expect(barMenu.style.right).toBe("8px");
+  });
+
+  it("rounds the edge tab only after the drawer finishes closing", async () => {
+    vi.useFakeTimers();
+    const { bubble, bubbleMenu, edgeBar, documentEvents } = await loadWidget();
+    const press = pointer(340, 790);
+    bubble.emit("pointerdown", press);
+    vi.advanceTimersByTime(600);
+    bubble.emit("pointerup", press);
+    bubbleMenu.children[0]!.emit("click");
+    const toggleDrawer = () => {
+      edgeBar.emit("pointerdown", pointer(4, 780));
+      edgeBar.emit("pointerup", pointer(4, 780));
+    };
+
+    toggleDrawer();
+    documentEvents.get("pointerdown")?.({ target: new FakeElement("main") } as unknown as Event);
+    expect(edgeBar.style.borderRadius).toBe("0");
+    toggleDrawer();
+    vi.advanceTimersByTime(300);
+    expect(edgeBar.style.borderRadius).toBe("0");
+
+    toggleDrawer();
+    vi.advanceTimersByTime(269);
+    expect(edgeBar.style.borderRadius).toBe("0");
+    vi.advanceTimersByTime(1);
+    expect(edgeBar.style.borderRadius).toBe("0 8px 8px 0");
+  });
+
+  it("uses readable hide options and a bubble pointer in dark mode", async () => {
+    vi.useFakeTimers();
+    const { bubble, bubbleMenu, bubbleMenuPointer } = await loadWidget(undefined, {
+      darkMode: true,
+    });
+    bubble.emit("pointerdown", pointer(340, 790));
+    vi.advanceTimersByTime(600);
+    bubble.emit("pointerup", pointer(340, 790));
+
+    expect(bubbleMenu.style.background).toBe("#29313e");
+    expect(bubbleMenu.children[0]!.style.color).toBe("#f7fafc");
+    expect(bubbleMenuPointer.style.borderTop).toBe("8px solid #29313e");
+    bubbleMenu.children[1]!.emit("mouseenter");
+    expect(bubbleMenu.children[1]!.style.background).toBe("#3b4657");
+
+    bubble.emit("pointerdown", pointer(340, 790));
+    bubble.emit("pointermove", pointer(20, 20));
+    bubble.emit("pointerup", pointer(20, 20));
+    bubble.emit("pointerdown", pointer(20, 20));
+    vi.advanceTimersByTime(600);
+    expect(bubbleMenuPointer.style.borderBottom).toBe("8px solid #29313e");
   });
 
   it("restores the chat on an internal page and starts fresh after leaving the site", async () => {

@@ -27,7 +27,7 @@ import {
   const hiddenKey = "usul-ai-widget-hidden-v1";
   const fadeDelayMs = 5_000;
   const holdDelayMs = 600;
-  const barWidth = 16;
+  const drawerTransitionMs = 220;
   const barHeight = 56;
   const prefersDark =
     typeof window.matchMedia === "function" &&
@@ -36,6 +36,11 @@ import {
   const surface = "#d6dbe3";
   const edge = "#a3adbc";
   const panelSurface = prefersDark ? "#1b1d21" : "#ffffff";
+  const menuSurface = prefersDark ? "#29313e" : "#f8fafc";
+  const menuEdge = prefersDark ? "#526071" : "#c8d1dd";
+  const menuHover = prefersDark ? "#3b4657" : "#e7edf5";
+  const drawerSurface = "#513477";
+  const drawerHover = "#6a4b91";
   const shadow = prefersDark
     ? "0 20px 48px -22px rgba(0,0,0,0.78)"
     : "0 20px 48px -22px rgba(33,53,82,0.45)";
@@ -91,15 +96,29 @@ import {
     flexDirection: "column",
     gap: "2px",
     width: "128px",
+    height: "96px",
     padding: "4px",
     boxSizing: "border-box",
+    justifyContent: "center",
+    border: `1px solid ${menuEdge}`,
     borderRadius: "12px",
-    background: panelSurface,
+    background: menuSurface,
     boxShadow: shadow,
     zIndex: "2147483647",
   });
 
-  function menuButton(label: string): HTMLButtonElement {
+  const bubbleMenuPointer = document.createElement("div");
+  bubbleMenuPointer.setAttribute("aria-hidden", "true");
+  Object.assign(bubbleMenuPointer.style, {
+    position: "fixed",
+    display: "none",
+    width: "0",
+    height: "0",
+    pointerEvents: "none",
+    zIndex: "2147483647",
+  });
+
+  function menuButton(label: string, drawer = false): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = label;
@@ -112,10 +131,23 @@ import {
       border: "0",
       borderRadius: "8px",
       background: "transparent",
-      color: prefersDark ? "#ffffff" : "#243044",
+      color: drawer ? "#ffffff" : prefersDark ? "#f7fafc" : "#243044",
       font: "500 14px system-ui, sans-serif",
       textAlign: "left",
       cursor: "pointer",
+      whiteSpace: "nowrap",
+    });
+    button.addEventListener("mouseenter", () => {
+      button.style.background = drawer ? drawerHover : menuHover;
+    });
+    button.addEventListener("mouseleave", () => {
+      button.style.background = "transparent";
+    });
+    button.addEventListener("focus", () => {
+      button.style.background = drawer ? drawerHover : menuHover;
+    });
+    button.addEventListener("blur", () => {
+      button.style.background = "transparent";
     });
     return button;
   }
@@ -128,18 +160,17 @@ import {
   edgeBar.type = "button";
   edgeBar.setAttribute("aria-label", "Usul AI hidden chat tab");
   edgeBar.setAttribute("aria-expanded", "false");
+  edgeBar.setAttribute("aria-haspopup", "menu");
   Object.assign(edgeBar.style, {
     position: "fixed",
     display: "none",
-    width: `${barWidth}px`,
+    width: `${edgeBarWidth()}px`,
     height: `${barHeight}px`,
     padding: "0",
     margin: "0",
     boxSizing: "border-box",
     border: "0",
-    background: "#513477",
-    color: "#ffffff",
-    font: "16px system-ui, sans-serif",
+    background: drawerSurface,
     boxShadow: shadow,
     opacity: "0.75",
     cursor: "pointer",
@@ -153,18 +184,24 @@ import {
   const barMenu = document.createElement("div");
   barMenu.setAttribute("role", "menu");
   barMenu.setAttribute("aria-label", "Usul AI hidden chat actions");
+  barMenu.setAttribute("aria-hidden", "true");
   Object.assign(barMenu.style, {
     position: "fixed",
-    display: "none",
-    width: "132px",
-    padding: "4px",
+    display: "flex",
+    alignItems: "center",
+    width: "0px",
+    height: `${barHeight}px`,
+    padding: "0",
     boxSizing: "border-box",
-    borderRadius: "10px",
-    background: panelSurface,
-    boxShadow: shadow,
+    overflow: "hidden",
+    background: drawerSurface,
+    boxShadow: "none",
+    pointerEvents: "none",
+    transition: `width ${drawerTransitionMs}ms ease`,
     zIndex: "2147483647",
   });
-  const showUsulAi = menuButton("Show UsulAI");
+  const showUsulAi = menuButton("Show UsulAI", true);
+  showUsulAi.tabIndex = -1;
   barMenu.append(showUsulAi);
 
   function readStored(key: string): string | null {
@@ -276,6 +313,10 @@ import {
     };
   }
 
+  function edgeBarWidth(): number {
+    return viewport().width <= 640 ? 8 : 16;
+  }
+
   function readPosition(): Point | null {
     try {
       const stored = JSON.parse(localStorage.getItem(positionKey) ?? "null") as Point | null;
@@ -332,8 +373,10 @@ import {
   let barY = 0;
   let bubbleMenuOpen = false;
   let barMenuOpen = false;
+  let barClosing = false;
   let fadeTimer: ReturnType<typeof setTimeout> | undefined;
   let barFadeTimer: ReturnType<typeof setTimeout> | undefined;
+  let barCloseTimer: ReturnType<typeof setTimeout> | undefined;
   let holdTimer: ReturnType<typeof setTimeout> | undefined;
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
   let activePointer:
@@ -413,51 +456,91 @@ import {
     const size = viewport();
     const menuWidth = 128;
     const menuHeight = 96;
-    bubbleMenu.style.left = `${Math.max(0, Math.min(bubblePosition.x, size.width - menuWidth))}px`;
-    bubbleMenu.style.top = `${Math.max(
+    const below = bubblePosition.y + size.bubbleSize! + 8 + menuHeight <= size.height;
+    const left = Math.max(0, Math.min(bubblePosition.x, size.width - menuWidth));
+    const top = Math.max(
       0,
       Math.min(
-        bubblePosition.y + size.bubbleSize! + 8 + menuHeight <= size.height
-          ? bubblePosition.y + size.bubbleSize! + 8
-          : bubblePosition.y - menuHeight - 8,
+        below ? bubblePosition.y + size.bubbleSize! + 8 : bubblePosition.y - menuHeight - 8,
         size.height - menuHeight,
       ),
+    );
+    bubbleMenu.style.left = `${left}px`;
+    bubbleMenu.style.top = `${top}px`;
+    bubbleMenuPointer.style.left = `${Math.max(
+      left + 12,
+      Math.min(bubblePosition.x + size.bubbleSize! / 2 - 8, left + menuWidth - 28),
     )}px`;
+    bubbleMenuPointer.style.top = `${below ? top - 8 : top + menuHeight}px`;
+    bubbleMenuPointer.style.borderLeft = "8px solid transparent";
+    bubbleMenuPointer.style.borderRight = "8px solid transparent";
+    bubbleMenuPointer.style.borderTop = below ? "0" : `8px solid ${menuSurface}`;
+    bubbleMenuPointer.style.borderBottom = below ? `8px solid ${menuSurface}` : "0";
   }
 
   function setBubbleMenuOpen(open: boolean) {
     bubbleMenuOpen = open;
     bubbleMenu.style.display = open ? "flex" : "none";
+    bubbleMenuPointer.style.display = open ? "block" : "none";
+    if (!open) {
+      hideLeft.style.background = "transparent";
+      hideRight.style.background = "transparent";
+    }
     bubble.setAttribute("aria-haspopup", "menu");
     if (open) placeBubbleMenu();
     showBubbleTemporarily();
   }
 
   function placeBarMenu() {
-    const menuWidth = 132;
-    const size = viewport();
-    barMenu.style.left = `${hiddenSide === "left" ? barWidth + 4 : Math.max(0, size.width - barWidth - menuWidth - 4)}px`;
-    barMenu.style.top = `${Math.max(0, Math.min(barY + 4, size.height - 52))}px`;
+    const width = edgeBarWidth();
+    barMenu.style.left = hiddenSide === "left" ? `${width}px` : "auto";
+    barMenu.style.right = hiddenSide === "right" ? `${width}px` : "auto";
+    barMenu.style.top = `${barY}px`;
+    barMenu.style.borderRadius = hiddenSide === "left" ? "0 8px 8px 0" : "8px 0 0 8px";
+    barMenu.style.width = `${barMenuOpen ? Math.min(132, viewport().width - width) : 0}px`;
+  }
+
+  function finishBarClose() {
+    if (!barClosing || barMenuOpen) return;
+    clearTimeout(barCloseTimer);
+    barClosing = false;
+    edgeBar.style.borderRadius = hiddenSide === "left" ? "0 8px 8px 0" : "8px 0 0 8px";
+    edgeBar.style.boxShadow = shadow;
+    barMenu.style.boxShadow = "none";
   }
 
   function setBarMenuOpen(open: boolean) {
+    const wasOpen = barMenuOpen;
+    clearTimeout(barCloseTimer);
     barMenuOpen = open;
-    barMenu.style.display = open ? "block" : "none";
+    barClosing = !open && wasOpen;
+    barMenu.style.display = "flex";
+    barMenu.style.pointerEvents = open ? "auto" : "none";
+    barMenu.style.boxShadow = open || barClosing ? shadow : "none";
+    barMenu.setAttribute("aria-hidden", String(!open));
+    showUsulAi.tabIndex = open ? 0 : -1;
+    if (!open) showUsulAi.style.background = "transparent";
     edgeBar.setAttribute("aria-expanded", String(open));
-    if (open) placeBarMenu();
+    edgeBar.style.borderRadius =
+      open || barClosing ? "0" : hiddenSide === "left" ? "0 8px 8px 0" : "8px 0 0 8px";
+    edgeBar.style.boxShadow = open || barClosing ? "none" : shadow;
+    placeBarMenu();
+    if (barClosing) barCloseTimer = setTimeout(finishBarClose, drawerTransitionMs + 50);
     showBarTemporarily();
   }
 
   function setBarPosition(nextY: number) {
     const maxY = Math.max(0, viewport().height - barHeight);
+    const width = edgeBarWidth();
     barY = Math.max(0, Math.min(nextY, maxY));
     barRatio = maxY > 0 ? barY / maxY : 0;
+    edgeBar.style.width = `${width}px`;
     edgeBar.style.left =
-      hiddenSide === "left" ? "0px" : `${Math.max(0, viewport().width - barWidth)}px`;
+      hiddenSide === "left" ? "0px" : `${Math.max(0, viewport().width - width)}px`;
     edgeBar.style.top = `${barY}px`;
-    edgeBar.style.borderRadius = hiddenSide === "left" ? "0 8px 8px 0" : "8px 0 0 8px";
-    edgeBar.textContent = hiddenSide === "left" ? "›" : "‹";
-    if (barMenuOpen) placeBarMenu();
+    edgeBar.style.borderRadius =
+      barMenuOpen || barClosing ? "0" : hiddenSide === "left" ? "0 8px 8px 0" : "8px 0 0 8px";
+    placeBarMenu();
   }
 
   function showBarTemporarily() {
@@ -477,6 +560,7 @@ import {
     setBarPosition(restingPosition.y + (viewport().bubbleSize! - barHeight) / 2);
     bubble.style.display = "none";
     edgeBar.style.display = "block";
+    barMenu.style.display = "flex";
     rememberHidden();
     showBarTemporarily();
   }
@@ -491,6 +575,9 @@ import {
     rememberHidden();
     setBarMenuOpen(false);
     edgeBar.style.display = "none";
+    barMenu.style.display = "none";
+    clearTimeout(barCloseTimer);
+    barClosing = false;
     bubble.style.display = "flex";
     showBubbleTemporarily();
   }
@@ -670,6 +757,9 @@ import {
 
   edgeBar.addEventListener("mouseenter", showBarTemporarily);
   showUsulAi.addEventListener("click", restoreBubble);
+  barMenu.addEventListener("transitionend", (event) => {
+    if (event.target === barMenu && event.propertyName === "width") finishBarClose();
+  });
 
   bubble.addEventListener("mouseenter", () => {
     showBubbleTemporarily();
@@ -840,6 +930,7 @@ import {
   document.body.appendChild(headPointer);
   document.body.appendChild(bubble);
   document.body.appendChild(bubbleMenu);
+  document.body.appendChild(bubbleMenuPointer);
   document.body.appendChild(edgeBar);
   document.body.appendChild(barMenu);
 })();
