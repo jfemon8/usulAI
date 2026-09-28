@@ -277,9 +277,11 @@ export interface RateLimitClient {
   blocked: boolean;
 }
 
+export type RateLimitWindows = Partial<Record<"minute" | "hour" | "day", number>>;
+
 export interface RateLimitScope {
   scope: string;
-  limits: { minute: number; hour: number; day: number } | null;
+  limits: RateLimitWindows | null;
   clients: RateLimitClient[];
 }
 
@@ -301,10 +303,7 @@ export function groupRateLimits(
   perScope = CLIENTS_PER_SCOPE,
 ): RateLimitScope[] {
   const scopes = new Map<string, RateLimitClient[]>();
-  const configured = RATE_LIMIT_CONFIG.scopes as Record<
-    string,
-    { minute: number; hour: number; day: number }
-  >;
+  const configured: Record<string, RateLimitWindows> = RATE_LIMIT_CONFIG.scopes;
 
   for (const doc of docs) {
     const match = RATE_ID.exec(doc._id);
@@ -326,7 +325,9 @@ export function groupRateLimits(
       blocked:
         client !== "global" &&
         limits !== undefined &&
-        (counts.minute > limits.minute || counts.hour > limits.hour || counts.day > limits.day),
+        (counts.minute > (limits.minute ?? Infinity) ||
+          counts.hour > (limits.hour ?? Infinity) ||
+          counts.day > (limits.day ?? Infinity)),
     };
     scopes.set(scope, [...(scopes.get(scope) ?? []), row]);
   }

@@ -1143,7 +1143,7 @@ export const RATE_LIMIT_CONFIG = {
     sourceView: { minute: 30, hour: 300, day: 1000 },
     usage: { minute: 20, hour: 200, day: 1000 },
     admin: { minute: 240, hour: 5000, day: 40000 },
-    adminLogin: { minute: 5, hour: 20, day: 60 },
+    adminLogin: { minute: 20 },
     adminReset: { minute: 6, hour: 30, day: 60 },
     helpRequest: { minute: 2, hour: 6, day: 12 },
     helpTrack: { minute: 30, hour: 300, day: 2000 },

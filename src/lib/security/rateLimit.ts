@@ -1,7 +1,7 @@
 import { createHash } from "crypto";
 import { DB_CONFIG, RATE_LIMIT_CONFIG } from "@/config/site";
 import { getDb } from "@/lib/db/mongoClient";
-import type { ScopeUsage, WindowUsage } from "@/lib/usage/types";
+import type { ScopeUsage, UsageScope, WindowUsage } from "@/lib/usage/types";
 import { logger } from "@/lib/utils/logger";
 
 export type RateScope = keyof typeof RATE_LIMIT_CONFIG.scopes;
@@ -140,7 +140,7 @@ export function usageFrom(
 }
 
 export async function readRateUsage(
-  scope: RateScope,
+  scope: UsageScope,
   request: Request,
   now: number = Date.now(),
 ): Promise<ScopeUsage> {

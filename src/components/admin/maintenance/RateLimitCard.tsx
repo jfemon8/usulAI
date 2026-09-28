@@ -32,6 +32,12 @@ const SCOPE_NAMES: Record<string, string> = {
   masail: "মাসআলা পাতা",
 };
 
+const LIMIT_LABELS = [
+  ["minute", "মিনিটে"],
+  ["hour", "ঘণ্টায়"],
+  ["day", "দিনে"],
+] as const;
+
 function Count({ value, limit }: { value: number; limit: number | undefined }) {
   const over = limit !== undefined && value > limit;
   const near = limit !== undefined && !over && value >= limit * 0.8;
@@ -103,8 +109,12 @@ export function RateLimitCard() {
                 </h3>
                 {scope.limits ? (
                   <p className="text-xs text-(--text-3) tabular-nums">
-                    সীমা: মিনিটে {formatCount(scope.limits.minute)}, ঘণ্টায়{" "}
-                    {formatCount(scope.limits.hour)}, দিনে {formatCount(scope.limits.day)}
+                    সীমা:{" "}
+                    {LIMIT_LABELS.filter(([window]) => scope.limits?.[window] !== undefined)
+                      .map(
+                        ([window, label]) => `${label} ${formatCount(scope.limits?.[window] ?? 0)}`,
+                      )
+                      .join(", ") || "নেই"}
                   </p>
                 ) : null}
               </div>
