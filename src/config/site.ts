@@ -10,6 +10,34 @@ export const DATE_TIME_CONFIG = {
   locale: "en-US",
 } as const;
 
+export const GENERAL_ASSISTANT_CONFIG = {
+  enabled: true,
+  banglaName: "উসুল এআই",
+  creator: { name: "Emon", url: "https://jfemon.vercel.app/" },
+  timeZoneHeader: "x-usul-time-zone",
+  maxClauses: 4,
+  maxClauseWords: 12,
+  maxZakatWords: 60,
+  maxPlaceWords: 3,
+  requestTimeoutMs: 4_500,
+  weatherCacheMs: 10 * 60_000,
+  prayerCacheMs: 6 * 60 * 60_000,
+  geocodeCacheMs: 24 * 60 * 60_000,
+  cacheEntries: 300,
+  hijriDayOffset: 0,
+  prayer: { method: 1, school: 1 },
+  metalCacheMs: 60 * 60_000,
+  evidenceTimeoutMs: 4_000,
+  endpoints: {
+    weather: "https://api.open-meteo.com/v1/forecast",
+    geocode: "https://geocoding-api.open-meteo.com/v1/search",
+    prayer: "https://api.aladhan.com/v1/timings",
+    gold: "https://api.gold-api.com/price/XAU",
+    silver: "https://api.gold-api.com/price/XAG",
+    exchange: "https://open.er-api.com/v6/latest/USD",
+  },
+} as const;
+
 export const SOURCE_PRIORITY = ["quran", "hadith", "ijma", "qiyas", "sirat", "fiqh"] as const;
 
 type SourceName = (typeof SOURCE_PRIORITY)[number];

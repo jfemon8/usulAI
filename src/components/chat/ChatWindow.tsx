@@ -7,6 +7,7 @@ import { DefaultChatTransport } from "ai";
 import { clsx } from "clsx";
 import { AnswerMarkdown } from "@/components/chat/AnswerMarkdown";
 import { Composer } from "@/components/chat/Composer";
+import { GeneralAnswer } from "@/components/chat/GeneralAnswer";
 import { MessageActions } from "@/components/chat/MessageActions";
 import { SourceCitationList } from "@/components/chat/SourceCitation";
 import { UsageModal } from "@/components/chat/UsageModal";
@@ -15,10 +16,11 @@ import { ArrowDownIcon, RetryIcon } from "@/components/ui/Icons";
 import { LogoMark } from "@/components/ui/Logo";
 import { commandEntry } from "@/lib/chat/commands";
 import { messageText } from "@/lib/chat/conversations";
+import { clientTimeZoneHeaders } from "@/lib/chat/clientTimeZone";
 import { createWidgetTransport } from "@/lib/chat/widgetTransport";
 import { DEFAULT_HOME_CONTENT, type HomeContent } from "@/lib/site/contentShape";
 import { readableChatError } from "@/lib/utils/chatError";
-import type { AnswerSource, UsulUIMessage, VerifiedInfo } from "@/types";
+import type { AnswerSource, GeneralInfo, UsulUIMessage, VerifiedInfo } from "@/types";
 
 interface ChatWindowProps {
   chatId: string;
@@ -67,6 +69,13 @@ function messageSources(message: UsulUIMessage): AnswerSource[] | null {
 function messageVerified(message: UsulUIMessage): VerifiedInfo | null {
   for (const part of message.parts) {
     if (part.type === "data-verified") return part.data;
+  }
+  return null;
+}
+
+function messageGeneral(message: UsulUIMessage): GeneralInfo | null {
+  for (const part of message.parts) {
+    if (part.type === "data-general") return part.data;
   }
   return null;
 }
@@ -216,7 +225,10 @@ export function ChatWindow({
             onPending: onPendingJob ?? (() => {}),
             onFailure: onJobFailed ?? (() => {}),
           })
-        : new DefaultChatTransport<UsulUIMessage>({ api: "/api/chat" }),
+        : new DefaultChatTransport<UsulUIMessage>({
+            api: "/api/chat",
+            headers: clientTimeZoneHeaders,
+          }),
     [compact, restoredJobId, onPendingJob, onJobFailed],
   );
   const { messages, sendMessage, regenerate, stop, status, error, clearError } =
@@ -386,9 +398,12 @@ export function ChatWindow({
             const text = messageText(message);
             const sources = messageSources(message);
             const verified = messageVerified(message);
+            const general = messageGeneral(message);
             const streaming = isLast && isLoading;
 
-            if (text.length === 0) {
+            const hasCards = general?.blocks.some((block) => block.type === "card") ?? false;
+
+            if (text.length === 0 && !hasCards) {
               return streaming ? (
                 <ThinkingRow key={message.id} foundSources={sources !== null} />
               ) : null;
@@ -399,8 +414,18 @@ export function ChatWindow({
                 <AssistantAvatar />
                 <div className="min-w-0 flex-1">
                   {verified ? <VerifiedBadge info={verified} /> : null}
-                  <AnswerMarkdown text={text} streaming={streaming} authored={verified !== null} />
-                  {!streaming && sources !== null ? <SourceCitationList sources={sources} /> : null}
+                  {general && hasCards ? (
+                    <GeneralAnswer info={general} streaming={streaming} />
+                  ) : (
+                    <AnswerMarkdown
+                      text={text}
+                      streaming={streaming}
+                      authored={verified !== null}
+                    />
+                  )}
+                  {!streaming && sources !== null && (!general || sources.length > 0) ? (
+                    <SourceCitationList sources={sources} />
+                  ) : null}
                   {!streaming && isLast && isRetryable(message) ? (
                     <button
                       type="button"
@@ -417,6 +442,7 @@ export function ChatWindow({
                       answer={text}
                       sources={sources ?? []}
                       onRetry={isLast && !isLoading ? retry : undefined}
+                      feedback={general === null}
                     />
                   ) : null}
                 </div>

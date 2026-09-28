@@ -37,7 +37,9 @@ async function main() {
   }
 
   const unanswered = await logs
-    .find({ $or: [{ retrievedCount: 0 }, { answered: false }] })
+    .find({
+      $or: [{ retrievedCount: 0, generalIntents: { $exists: false } }, { answered: false }],
+    })
     .sort({ createdAt: -1 })
     .limit(30)
     .toArray();

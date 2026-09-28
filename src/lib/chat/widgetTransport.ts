@@ -1,4 +1,5 @@
 import { DefaultChatTransport, UI_MESSAGE_STREAM_HEADERS } from "ai";
+import { clientTimeZoneHeaders } from "@/lib/chat/clientTimeZone";
 import type { UsulUIMessage } from "@/types";
 
 interface WidgetJobUpdate {
@@ -90,6 +91,7 @@ export function createWidgetTransport({
 }): DefaultChatTransport<UsulUIMessage> {
   return new DefaultChatTransport<UsulUIMessage>({
     api: "/api/widget-chat",
+    headers: clientTimeZoneHeaders,
     prepareReconnectToStreamRequest: () => ({
       api: `/api/widget-chat/jobs/${resumeJobId}`,
     }),

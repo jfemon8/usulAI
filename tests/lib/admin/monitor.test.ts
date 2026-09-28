@@ -72,7 +72,9 @@ describe("monitor filters", () => {
       scopedTo: "hadith",
       modelId: "glm-4.5-flash",
       $and: [
-        { $or: [{ answered: false }, { retrievedCount: 0 }] },
+        {
+          $or: [{ answered: false }, { retrievedCount: 0, generalIntents: { $exists: false } }],
+        },
         {
           $or: [{ createdAt: { $lt: createdAt } }, { createdAt, _id: { $lt: id } }],
         },

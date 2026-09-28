@@ -30,6 +30,7 @@ export interface QueryLogEntry {
   loopCut?: boolean;
   gateRejections?: GateRejection[];
   errorTier?: string;
+  generalIntents?: string[];
 }
 
 export async function logQuery(entry: Omit<QueryLogEntry, "createdAt">): Promise<void> {

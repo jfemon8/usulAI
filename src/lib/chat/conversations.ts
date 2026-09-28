@@ -30,6 +30,10 @@ export function compactMessage(message: UsulUIMessage): UsulUIMessage {
       parts.push({ type: "data-verified", data: part.data });
       continue;
     }
+    if (part.type === "data-general") {
+      parts.push({ type: "data-general", data: part.data });
+      continue;
+    }
     if (part.type !== "data-sources") continue;
     parts.push({
       type: "data-sources",

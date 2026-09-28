@@ -70,10 +70,97 @@ export interface VerifiedInfo {
   path: string | null;
 }
 
+export type GeneralIntent =
+  | "salam"
+  | "salamReply"
+  | "greeting"
+  | "wellbeing"
+  | "identity"
+  | "capabilities"
+  | "creator"
+  | "thanks"
+  | "goodbye"
+  | "date"
+  | "day"
+  | "time"
+  | "weather"
+  | "prayer"
+  | "currentPrayer"
+  | "kalima"
+  | "salahImportance"
+  | "salahFazilat"
+  | "rakat"
+  | "ramadan"
+  | "sawmNiyat"
+  | "iftarDua"
+  | "sawmFazilat"
+  | "hajj"
+  | "hajjFazilat"
+  | "zakatNisab"
+  | "zakatRate"
+  | "zakatCalc"
+  | "zakatFazilat";
+
+export interface ZakatPrices {
+  goldPerGram: number | null;
+  silverPerGram: number | null;
+  source: string | null;
+  updatedAt: string | null;
+}
+
+export interface ZakatAssets {
+  cash: number;
+  business: number;
+  receivables: number;
+  goldGrams: number;
+  goldKarat: number;
+  goldValue: number;
+  silverGrams: number;
+  silverValue: number;
+  debts: number;
+}
+
+export interface GeneralCardStat {
+  label: string;
+  value: string;
+}
+
+export interface GeneralCardRow {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}
+
+export interface GeneralCard {
+  kind:
+    "date" | "time" | "weather" | "prayer" | "creator" | "prayerNow" | "ramadan" | "hajj" | "zakat";
+  lang: "bn" | "en";
+  icon?: string;
+  eyebrow?: string;
+  headline: string;
+  headlineHref?: string;
+  subline?: string;
+  stats?: GeneralCardStat[];
+  rows?: GeneralCardRow[];
+  note?: string;
+  link?: { label: string; href: string };
+  timeZone?: string;
+  countdown?: { to: number; label: string };
+  zakat?: { prices: ZakatPrices; assets: ZakatAssets };
+}
+
+export type GeneralBlock = { type: "markdown"; text: string } | { type: "card"; card: GeneralCard };
+
+export interface GeneralInfo {
+  intents: GeneralIntent[];
+  blocks: GeneralBlock[];
+}
+
 export type UsulDataParts = {
   sources: AnswerSource[];
   outcome: AnswerOutcome;
   verified: VerifiedInfo;
+  general: GeneralInfo;
 };
 
 export type UsulUIMessage = UIMessage<never, UsulDataParts>;

@@ -1,6 +1,8 @@
 import { createUIMessageStream, createUIMessageStreamResponse, streamText } from "ai";
 import {
   ANSWER_GATE_CONFIG,
+  DATE_TIME_CONFIG,
+  GENERAL_ASSISTANT_CONFIG,
   MODEL_ATTEMPT_CONFIG,
   RATE_LIMIT_CONFIG,
   SOURCE_TRANSLATION_CONFIG,
@@ -24,6 +26,9 @@ import {
 } from "@/lib/ai/sourceTranslation";
 import { createRepetitionGuard } from "@/lib/ai/repetitionGuard";
 import { createWordPacer } from "@/lib/ai/wordPacer";
+import { answerGeneralQuestion } from "@/lib/general/compose";
+import { isValidTimeZone } from "@/lib/general/calendar";
+import { resolveCitations } from "@/lib/general/section";
 import { answerLanguageMatches, validateAnswer, type GateInput } from "@/lib/ai/answerGate";
 import {
   answerOrder,
@@ -125,14 +130,94 @@ export async function createChatResponse(
       413,
     );
   }
-  quranVerseIndex();
-  const aiSettings = await loadAiSettings();
   const history = toHistory(messages);
   if (history.length > 0) void learnFromFollowUp(messages, clientKey(request));
   const language = detectConversationLanguage(
     question,
     history.filter((turn) => turn.role === "user").map((turn) => turn.text),
   );
+
+  const requestedZone = request.headers.get(GENERAL_ASSISTANT_CONFIG.timeZoneHeader);
+  const general = await answerGeneralQuestion(question, {
+    conversationBangla: language !== "other",
+    timeZone: isValidTimeZone(requestedZone) ? requestedZone : DATE_TIME_CONFIG.timeZone,
+  }).catch((error: unknown) => {
+    logger.warn("General answer failed, using the evidence pipeline", {
+      error: String(error).slice(0, 160),
+    });
+    return null;
+  });
+
+  if (general) {
+    const evidence =
+      general.evidence.length > 0
+        ? await Promise.race([
+            findChunksByReferences(general.evidence),
+            new Promise<RetrievedChunk[]>((resolve) =>
+              setTimeout(() => resolve([]), GENERAL_ASSISTANT_CONFIG.evidenceTimeoutMs),
+            ),
+          ]).catch((error: unknown) => {
+            logger.warn("General answer evidence lookup failed", {
+              error: String(error).slice(0, 160),
+            });
+            return [] as RetrievedChunk[];
+          })
+        : [];
+    const cited = general.evidence.flatMap((reference) => {
+      const chunk = evidence.find((candidate) => candidate.citation.reference === reference);
+      return chunk ? [chunk] : [];
+    });
+    const indexOf = new Map(cited.map((chunk, index) => [chunk.citation.reference, index + 1]));
+    const generalSources: AnswerSource[] = cited.map((chunk, index) => ({
+      index: index + 1,
+      sourceType: chunk.sourceType,
+      reference: chunk.citation.reference,
+      url: chunk.citation.url,
+      similarity: 0,
+      grade: preferredGrade(chunk.grades),
+    }));
+    const generalText = resolveCitations(general.text, indexOf);
+    const generalInfo = {
+      ...general.info,
+      blocks: general.info.blocks.map((block) =>
+        block.type === "markdown"
+          ? { ...block, text: resolveCitations(block.text, indexOf) }
+          : block,
+      ),
+    };
+
+    void logQuery({
+      question,
+      historyTurns: history.length,
+      language,
+      ...summariseRetrieval([]),
+      references: generalSources.map((source) => source.reference),
+      answered: true,
+      generalIntents: general.info.intents,
+    });
+
+    return createUIMessageStreamResponse({
+      stream: createUIMessageStream<UsulUIMessage>({
+        execute: async ({ writer }) => {
+          const textId = crypto.randomUUID();
+          if (generalSources.length > 0) {
+            writer.write({ type: "data-sources", id: "sources", data: generalSources });
+          }
+          writer.write({ type: "data-general", id: "general", data: generalInfo });
+          writer.write({ type: "text-start", id: textId });
+          const pacer = createWordPacer({
+            write: (chunk) => writer.write({ type: "text-delta", id: textId, delta: chunk }),
+          });
+          pacer.push(generalText);
+          await pacer.finish();
+          writer.write({ type: "text-end", id: textId });
+        },
+      }),
+    });
+  }
+
+  quranVerseIndex();
+  const aiSettings = await loadAiSettings();
 
   const verified =
     history.length === 0 && aiSettings.verifiedAnswersEnabled

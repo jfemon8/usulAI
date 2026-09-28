@@ -64,7 +64,7 @@ async function activityStats() {
     logs.countDocuments({ createdAt: { $gte: week } }),
     logs.countDocuments({
       createdAt: { $gte: week },
-      $or: [{ answered: false }, { retrievedCount: 0 }],
+      $or: [{ answered: false }, { retrievedCount: 0, generalIntents: { $exists: false } }],
     }),
     db.collection(DB_CONFIG.verifiedAnswerCollection).estimatedDocumentCount(),
     db.collection(DB_CONFIG.verifiedAnswerCollection).countDocuments({ origin: "scholar" }),

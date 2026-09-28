@@ -23,6 +23,7 @@ interface MessageActionsProps {
   answer: string;
   sources: AnswerSource[];
   onRetry?: () => void;
+  feedback?: boolean;
 }
 
 function ActionButton({
@@ -56,7 +57,13 @@ function ActionButton({
   );
 }
 
-export function MessageActions({ question, answer, sources, onRetry }: MessageActionsProps) {
+export function MessageActions({
+  question,
+  answer,
+  sources,
+  onRetry,
+  feedback = true,
+}: MessageActionsProps) {
   const [copied, setCopied] = useState(false);
   const votes = useSyncExternalStore(
     feedbackStore.subscribe,
@@ -132,73 +139,77 @@ export function MessageActions({ question, answer, sources, onRetry }: MessageAc
         </ActionButton>
       ) : null}
 
-      <ActionButton
-        label="সহায়ক"
-        onClick={() => sendFeedback("helpful")}
-        active={verdict === "helpful"}
-        disabled={busy || verdict !== null}
-      >
-        <ThumbUpIcon className="h-4 w-4" />
-      </ActionButton>
-      <ActionButton
-        label="সহায়ক নয়"
-        onClick={() => sendFeedback("unhelpful")}
-        active={verdict === "unhelpful"}
-        disabled={busy || verdict !== null}
-      >
-        <ThumbDownIcon className="h-4 w-4" />
-      </ActionButton>
-      <ActionButton
-        label="সূত্র ভুল"
-        onClick={() => sendFeedback("wrong-citation")}
-        active={verdict === "wrong-citation"}
-        disabled={busy || verdict !== null}
-      >
-        <FlagIcon className="h-4 w-4" />
-      </ActionButton>
-
-      {notice ? (
-        <span className="ms-1.5 text-xs text-(--text-3)" role="status">
-          {notice}
-        </span>
-      ) : verdict === "helpful" ? (
-        <span className="ms-1.5 text-xs text-(--text-3)" role="status">
-          ধন্যবাদ, আপনার মতামত রাখা হলো।
-        </span>
-      ) : null}
-
-      {verdict === "unhelpful" || verdict === "wrong-citation" ? (
-        <div
-          role="status"
-          className="rise-in mt-1.5 flex w-full flex-col gap-2 rounded-xl border border-(--border) bg-(--surface-2) px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
-        >
-          <p className="text-xs leading-5 text-(--text-2)">
-            ধন্যবাদ, উত্তরটি আলেমদের পর্যালোচনায় পাঠানো হয়েছে। নিজের প্রশ্নের নির্ভরযোগ্য উত্তর
-            চাইলে সরাসরি আলেমের কাছে পাঠাতে পারেন।
-          </p>
-          <button
-            type="button"
-            onClick={() => setAskOpen(true)}
-            aria-haspopup="dialog"
-            className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-(--accent) px-3 text-xs font-medium text-(--accent-contrast) transition hover:bg-(--accent-strong)"
+      {feedback ? (
+        <>
+          <ActionButton
+            label="সহায়ক"
+            onClick={() => sendFeedback("helpful")}
+            active={verdict === "helpful"}
+            disabled={busy || verdict !== null}
           >
-            <QuestionIcon className="h-4 w-4 shrink-0" />
-            আলেমের কাছে প্রশ্ন পাঠান
-          </button>
-        </div>
-      ) : null}
+            <ThumbUpIcon className="h-4 w-4" />
+          </ActionButton>
+          <ActionButton
+            label="সহায়ক নয়"
+            onClick={() => sendFeedback("unhelpful")}
+            active={verdict === "unhelpful"}
+            disabled={busy || verdict !== null}
+          >
+            <ThumbDownIcon className="h-4 w-4" />
+          </ActionButton>
+          <ActionButton
+            label="সূত্র ভুল"
+            onClick={() => sendFeedback("wrong-citation")}
+            active={verdict === "wrong-citation"}
+            disabled={busy || verdict !== null}
+          >
+            <FlagIcon className="h-4 w-4" />
+          </ActionButton>
 
-      <AskScholarDialog
-        open={askOpen}
-        onClose={() => setAskOpen(false)}
-        initialQuestion={question}
-        context={{
-          aiAnswer: answer,
-          references: [...sources]
-            .sort((a, b) => a.index - b.index)
-            .map((source) => source.reference),
-        }}
-      />
+          {notice ? (
+            <span className="ms-1.5 text-xs text-(--text-3)" role="status">
+              {notice}
+            </span>
+          ) : verdict === "helpful" ? (
+            <span className="ms-1.5 text-xs text-(--text-3)" role="status">
+              ধন্যবাদ, আপনার মতামত রাখা হলো।
+            </span>
+          ) : null}
+
+          {verdict === "unhelpful" || verdict === "wrong-citation" ? (
+            <div
+              role="status"
+              className="rise-in mt-1.5 flex w-full flex-col gap-2 rounded-xl border border-(--border) bg-(--surface-2) px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p className="text-xs leading-5 text-(--text-2)">
+                ধন্যবাদ, উত্তরটি আলেমদের পর্যালোচনায় পাঠানো হয়েছে। নিজের প্রশ্নের নির্ভরযোগ্য
+                উত্তর চাইলে সরাসরি আলেমের কাছে পাঠাতে পারেন।
+              </p>
+              <button
+                type="button"
+                onClick={() => setAskOpen(true)}
+                aria-haspopup="dialog"
+                className="inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-(--accent) px-3 text-xs font-medium text-(--accent-contrast) transition hover:bg-(--accent-strong)"
+              >
+                <QuestionIcon className="h-4 w-4 shrink-0" />
+                আলেমের কাছে প্রশ্ন পাঠান
+              </button>
+            </div>
+          ) : null}
+
+          <AskScholarDialog
+            open={askOpen}
+            onClose={() => setAskOpen(false)}
+            initialQuestion={question}
+            context={{
+              aiAnswer: answer,
+              references: [...sources]
+                .sort((a, b) => a.index - b.index)
+                .map((source) => source.reference),
+            }}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

@@ -90,7 +90,7 @@ export function parseLogCursor(value: string): LogCursor {
 }
 
 export const UNANSWERED_CLAUSE: Filter<QueryLogEntry> = {
-  $or: [{ answered: false }, { retrievedCount: 0 }],
+  $or: [{ answered: false }, { retrievedCount: 0, generalIntents: { $exists: false } }],
 };
 
 export function monitorFilter(filters: MonitorFilters, now: number): Filter<QueryLogEntry> {
